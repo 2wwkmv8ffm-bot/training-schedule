@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>훈련 스케줄</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" />
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --text: #1d2330;
+      --muted: #6b7280;
+      --line: #e3e6eb;
+      --accent: #2563eb;
+      --accent-soft: #e8efff;
+      --done: #16a34a;
+      --danger: #dc2626;
+      --today: #fff7e6;
+      --radius: 10px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151b;
+        --panel: #1b1f27;
+        --text: #e6e8ec;
+        --muted: #9aa1ad;
+        --line: #2b313c;
+        --accent: #6b9bff;
+        --accent-soft: #1f2a44;
+        --done: #4ade80;
+        --danger: #f87171;
+        --today: #2a2416;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Noto Sans KR", system-ui, sans-serif;
+      font-size: 15px;
+    }
+    header {
+      display: flex; flex-wrap: wrap; gap: 12px;
+      align-items: center; justify-content: space-between;
+      padding: 16px; max-width: 1280px; margin: 0 auto;
+    }
+    h1 { font-size: 20px; margin: 0; }
+    .status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .dot.ok { background: var(--done); }
+    .dot.err { background: var(--danger); }
+    .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    button {
+      font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+      padding: 7px 12px; border-radius: 8px; cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    button.danger { color: var(--danger); }
+    .range { font-weight: 700; min-width: 190px; text-align: center; }
+    main { max-width: 1280px; margin: 0 auto; padding: 0 16px 32px; }
+    .banner {
+      background: var(--panel); border: 1px solid var(--danger); border-radius: var(--radius);
+      padding: 12px 14px; margin-bottom: 12px; display: none; line-height: 1.6;
+    }
+    .banner.show { display: block; }
+    .banner code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+    .summary { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; min-width: 120px; }
+    .stat b { display: block; font-size: 20px; }
+    .stat span { font-size: 12px; color: var(--muted); }
+    .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+    .day {
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+      min-height: 220px; display: flex; flex-direction: column;
+    }
+    .day.today { background: var(--today); }
+    .day-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 10px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 14px;
+    }
+    .day-head .sun { color: var(--danger); }
+    .day-head .sat { color: var(--accent); }
+    .day-head button { padding: 2px 8px; font-size: 13px; }
+    .items { padding: 8px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .item {
+      border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px;
+      padding: 6px 8px; cursor: pointer; background: var(--panel); font-size: 13px;
+    }
+    .item:hover { border-color: var(--accent); }
+    .item.done { opacity: .6; border-left-color: var(--done); }
+    .item.done .t { text-decoration: line-through; }
+    .item .row { display: flex; gap: 6px; align-items: flex-start; }
+    .item input { margin: 2px 0 0; }
+    .item .t { font-weight: 700; word-break: break-word; }
+    .item .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .empty { color: var(--muted); font-size: 12px; text-align: center; margin-top: 12px; }
+    dialog {
+      border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--text);
+      padding: 0; width: min(440px, calc(100vw - 32px));
+    }
+    dialog::backdrop { background: rgba(0,0,0,.4); }
+    form { padding: 18px; display: grid; gap: 12px; }
+    form h2 { margin: 0; font-size: 17px; }
+    label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+    input, select, textarea {
+      font: inherit; color: var(--text); background: var(--bg);
+      border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; width: 100%;
+    }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .check { display: flex; gap: 8px; align-items: center; color: var(--text); }
+    .check input { width: auto; }
+    .actions { display: flex; gap: 8px; justify-content: space-between; }
+    .actions .right { display: flex; gap: 8px; margin-left: auto; }
+    @media (max-width: 900px) {
+      .week { grid-template-columns: 1fr; }
+      .day { min-height: 0; }
+      .range { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>훈련 스케줄</h1>
+      <div class="status"><span class="dot" id="dot"></span><span id="statusText">Supabase 연결 중…</span></div>
+    </div>
+    <div class="toolbar">
+      <button id="prev" aria-label="이전 주">◀</button>
+      <div class="range" id="range"></div>
+      <button id="next" aria-label="다음 주">▶</button>
+      <button id="today">오늘</button>
+      <button class="primary" id="add">+ 훈련 추가</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="banner" id="banner"></div>
+    <div class="summary">
+      <div class="stat"><b id="sCount">0</b><span>이번 주 훈련</span></div>
+      <div class="stat"><b id="sDone">0</b><span>완료</span></div>
+      <div class="stat"><b id="sMin">0분</b><span>총 훈련 시간</span></div>
+    </div>
+    <div class="week" id="week"></div>
+  </main>
+
+  <dialog id="dlg">
+    <form id="form" method="dialog">
+      <h2 id="formTitle">훈련 추가</h2>
+      <label>훈련 이름
+        <input name="title" required maxlength="100" placeholder="예: 인터벌 러닝" />
+      </label>
+      <div class="two">
+        <label>날짜 <input type="date" name="date" required /></label>
+        <label>시작 시간 <input type="time" name="start_time" /></label>
+      </div>
+      <div class="two">
+        <label>종류
+          <select name="category">
+            <option>러닝</option><option>수영</option><option>근력</option><option>사이클</option>
+            <option>유연성</option><option>구기</option><option>휴식</option><option>기타</option>
+          </select>
+        </label>
+        <label>시간(분) <input type="number" name="duration_min" min="0" step="5" placeholder="60" /></label>
+      </div>
+      <label>강도
+        <select name="intensity">
+          <option value="">선택 안 함</option><option>낮음</option><option>보통</option><option>높음</option>
+        </select>
+      </label>
+      <label>메모 <textarea name="notes" rows="3" placeholder="세트, 거리, 페이스 등"></textarea></label>
+      <label class="check"><input type="checkbox" name="completed" /> 완료함</label>
+      <div class="actions">
+        <button type="button" class="danger" id="del">삭제</button>
+        <div class="right">
+          <button type="button" id="cancel">취소</button>
+          <button type="submit" class="primary" id="save">저장</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
