@@ -2,151 +2,496 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>훈련 스케줄</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>ZONE 훈련</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <style>
     :root {
-      --bg: #f5f6f8;
+      color-scheme: light;
+      --bg: #f4f7fc;
       --panel: #ffffff;
-      --text: #1d2330;
-      --muted: #6b7280;
-      --line: #e3e6eb;
-      --accent: #2563eb;
-      --accent-soft: #e8efff;
+      --panel2: #eef3fb;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --hover: #c7d2fe;
+      --accent: #1d6bf3;
+      --accent2: #38bdf8;
+      --accent-soft: rgba(29, 107, 243, .10);
+      --shadow: rgba(29, 107, 243, .30);
       --done: #16a34a;
-      --danger: #dc2626;
-      --today: #fff7e6;
-      --radius: 10px;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #12151b;
-        --panel: #1b1f27;
-        --text: #e6e8ec;
-        --muted: #9aa1ad;
-        --line: #2b313c;
-        --accent: #6b9bff;
-        --accent-soft: #1f2a44;
-        --done: #4ade80;
-        --danger: #f87171;
-        --today: #2a2416;
-      }
+      --danger: #e11d48;
+      --today: rgba(29, 107, 243, .05);
+      --radius: 16px;
     }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: "Noto Sans KR", system-ui, sans-serif;
-      font-size: 15px;
+    html, body { margin: 0; background: var(--bg); color: var(--text); }
+    body { font-family: "Noto Sans KR", system-ui, sans-serif; font-size: 15px; -webkit-tap-highlight-color: transparent; }
+    .num { font-family: "Barlow Condensed", "Noto Sans KR", sans-serif; font-weight: 800; letter-spacing: -.5px; line-height: 1; }
+    .app { max-width: 640px; margin: 0 auto; padding: 0 16px calc(100px + env(safe-area-inset-bottom)); }
+    .tab { display: none; }
+    .tab.show { display: block; }
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 0 14px; }
+    .brand { font-family: "Barlow Condensed", sans-serif; font-weight: 800; font-style: italic; font-size: 32px; letter-spacing: 3px; }
+    .brand i { color: var(--accent); font-style: italic; }
+    h1.big { font-size: 34px; font-weight: 900; margin: 0; letter-spacing: -1px; }
+    h2 { font-size: 22px; margin: 0 0 6px; }
+
+    button {
+      font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+      border-radius: 12px; padding: 9px 14px; cursor: pointer;
     }
-    header {
-      display: flex; flex-wrap: wrap; gap: 12px;
-      align-items: center; justify-content: space-between;
-      padding: 16px; max-width: 1280px; margin: 0 auto;
+    button:hover { border-color: var(--hover); }
+    button:disabled { opacity: .5; cursor: default; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+    button.primary:hover { background: #1559d6; }
+    button.white { background: var(--text); border-color: var(--text); color: #fff; font-weight: 800; }
+    button.danger { color: var(--danger); }
+    button.link { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 6px; }
+    .pill { border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 700; }
+    .pill.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .cmsg { max-width: 85%; padding: 10px 12px; border-radius: 14px; white-space: pre-wrap; line-height: 1.55; font-size: 14px; }
+    .cmsg.me { justify-self: end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+    .cmsg.ai { justify-self: start; background: var(--soft, #eef2f7); border-bottom-left-radius: 4px; }
+    .coach-card { background: linear-gradient(135deg, rgba(29,107,243,.07), rgba(56,189,248,.07)); }
+    .icon { width: 40px; height: 40px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; }
+    input, select, textarea {
+      font: inherit; color: var(--text); background: var(--panel2);
+      border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; width: 100%;
     }
-    h1 { font-size: 20px; margin: 0; }
-    .status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    input[type="range"] { padding: 0; accent-color: var(--accent); background: none; border: 0; }
+    label { display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(15, 23, 42, .04); }
+    .card h3 { margin: 0 0 10px; font-size: 15px; }
+    .eyebrow { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .4px; margin-bottom: 6px; }
+    .hint { font-size: 12px; color: var(--muted); line-height: 1.6; }
+    .sub { color: var(--muted); margin: 0 0 18px; font-size: 14px; line-height: 1.6; }
+    .warn { color: var(--danger); font-size: 14px; min-height: 1em; }
+    .note { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; margin-top: 10px; }
+    .note code, .banner code { background: rgba(15, 23, 42, .06); padding: 1px 5px; border-radius: 4px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .spread { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .mt { margin-top: 16px !important; }
+    .progress { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+    .progress i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; }
+
+    /* ---- 하단 탭 ---- */
+    .tabbar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+      background: rgba(255, 255, 255, .95); backdrop-filter: blur(12px); border-top: 1px solid var(--line);
+      display: flex; justify-content: space-around; align-items: flex-end;
+      padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    }
+    .tabbar button { background: none; border: 0; display: grid; justify-items: center; gap: 3px; font-size: 11px; color: var(--muted); padding: 4px 8px; min-width: 56px; }
+    .tabbar button.on { color: var(--accent); font-weight: 700; }
+    .tabbar svg { width: 24px; height: 24px; }
+    .tabbar .rec {
+      width: 62px; height: 62px; min-width: 0; border-radius: 50%; background: var(--accent); color: #fff;
+      margin-top: -28px; box-shadow: 0 8px 24px var(--shadow); display: grid; place-items: center; padding: 0;
+    }
+    .tabbar .rec svg { width: 28px; height: 28px; }
+
+    /* ---- 계획(달력) 탭 ---- */
+    .status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
     .dot.ok { background: var(--done); }
     .dot.err { background: var(--danger); }
-    .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    button {
-      font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text);
-      padding: 7px 12px; border-radius: 8px; cursor: pointer;
-    }
-    button:hover { border-color: var(--accent); }
-    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-    button.danger { color: var(--danger); }
-    .range { font-weight: 700; min-width: 190px; text-align: center; }
-    main { max-width: 1280px; margin: 0 auto; padding: 0 16px 32px; }
-    .banner {
-      background: var(--panel); border: 1px solid var(--danger); border-radius: var(--radius);
-      padding: 12px 14px; margin-bottom: 12px; display: none; line-height: 1.6;
-    }
+    .plan-cta { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 14px; }
+    .plan-cta .primary { padding: 13px; font-size: 15px; }
+    .weeknav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .range { flex: 1; text-align: center; font-weight: 700; }
+    .banner { background: var(--panel); border: 1px solid var(--danger); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; display: none; line-height: 1.6; font-size: 14px; }
     .banner.show { display: block; }
-    .banner code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
-    .summary { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; min-width: 120px; }
-    .stat b { display: block; font-size: 20px; }
+    .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+    .stat b { display: block; font-family: "Barlow Condensed", sans-serif; font-size: 28px; font-weight: 800; }
     .stat span { font-size: 12px; color: var(--muted); }
-    .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
-    .day {
-      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-      min-height: 220px; display: flex; flex-direction: column;
-    }
-    .day.today { background: var(--today); }
-    .day-head {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 8px 10px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 14px;
-    }
-    .day-head .sun { color: var(--danger); }
+    .week { display: grid; gap: 10px; }
+    .day { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+    .day.today { border-color: var(--accent); background: linear-gradient(var(--today), var(--today)), var(--panel); }
+    .day-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; font-weight: 700; font-size: 14px; }
+    .day-head .sun { color: #e11d48; }
     .day-head .sat { color: var(--accent); }
-    .day-head button { padding: 2px 8px; font-size: 13px; }
-    .items { padding: 8px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
-    .item {
-      border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px;
-      padding: 6px 8px; cursor: pointer; background: var(--panel); font-size: 13px;
-    }
-    .item:hover { border-color: var(--accent); }
-    .item.done { opacity: .6; border-left-color: var(--done); }
+    .day-head button { padding: 2px 10px; font-size: 14px; border-radius: 999px; }
+    .items { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+    .item { border-radius: 10px; border-left: 4px solid var(--accent); padding: 8px 10px; cursor: pointer; background: var(--panel2); font-size: 14px; }
+    .item.done { opacity: .55; border-left-color: var(--done); }
     .item.done .t { text-decoration: line-through; }
-    .item .row { display: flex; gap: 6px; align-items: flex-start; }
-    .item input { margin: 2px 0 0; }
+    .item .row { flex-wrap: nowrap; align-items: flex-start; }
+    .item input { width: auto; margin: 3px 0 0; accent-color: var(--accent); }
     .item .t { font-weight: 700; word-break: break-word; }
     .item .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
-    .empty { color: var(--muted); font-size: 12px; text-align: center; margin-top: 12px; }
-    dialog {
-      border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--text);
-      padding: 0; width: min(440px, calc(100vw - 32px));
-    }
-    dialog::backdrop { background: rgba(0,0,0,.4); }
-    form { padding: 18px; display: grid; gap: 12px; }
-    form h2 { margin: 0; font-size: 17px; }
-    label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
-    input, select, textarea {
-      font: inherit; color: var(--text); background: var(--bg);
-      border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; width: 100%;
-    }
+    .empty { color: var(--muted); font-size: 12px; padding: 0 2px 4px; }
+    /* 월간 캘린더 */
+    .mcal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px; margin-bottom: 10px; }
+    .mh { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); padding: 4px 0; }
+    .mh.sun, .mc .mn.sun { color: #e11d48; }
+    .mh.sat, .mc .mn.sat { color: var(--accent); }
+    .mc { min-height: 64px; padding: 3px; border-radius: 8px; border: 1px solid transparent; background: none; display: flex; flex-direction: column; gap: 2px; align-items: stretch; text-align: left; min-width: 0; overflow: hidden; }
+    .mc:hover { background: var(--panel2); }
+    .mc.out { opacity: .35; }
+    .mc.today .mn { background: var(--accent); color: #fff; border-radius: 999px; padding: 0 6px; align-self: flex-start; }
+    .mc.sel { border-color: var(--accent); background: var(--accent-soft); }
+    .mc .mn { font-size: 12px; font-weight: 700; line-height: 18px; }
+    .mc i { display: block; font-style: normal; font-size: 9.5px; line-height: 14px; color: #fff; border-radius: 3px; padding: 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mc i.dn { color: #475569; text-decoration: line-through; }
+    .mc em { font-style: normal; font-size: 10px; color: var(--muted); }
+    @media (min-width: 560px) { .mc { min-height: 84px; } .mc i { font-size: 11px; line-height: 16px; } }
+
+    /* ---- 대화상자 ---- */
+    dialog { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--text); padding: 0; width: min(460px, calc(100vw - 24px)); }
+    dialog::backdrop { background: rgba(15, 23, 42, .4); }
+    dialog form { padding: 18px; display: grid; gap: 12px; }
+    dialog h2 { margin: 0; font-size: 18px; }
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .check { display: flex; gap: 8px; align-items: center; color: var(--text); }
-    .check input { width: auto; }
+    .check input { width: auto; accent-color: var(--accent); }
     .actions { display: flex; gap: 8px; justify-content: space-between; }
     .actions .right { display: flex; gap: 8px; margin-left: auto; }
-    @media (max-width: 900px) {
-      .week { grid-template-columns: 1fr; }
-      .day { min-height: 0; }
-      .range { min-width: 0; }
+
+    /* ---- 전체 화면(설정·계획·기록·상세) ---- */
+    .ov { position: fixed; inset: 0; z-index: 40; background: var(--bg); overflow-y: auto; display: none; }
+    .ov.show { display: block; }
+    #trackerOv { z-index: 45; }
+    .ov-inner { max-width: 680px; margin: 0 auto; padding: 16px 16px 110px; }
+    .wz-top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .wz-prog { flex: 1; height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
+    .wz-prog span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+    .ov-foot {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 41;
+      background: var(--panel); border-top: 1px solid var(--line);
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); display: flex; justify-content: space-between; gap: 8px;
     }
+    .ov-foot button { padding: 12px 18px; }
+    .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .unit { display: flex; align-items: center; gap: 6px; }
+    .unit span { color: var(--muted); font-size: 13px; white-space: nowrap; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { padding: 8px 14px; border-radius: 999px; }
+    .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+    .sport-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .sport-card { display: grid; gap: 6px; justify-items: center; padding: 26px 10px; border: 2px solid var(--line); border-radius: 18px; background: var(--panel); }
+    .sport-card:hover, .sport-card:focus-visible { border-color: var(--accent); outline: none; }
+    .sport-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+    .sport-card .ico { font-size: 44px; line-height: 1; }
+    .sport-card .nm { font-size: 19px; font-weight: 900; }
+    .sport-card .ds { font-size: 12px; color: var(--muted); }
+    .rec-head, .rec-row { display: grid; grid-template-columns: minmax(64px, 96px) repeat(3, minmax(0, 1fr)); gap: 6px; align-items: center; }
+    .rec-head { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .rec-row { margin-bottom: 6px; }
+    .rec-lbl { font-size: 13px; font-weight: 500; }
+    .rec-row input { padding: 7px; font-size: 14px; min-width: 0; }
+    details.card summary { cursor: pointer; font-weight: 700; }
+    details.card[open] summary { margin-bottom: 10px; }
+    .race-row { display: grid; grid-template-columns: 2fr 1.4fr 1.6fr 1.1fr auto; gap: 6px; margin-bottom: 8px; align-items: center; }
+    .race-row > * { min-width: 0; }
+    @media (max-width: 640px) {
+      .race-row { grid-template-columns: 1fr 1fr; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+    }
+    .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px; }
+    .kv > span { color: var(--muted); }
+    .zt-wrap { overflow-x: auto; }
+    .zt { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 640px; }
+    .zt th, .zt td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; vertical-align: top; line-height: 1.5; }
+    .zt th { color: var(--muted); font-weight: 500; }
+    .zguide { margin-top: 8px; padding: 8px 10px; border-left: 4px solid; border-radius: 8px; background: var(--panel2, #f8fafc); font-size: 13px; line-height: 1.6; }
+    .zguide .link { padding: 0; margin-left: 4px; }
+    .zone-btn { background: linear-gradient(90deg, #60a5fa, #22c55e, #eab308, #f97316, #ef4444); color: #fff; border: 0; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+    .zlegend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; margin: 0 2px 8px; color: var(--muted); }
+    .zlegend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+    .ztable { display: grid; gap: 4px; margin-top: 10px; }
+    .ztable > div { display: grid; grid-template-columns: 1.4fr .9fr 1.2fr .8fr; gap: 6px; padding: 7px 8px; border-radius: 8px; background: var(--panel2, #f8fafc); font-size: 13px; align-items: center; }
+    .zcard { padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); font-size: 14px; }
+    .zcard summary { cursor: pointer; line-height: 1.6; }
+    .mc i b { font-weight: 800; }
+    .zb { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; color: #fff; white-space: nowrap; }
+    .z1 { background: #64748b; } .z2 { background: #16a34a; } .z3 { background: #ca8a04; } .z4 { background: #ea580c; } .z5 { background: #dc2626; }
+    .sess { border-left: 5px solid var(--accent); }
+    .sess .hd { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .sess .hd b { font-size: 16px; }
+    .sess ul { margin: 4px 0; padding-left: 20px; line-height: 1.65; font-size: 14px; }
+    .sess .lbl { font-size: 12px; color: var(--muted); font-weight: 700; margin-top: 10px; }
+    .sess .txt { font-size: 14px; line-height: 1.6; }
+    .plan-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+    /* 훈련 카드: 요약 → 구성 표 → 설명 */
+    .sess .hd { margin-bottom: 10px; }
+    /* 홈: 이번 주 스케줄 */
+    .wstrip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+    .wd { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px 8px; border-radius: 12px; border: 1px solid transparent; background: var(--panel2); min-width: 0; }
+    .wd.today { border-color: var(--accent); }
+    .wd.sel { background: var(--accent-soft); border-color: var(--accent); }
+    .wd .wn { font-size: 11px; font-weight: 700; color: var(--muted); }
+    .wd .wn.sun { color: #e11d48; } .wd .wn.sat { color: var(--accent); }
+    .wd .wdt { font-size: 15px; font-weight: 800; }
+    .wd .wi { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 40px; border-radius: 8px; color: #fff; font-size: 15px; line-height: 1.2; padding: 3px 0; }
+    .wd .wi small { font-size: 9.5px; font-weight: 800; }
+    .wd .wi.dn { opacity: .6; }
+    .wd .wrest { font-size: 10px; color: var(--muted); padding-top: 6px; }
+    .goal-row { margin-top: 12px; }
+    .goal-row .progress { margin-top: 6px; height: 10px; }
+    .hsess { padding: 12px 0; border-top: 1px solid var(--line); }
+    .hsess:first-of-type { border-top: 0; padding-top: 8px; }
+    .hsess.done .t { text-decoration: line-through; color: var(--muted); }
+    .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+    .tiles > div { background: var(--panel2); border-radius: 10px; padding: 8px; min-width: 0; }
+    .tiles span { display: block; font-size: 11px; color: var(--muted); }
+    .tiles b { display: block; font-size: 14px; line-height: 1.3; word-break: keep-all; overflow-wrap: anywhere; }
+    @media (max-width: 420px) { .tiles { grid-template-columns: 1fr 1fr; } }
+    .steps { display: grid; gap: 4px; }
+    .step { display: grid; grid-template-columns: 58px 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--panel2); font-size: 13.5px; line-height: 1.45; }
+    .step.main { background: var(--accent-soft); }
+    .step .st-l { font-weight: 800; font-size: 12px; color: var(--muted); word-break: keep-all; }
+    .step.main .st-l { color: var(--accent); }
+    .step .st-c { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .step .st-c b { font-size: 12px; background: var(--panel); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+    ul.tg { margin: 2px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.6; }
+    details.why { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+    details.why summary { cursor: pointer; font-size: 13px; color: var(--accent); font-weight: 700; }
+    .vpick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+    .vpick button { display: grid; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 12px; }
+    .vpick button.on { border: 2px solid var(--accent); background: var(--accent-soft); }
+    .vpick .vt { font-weight: 800; font-size: 14px; }
+    .vpick .vn { font-size: 12px; color: var(--muted); }
+    .rec-group { font-weight: 800; font-size: 14px; margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+    .rec-group:first-of-type { margin-top: 4px; padding-top: 0; border-top: 0; }
+    .dayopt { display: grid; grid-template-columns: 28px 1fr 1fr; gap: 6px; align-items: center; margin-bottom: 8px; }
+    .dayopt:has(select:nth-of-type(3)) { grid-template-columns: 28px 1fr 1fr 1fr; }
+    .dayopt:has(select:nth-of-type(4)) { grid-template-columns: 28px 1fr 1fr 1fr 1fr; }
+    .dayopt-wrap { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+    .dayopt2 { grid-template-columns: 28px 1fr 1fr !important; margin: 0; }
+    .dayopt2 .hint { font-size: 11px; }
+    .dayopt select { padding: 7px 6px; font-size: 13px; min-width: 0; }
+    @media (max-width: 480px) {
+      .dayopt:has(select:nth-of-type(3)) { grid-template-columns: 28px 1fr 1fr; }
+      .dayopt:has(select:nth-of-type(3)) select:nth-of-type(3) { grid-column: 2 / 4; }
+      .dayopt:has(select:nth-of-type(4)) { grid-template-columns: 28px 1fr 1fr; }
+      .dayopt:has(select:nth-of-type(4)) select:nth-of-type(3) { grid-column: auto; }
+    }
+    /* ---- 뒤로 버튼 (스크롤하면 왼쪽 위에 나타나요) ---- */
+    .sq-cell { display: grid; gap: 6px; }
+    .sq-cell .sport-card { padding: 18px 8px; }
+    .sq-set { justify-self: stretch; font-size: 12px; }
+    .back-fab {
+      position: fixed; left: 12px; top: calc(env(safe-area-inset-top) + 12px); z-index: 70;
+      padding: 9px 16px; border-radius: 999px; border: 0; background: var(--text); color: #fff; font-weight: 800; font-size: 14px;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, .25); opacity: 0; transform: translateY(-8px); pointer-events: none; transition: opacity .15s, transform .15s;
+    }
+    .back-fab.show { opacity: .92; transform: none; pointer-events: auto; }
+
+    /* ---- 스트라바 ---- */
+    .strava-btn { background: #fc5200; border-color: #fc5200; color: #fff; }
+    .strava-link { color: #fc5200; font-weight: 700; text-decoration: none; }
+    .toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60;
+      background: var(--text); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; max-width: calc(100vw - 32px); box-shadow: 0 6px 20px rgba(15, 23, 42, .25); }
+
+    /* ---- 커뮤니티 ---- */
+    .tabbar button { min-width: 48px; padding: 4px 4px; }
+    .post { padding: 14px; }
+    .post-hd { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+    .av { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 800; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+    .post-title { font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+    .post-stats { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 10px; }
+    .post-stats span { display: block; font-size: 11px; color: var(--muted); }
+    .post-stats b { font-size: 22px; }
+    .post-map { height: 200px; border-radius: 12px; overflow: hidden; margin-bottom: 10px; background: var(--panel2); }
+    .post-act { display: flex; gap: 8px; }
+    .ratio-box { display: grid; gap: 4px; margin-top: 8px; }
+    .ratio-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; font-size: 13px; padding: 6px 8px; border-radius: 8px; background: var(--panel2, #f8fafc); }
+    .mix { margin-top: 10px; padding: 10px; border-radius: 10px; background: var(--panel2, #f8fafc); }
+    .mix-h { font-size: 13px; font-weight: 800; margin-bottom: 6px; }
+    .mix-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #e2e8f0; }
+    .mix-bar i.lo, .mix-leg i.lo { background: #22c55e; }
+    .mix-bar i.hi, .mix-leg i.hi { background: #f97316; }
+    .mix-leg { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-top: 6px; font-size: 13px; }
+    .mix-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+    .ratio-tag { margin-top: 8px; font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 8px; background: linear-gradient(90deg, rgba(34,197,94,.12), rgba(249,115,22,.12)); }
+    .share-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 6px; }
+    .share-grid button { display: grid; justify-items: center; gap: 6px; background: none; border: 0; padding: 4px 0; font-size: 12px; color: var(--text); }
+    .share-grid button span { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 20px; font-weight: 900; color: #fff; }
+    .post-act button { border-radius: 999px; padding: 6px 14px; font-size: 14px; }
+    .post-act button.on { background: #ffe4e6; border-color: #fecdd3; }
+    .post-cmts { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
+    .cmt { font-size: 14px; line-height: 1.5; word-break: break-word; display: flex; gap: 8px; align-items: flex-start; }
+    .cmt .av { font-size: 12px; }
+    .post-body { font-size: 15px; line-height: 1.6; white-space: pre-line; word-break: break-word; margin-bottom: 10px; }
+    .post-photos { display: grid; gap: 4px; border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
+    .post-photos.n2, .post-photos.n4 { grid-template-columns: 1fr 1fr; }
+    .post-photos.n3 { grid-template-columns: 1fr 1fr; }
+    .post-photos.n3 a:first-child { grid-column: 1 / 3; }
+    .post-photos a { position: relative; display: block; background: var(--panel2); }
+    .post-photos img { width: 100%; height: 100%; display: block; object-fit: cover; aspect-ratio: 4 / 3; }
+    .post-photos.n1 img { aspect-ratio: auto; max-height: 420px; }
+    .post-photos .more { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(15, 23, 42, .5); color: #fff; font-size: 22px; font-weight: 800; }
+    .cmt-form { display: flex; gap: 6px; }
+    .cmt-form input { flex: 1; min-width: 0; }
+    .media { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .media .m { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--panel2); }
+    .media img, .media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .media .x { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; padding: 0; border-radius: 50%; background: rgba(15, 23, 42, .6); color: #fff; border: 0; font-size: 12px; }
+
+    /* ---- 홈·활동·나 ---- */
+    .hero { font-size: 84px; }
+    .hero-unit { color: var(--muted); font-weight: 700; margin-top: 2px; }
+    .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+    .trio b { font-size: 26px; display: block; }
+    .trio span { font-size: 12px; color: var(--muted); }
+    .seg { display: flex; background: var(--panel2); border-radius: 12px; padding: 4px; gap: 4px; margin-bottom: 12px; }
+    .seg button { flex: 1; border: 0; background: none; border-radius: 9px; padding: 8px 0; font-weight: 700; color: var(--muted); }
+    .seg button.on { background: var(--panel); color: var(--accent); box-shadow: 0 1px 4px rgba(15, 23, 42, .12); }
+    .bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; margin-top: 16px; }
+    .bars .b { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; height: 100%; justify-content: flex-end; min-width: 0; }
+    .bars .b i { display: block; width: 100%; max-width: 26px; background: var(--accent); border-radius: 6px 6px 2px 2px; min-height: 3px; }
+    .bars .b i.zero { background: var(--line); }
+    .bars .b span { font-size: 10px; color: var(--muted); height: 12px; }
+    .act { display: flex; gap: 12px; align-items: center; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; margin-bottom: 10px; cursor: pointer; width: 100%; text-align: left; }
+    .act:hover { border-color: var(--hover); }
+    .act .route { width: 64px; height: 64px; flex: none; background: var(--panel2); border-radius: 12px; display: grid; place-items: center; font-size: 28px; }
+    .act .main { flex: 1; min-width: 0; }
+    .act .d { font-size: 12px; color: var(--muted); }
+    .act .km { font-size: 30px; margin: 2px 0; }
+    .act .meta { font-size: 12px; color: var(--muted); }
+    .today-s { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+    .today-s:first-of-type { border-top: 0; }
+    .today-s .main { flex: 1; min-width: 0; }
+    .today-s .t { font-weight: 700; }
+    .today-s.done .t { text-decoration: line-through; color: var(--muted); }
+    .badges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .badge { display: grid; justify-items: center; align-content: start; gap: 6px; text-align: center; padding: 14px 6px; background: var(--panel2); border-radius: 14px; }
+    .badge .em { width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 4px 14px var(--shadow); }
+    .badge.locked .em { background: var(--line); box-shadow: none; filter: grayscale(1); opacity: .45; }
+    .badge .bn { font-size: 12px; font-weight: 700; }
+    .badge .bp { font-size: 11px; color: var(--muted); }
+    .avatar { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; font-size: 40px; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+    .avatar-btn { position: relative; padding: 0; border: 3px solid #fff; box-shadow: 0 2px 10px rgba(15, 23, 42, .15); overflow: visible; cursor: pointer; }
+    .avatar-btn img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+    .avatar-btn .cam { position: absolute; right: -4px; bottom: -4px; width: 30px; height: 30px; border-radius: 50%; background: #fff; display: grid; place-items: center; font-size: 15px; box-shadow: 0 1px 4px rgba(15, 23, 42, .2); }
+    .lvl { display: inline-block; font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+    .pr-row { display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid var(--line); font-size: 14px; gap: 8px; }
+    .pr-row:first-of-type { border-top: 0; }
+    .pr-row b { font-family: "Barlow Condensed", sans-serif; font-size: 20px; }
+    .set-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); gap: 8px; }
+    .set-row:first-of-type { border-top: 0; }
+    .set-row > button, .set-row > select, .set-row > label.check { flex: none; white-space: nowrap; }
+    .map { height: 280px; border-radius: 16px; overflow: hidden; margin-bottom: 12px; background: var(--panel2); }
+    .stats4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .stats4 b { font-size: 38px; display: block; }
+    .stats4 span { font-size: 12px; color: var(--muted); }
+    .split { display: grid; grid-template-columns: 34px 58px 1fr; gap: 8px; align-items: center; font-size: 13px; margin-bottom: 6px; }
+    .split i { display: block; height: 10px; background: var(--accent); border-radius: 4px; }
+
+    /* ---- GPS 기록 ---- */
+    .trk { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; }
+    .trk-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .gps { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+    .gps .dot.mid { background: var(--accent2); }
+    .go { width: 190px; height: 190px; border-radius: 50%; background: var(--accent); border: 0; color: #fff; font-family: "Barlow Condensed", "Noto Sans KR", sans-serif; font-size: 46px; font-weight: 800; letter-spacing: 2px; margin: 30px auto; box-shadow: 0 12px 44px var(--shadow); }
+    .go:active { transform: scale(.97); }
+    .count { font-size: 200px; text-align: center; margin: auto; color: var(--accent); }
+    .live-dist { font-size: min(36vw, 180px); text-align: center; margin-top: 28px; }
+    .live-unit { text-align: center; color: var(--muted); font-weight: 700; margin-top: 6px; }
+    .live-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 30px 0 18px; text-align: center; }
+    .live-grid b { font-size: 36px; display: block; }
+    .live-grid span { font-size: 12px; color: var(--muted); }
+    .trk.paused .live-dist { color: var(--accent); }
+    .ctrl { display: flex; justify-content: center; gap: 22px; margin-top: auto; padding-top: 18px; }
+    .ctrl button { width: 92px; height: 92px; border-radius: 50%; font-size: 15px; font-weight: 800; }
+    .center { justify-content: center; }
+    .goal-pick { margin-top: 18px; }
+    .goal-pick .chip { padding: 6px 12px; font-size: 13px; }
+    .goal-live { margin: 14px 4px 0; font-size: 14px; font-weight: 700; }
+    .goal-live .progress { height: 12px; margin-top: 6px; }
   </style>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>훈련 스케줄</h1>
-      <div class="status"><span class="dot" id="dot"></span><span id="statusText">Supabase 연결 중…</span></div>
-    </div>
-    <div class="toolbar">
-      <button id="prev" aria-label="이전 주">◀</button>
-      <div class="range" id="range"></div>
-      <button id="next" aria-label="다음 주">▶</button>
-      <button id="today">오늘</button>
-      <button class="primary" id="add">+ 훈련 추가</button>
-    </div>
-  </header>
+  <div class="app">
+    <!-- 홈 -->
+    <section class="tab show" id="tab-home">
+      <header class="top">
+        <div class="brand" data-home="1" style="cursor:pointer">Z<i>O</i>NE</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          <button class="pill" id="sportBtn">종목 선택</button>
+          <button type="button" class="pill zone-btn" data-zguide="0">❤️ 내 존 영역</button>
+        </div>
+      </header>
+      <div id="homeBody"></div>
+    </section>
 
-  <main>
-    <div class="banner" id="banner"></div>
-    <div class="summary">
-      <div class="stat"><b id="sCount">0</b><span>이번 주 훈련</span></div>
-      <div class="stat"><b id="sDone">0</b><span>완료</span></div>
-      <div class="stat"><b id="sMin">0분</b><span>총 훈련 시간</span></div>
-    </div>
-    <div class="week" id="week"></div>
-  </main>
+    <!-- 계획 (주간 달력) -->
+    <section class="tab" id="tab-plan">
+      <header class="top">
+        <h1 class="big">계획</h1>
+        <div class="status"><span class="dot" id="dot"></span><span id="statusText">연결 중…</span></div>
+      </header>
+      <div class="plan-cta">
+        <button class="primary" id="planBtn">📋 자동 훈련 계획 보기</button>
+        <button id="add">+ 직접 추가</button>
+      </div>
+      <div class="seg" id="viewSeg">
+        <button type="button" data-view="week">주간</button>
+        <button type="button" data-view="month">월간 (캘린더)</button>
+      </div>
+      <div class="weeknav">
+        <button class="icon" id="prev" aria-label="이전">‹</button>
+        <div class="range" id="range"></div>
+        <button class="icon" id="next" aria-label="다음 주">›</button>
+        <button class="pill" id="today">오늘</button>
+      </div>
+      <div class="banner" id="banner"></div>
+      <div class="summary">
+        <div class="stat"><b id="sCount">0</b><span>이번 주 훈련</span></div>
+        <div class="stat"><b id="sDone">0</b><span>완료</span></div>
+        <div class="stat"><b id="sMin">0분</b><span>총 훈련 시간</span></div>
+      </div>
+      <div class="week" id="week"></div>
+    </section>
 
+    <!-- 활동 기록·통계 -->
+    <section class="tab" id="tab-activity">
+      <header class="top">
+        <h1 class="big">활동</h1>
+        <div style="display:flex;gap:6px"><button class="pill" id="importBtn">⌚ 파일 가져오기</button>
+        <button class="pill" id="manualBtn">+ 직접 기록</button></div>
+        <input type="file" id="importFile" accept=".fit,.gpx,.tcx,.zip" multiple hidden />
+      </header>
+      <div id="actBody"></div>
+    </section>
+
+    <!-- 커뮤니티 -->
+    <section class="tab" id="tab-community">
+      <header class="top"><h1 class="big">커뮤니티</h1></header>
+      <div id="comBody"></div>
+    </section>
+
+    <!-- 나 (프로필·기록·배지) -->
+    <section class="tab" id="tab-me">
+      <header class="top"><h1 class="big">나</h1></header>
+      <div id="meBody"></div>
+    </section>
+  </div>
+
+  <nav class="tabbar">
+    <button data-tab="home" class="on" aria-label="홈">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/></svg><span>홈</span>
+    </button>
+    <button data-tab="plan" aria-label="계획">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>계획</span>
+    </button>
+    <button data-tab="activity" aria-label="활동">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V12M10 20V6M16 20v-9M22 20H2"/></svg><span>활동</span>
+    </button>
+    <button data-tab="community" aria-label="커뮤니티">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.5"/><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5M15 14.6c2.8-.4 5.4 1.2 6.3 4.4"/></svg><span>커뮤니티</span>
+    </button>
+    <button data-tab="me" aria-label="나">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>나</span>
+    </button>
+  </nav>
+
+  <!-- 훈련 일정 추가·수정 -->
   <dialog id="dlg">
     <form id="form" method="dialog">
       <h2 id="formTitle">훈련 추가</h2>
@@ -158,12 +503,7 @@
         <label>시작 시간 <input type="time" name="start_time" /></label>
       </div>
       <div class="two">
-        <label>종류
-          <select name="category">
-            <option>러닝</option><option>수영</option><option>근력</option><option>사이클</option>
-            <option>유연성</option><option>구기</option><option>휴식</option><option>기타</option>
-          </select>
-        </label>
+        <label>종류 <select name="category"></select></label>
         <label>시간(분) <input type="number" name="duration_min" min="0" step="5" placeholder="60" /></label>
       </div>
       <label>강도
@@ -171,7 +511,7 @@
           <option value="">선택 안 함</option><option>낮음</option><option>보통</option><option>높음</option>
         </select>
       </label>
-      <label>메모 <textarea name="notes" rows="3" placeholder="세트, 거리, 페이스 등"></textarea></label>
+      <label>메모 <textarea name="notes" rows="8" placeholder="세트, 거리, 페이스 등"></textarea></label>
       <label class="check"><input type="checkbox" name="completed" /> 완료함</label>
       <div class="actions">
         <button type="button" class="danger" id="del">삭제</button>
@@ -183,8 +523,97 @@
     </form>
   </dialog>
 
+  <!-- 직접 기록 (수영·실내 훈련 등 GPS 없이) -->
+  <dialog id="manualDlg">
+    <form id="manualForm" method="dialog">
+      <h2>직접 기록하기</h2>
+      <label>종목
+        <select name="sport">
+          <option value="run">🏃 달리기</option><option value="bike">🚴 자전거</option>
+          <option value="swim">🏊 수영</option><option value="tri">🏅 철인3종 (한 번에)</option>
+        </select>
+      </label>
+      <label>공개 범위
+        <select name="vis"><option value="friends">👥 친구만</option><option value="public">🌏 전체 공개</option><option value="private">🔒 나만</option></select>
+      </label>
+      <label>제목 <input name="title" maxlength="100" placeholder="예: 트레드밀 인터벌" /></label>
+      <div class="two">
+        <label>날짜 <input type="date" name="date" required /></label>
+        <label>시작 시간 <input type="time" name="time" /></label>
+      </div>
+      <div class="two">
+        <label><span id="mDistLbl">거리 (km)</span> <input name="distance" inputmode="decimal" placeholder="예: 10" /></label>
+        <label>운동 시간 <input name="duration" placeholder="예: 45:30 또는 1:05:00" required /></label>
+      </div>
+      <label>운동 자각도(RPE) <b id="mRpeV">5</b>
+        <input type="range" name="rpe" min="1" max="10" value="5" />
+      </label>
+      <div class="hint" id="mRpeTxt"></div>
+      <label>메모 <textarea name="notes" rows="3"></textarea></label>
+      <div class="actions">
+        <div class="right">
+          <button type="button" id="mCancel">취소</button>
+          <button type="submit" class="primary">저장</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 스트라바 가져오기 -->
+  <dialog id="stravaDlg"><div style="padding:18px;display:grid;gap:12px" id="stravaBody"></div></dialog>
+
+  <!-- 커뮤니티 글쓰기 -->
+  <dialog id="postDlg"><div style="padding:18px;display:grid;gap:12px" id="postBody"></div></dialog>
+
+  <!-- 친구 관리 -->
+  <dialog id="friendDlg"><div style="padding:18px;display:grid;gap:14px" id="friendBody"></div></dialog>
+
+  <!-- 가민 기록 가져오기 -->
+  <dialog id="importDlg"><div style="padding:18px;display:grid;gap:12px" id="importBody"></div></dialog>
+
+  <!-- 처음 설정 (종목 → 신체 정보 → 일정 → 훈련량 → 기록·목표 → 대회 → 확인) -->
+  <div class="ov" id="wizard">
+    <div class="ov-inner">
+      <div class="wz-top">
+        <div class="wz-prog"><span id="wzBar"></span></div>
+        <span class="hint" id="wzStep"></span>
+        <button type="button" class="pill" data-home="1" id="wzHome">🏠 홈</button>
+        <button type="button" id="wzClose">닫기</button>
+      </div>
+      <div id="wzBody"></div>
+    </div>
+    <div class="ov-foot">
+      <button type="button" id="wzPrev">‹ 이전</button>
+      <button type="button" class="primary" id="wzNext">다음 ›</button>
+    </div>
+  </div>
+
+  <!-- 자동 훈련 계획 -->
+  <div class="ov" id="planOv"><div class="ov-inner" id="planBody"></div></div>
+
+  <!-- 활동 상세 -->
+  <div class="ov" id="detailOv"><div class="ov-inner" id="detailBody"></div></div>
+
+  <!-- GPS 기록 -->
+  <div class="ov" id="trackerOv"></div>
+
+  <!-- 로그인 · 회원가입 -->
+  <div class="ov" id="authOv"><div class="ov-inner" id="authBody"></div></div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="config.js"></script>
+  <script src="zones.js"></script>
   <script src="app.js"></script>
+  <script src="engine.js"></script>
+  <script src="profile.js"></script>
+  <script src="garmin.js"></script>
+  <script src="tracker.js"></script>
+  <script src="hub.js"></script>
+  <script src="auth.js"></script>
+  <script src="community.js"></script>
+  <script src="strava.js"></script>
+  <script src="coach.js"></script>
+  <script src="nav.js"></script>
 </body>
 </html>
