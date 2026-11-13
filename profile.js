@@ -20,7 +20,7 @@
     run: [["indoor", "트레드밀·실내 트랙"], ["outdoor", "야외 도로·트랙"]],
   };
   const SESSION_MIN = [30, 45, 60, 75, 90, 120, 150, 180];
-  const STEPS = ["종목", "신체 정보", "기준점 테스트", "훈련 일정", "주간 훈련량", "기록과 목표", "목표·훈련 방식", "대회 일정", "확인"];
+  const STEPS = ["종목", "신체 정보", "기준점 테스트", "훈련 일정", "주간 훈련량", "기록과 목표", "훈련 방식", "대회·목표", "확인"];
   const LV_COLOR = window.ZONE ? window.ZONE.colors : ["#60a5fa", "#22c55e", "#eab308", "#f97316", "#ef4444"]; // Z1~Z5 (zones.js와 같은 색)
   const LV_FG = (l) => (l === 3 ? "#422006" : "#fff");
 
@@ -58,8 +58,47 @@
     const { error } = await db.from(PROFILE_TABLE).upsert({ id: pid(), data: p, updated_at: new Date().toISOString() });
     cloudOk = !error;
   }
+  // 📅 계획이 바뀌면 달력의 '앞으로 할' 자동 계획도 같이 바꿔요
+  //  (오늘 이후 · 완료 안 한 · [자동 계획] 일정만. 완료한 날·코치로 바꾼 날·직접 넣은 일정은 그대로)
+  let syncTimer = null, syncBusy = false;
+  function scheduleSync() { clearTimeout(syncTimer); syncTimer = setTimeout(() => { syncCalendar().catch(() => {}); }, 1500); }
+  function rowOf(s, d) {
+    return { date: d, title: s.title, start_time: s.slot === "오전" ? "07:00" : s.slot === "오후" ? "18:30" : null,
+      category: s.disc === "brick" ? "브릭" : DISC[s.disc].cat, duration_min: s.minutes || null,
+      intensity: s.lvl <= 2 ? "낮음" : s.lvl === 3 ? "보통" : "높음", notes: notesText(s), completed: false };
+  }
+  async function syncCalendar() {
+    if (!profile || syncBusy) return 0;
+    syncBusy = true;
+    try {
+      const P = makeVariants(profile)[0].plan;
+      const today = iso(new Date()), end = iso(addDays(P.week(0).start, 7 * 8 - 1));
+      const { data: old, error } = await TS.mine(db.from(TS.TABLE).select("id,date,title,category,notes,completed")).gte("date", today).lte("date", end).like("notes", "[자동 계획]%");
+      if (error || !old || !old.length) return 0;
+      const cats = new Set([...discsOf(profile.sport).map((x) => DISC[x].cat), "브릭"]);
+      if (!old.some((s) => cats.has(s.category))) return 0; // 다른 종목 계획이 들어 있으면 건드리지 않아요
+      const keep = new Set(old.filter((s) => s.completed || /🧑‍🏫 코치:/.test(s.notes || "")).map((s) => s.date));
+      const weeks = new Set(old.map((s) => iso(mondayOf(new Date(s.date + "T00:00:00")))));
+      const rows = [];
+      for (let i = 0; i < 8; i++) {
+        const W = P.week(i);
+        if (!weeks.has(iso(W.start))) continue; // 달력에 넣어 둔 주만
+        W.sessions.forEach((s) => { const d = iso(addDays(W.start, s.day)); if (d >= today && d <= end && !keep.has(d)) rows.push(rowOf(s, d)); });
+      }
+      const oldRep = old.filter((s) => !keep.has(s.date));
+      const sig = (a) => a.map((x) => `${x.date}|${x.title}`).sort().join(";");
+      if (sig(oldRep) === sig(rows)) return 0;
+      if (oldRep.length) await db.from(TS.TABLE).delete().in("id", oldRep.map((x) => x.id));
+      if (rows.length) await db.from(TS.TABLE).insert(rows);
+      const el = document.createElement("div"); el.className = "toast"; el.textContent = `📅 바뀐 계획을 달력에도 반영했어요 (${rows.length}개)`;
+      document.body.appendChild(el); setTimeout(() => el.remove(), 3500);
+      TS.reload();
+      return rows.length;
+    } finally { syncBusy = false; }
+  }
   function setProfile(p) {
     profile = p;
+    if (p) scheduleSync();
     TS.setSport(p ? p.sport : null);
     const b = $("sportBtn");
     if (b) b.textContent = p && p.sport ? `${SPORTS[p.sport].icon} ${p.sport} ▾` : "종목 선택";
@@ -68,7 +107,7 @@
 
   // ---------- 설정 화면 ----------
   // 종목마다 따로 저장하는 문진표 항목 (이름·몸무게·나이·심박 같은 신체 정보는 공통)
-  const SPORT_FIELDS = ["tests", "daysPerWeek", "days", "dayOpts", "weeklyHours", "sessionMin", "volume", "env", "records", "goal", "philosophy", "lowPct", "mafAdj", "races"];
+  const SPORT_FIELDS = ["tests", "daysPerWeek", "days", "dayOpts", "weeklyHours", "sessionMin", "volume", "env", "records", "goal", "philosophy", "lowPct", "mafAdj", "races", "goalSetAt"];
   const pickSport = (p) => { const o = {}; SPORT_FIELDS.forEach((k) => { if (p[k] !== undefined) o[k] = clone(p[k]); }); return o; };
   // 지금 종목 설정은 보관하고, 바꿀 종목의 저장된 설정을 불러와요 (없으면 지금 설정을 그대로 시작점으로)
   function withSport(p, sport) {
@@ -263,16 +302,9 @@
       gapTxt = `<div class="note">목표 ${esc(g.timeText)} → 필요한 VDOT <b>${need.toFixed(1)}</b>${R ? ` · 지금 VDOT <b>${R.vdot.toFixed(1)}</b> (${need - R.vdot > 0 ? `${(need - R.vdot).toFixed(1)} 올려야 해요` : "이미 가능한 수준!"})` : ""}<br>목표 페이스 ${fmt(g.time / (g.dist / 1000))}/km</div>`;
     }
     const PH = { "5K": "20:00", "10K": "42:00", half: "1:35:00", full: "3:30:00" };
-    return `<h2>목표와 훈련 방식</h2>
-      <p class="sub">목표 거리에 따라 핵심 훈련과 레이스 강도가 달라져요.</p>
-      <div class="card"><h3>🎯 목표 종목·거리</h3>
-        <div class="chips">${goals.map(([k, n, , , , h]) => `<button type="button" class="chip${g.key === k && draft.goal.event ? " on" : ""}" data-goal="${k}">${n}</button>`).join("")}</div>
-        <p class="hint">${draft.goal.event ? "" : `선택 안 하면 ${esc(g.from)}: <b>${esc(g.name)}</b>`}</p>
-        <div class="note">핵심 훈련: <b>${esc(g.focus)}</b><br>레이스 강도: <b>${esc(g.race)}</b><br>
-          권장 주간 시간: <b>${g.hours[0]}~${g.hours[1]}시간</b> · 지금 가능한 시간: <b>${avail.toFixed(1)}시간</b>${avail < g.hours[0] ? " — 부족한 만큼 핵심 훈련 위주로 짜요" : ""}</div>
-        <div class="fields mt">${field("목표 기록", "goal.time", "", sk === "run" ? PH[g.key] || "" : "예: 2:20:00", "time")}</div>
-        ${gapTxt}
-      </div>
+    void PH; void gapTxt; void avail; void goals;
+    return `<h2>훈련 방식</h2>
+      <p class="sub">TrainingPeaks·TriDot 같은 플랫폼과 조 프릴·맷 피츠제럴드·잭 대니얼스·헌터 앨런/앤드류 코건의 방법을 바탕으로 짜요. 어떤 방식이 맞는지 골라 주세요.</p>
       <div class="card"><h3>🧭 훈련 방식</h3>
         <div style="display:grid;gap:8px">${Object.entries(E.PHIL).map(([k, v]) => `<button type="button" class="sport-card${draft.philosophy === k ? " selected" : ""}" data-phil="${k}" style="justify-items:start;text-align:left;padding:14px">
           <span class="nm" style="font-size:16px">${v.name}${k === "polarized" ? " <span class=\"lvl\">추천</span>" : ""}</span><span class="ds" style="line-height:1.6">${v.desc}</span></button>`).join("")}</div>
@@ -303,18 +335,59 @@
         <input list="evList" data-race="${i}" data-k="event" value="${esc(r.event)}" placeholder="종목·거리" />
         <select data-race="${i}" data-k="priority">${[["A", "A 메인"], ["B", "B 중요"], ["C", "C 연습"]].map(([v, l]) => `<option value="${v}"${r.priority === v ? " selected" : ""}>${l}</option>`).join("")}</select>
         <button type="button" class="icon" data-rmrace="${i}" aria-label="삭제">✕</button></div>`).join("");
-    return `<h2>올해 나가는 대회</h2>
-      <p class="sub">A 대회 날짜에서 거꾸로 계산해 연간 계획(기초 → 강화 → 피크 → 테이퍼)을 짜요. 없으면 24주 뒤를 시즌 목표로 잡아요.</p>
-      <div class="card">${rows || '<p class="hint">아직 등록한 대회가 없어요.</p>'}
+    const sk = sportKey(draft.sport), goals = E.GOALS[sk] || [], g = E.goalOf(draft);
+    const PRK = { "5K": "run.5km", "10K": "run.10km", half: "run.하프마라톤", full: "run.마라톤" }[g.key];
+    const PH = { "5K": ["23:00", "21:30"], "10K": ["48:00", "45:00"], half: ["1:45:00", "1:39:00"], full: ["3:45:00", "3:30:00"] }[g.key] || ["", "예: 2:20:00"];
+    return `<h2>올해 나가는 대회와 목표</h2>
+      <p class="sub">마지막이에요! 올해 나가는 대회를 모두 알려주세요. 대회 날짜·거리·중요도에 맞춰 <b>기초 → 강화 → 조정기(대회 2주 전) → 대회 → 회복</b>까지 스케줄을 도와드려요.</p>
+      <div class="card"><h3>🏁 어떤 대회를 뛰나요?</h3>
+        ${rows || '<p class="hint">아직 등록한 대회가 없어요. 대회가 없으면 24주 뒤를 시즌 목표로 잡고 짜요.</p>'}
         <datalist id="evList">${eventSuggestions().map((e) => `<option value="${esc(e)}">`).join("")}</datalist>
         <button type="button" data-addrace="1" class="mt">+ 대회 추가</button>
-        <p class="hint mt"><b>A</b> = 시즌 목표 · <b>B</b> = 중요 (그 주는 양을 15% 줄여요) · <b>C</b> = 연습 삼아</p></div>`;
+        <div class="note mt" style="line-height:1.7"><b>A 메인</b> — 시즌 목표. 이 날짜에서 거꾸로 연간 계획을 짜고, 2주 조정기 + 대회 후 회복까지 넣어요.<br>
+          <b>B 중요</b> — 전력으로 뛰지만, 1~2주 전부터 양을 조금만 줄여요 (A 대회 준비 흐름은 유지).<br>
+          <b>C 연습</b> — 훈련 삼아 뛰는 대회. 조정기 없이 강한 훈련 하루로 생각해요.</div></div>
+      <div class="card"><h3>🎯 어떤 거리에 맞춰 훈련하고 싶나요?</h3>
+        <p class="hint" style="margin-top:0">보통 A 대회 거리와 같게 해요. 이 거리에 맞춰 핵심 훈련·레이스 강도·페이스가 정해져요.</p>
+        <div class="chips">${goals.map(([k, n]) => `<button type="button" class="chip${g.key === k && draft.goal.event ? " on" : ""}" data-goal="${k}">${n}</button>`).join("")}</div>
+        <p class="hint">${draft.goal.event ? "" : `선택 안 하면 ${esc(g.from)}: <b>${esc(g.name)}</b>`}</p>
+        <div class="note">핵심 훈련: <b>${esc(g.focus)}</b><br>레이스 강도: <b>${esc(g.race)}</b><br>권장 주간 시간: <b>${g.hours[0]}~${g.hours[1]}시간</b></div>
+        <div class="fields mt" style="grid-template-columns:1fr 1fr">
+          ${PRK ? `<label>이 거리 최고기록<div class="unit"><input type="text" inputmode="decimal" data-time="1" data-rec="${PRK}" data-col="pr" value="${esc((draft.records && draft.records[PRK] && draft.records[PRK].pr) || "")}" placeholder="${PH[0]}" /></div></label>` : ""}
+          ${field("목표 기록", "goal.time", "", PH[1], "time")}</div>
+        <div id="goalAn">${goalAnalysis(draft)}</div>
+      </div>`;
+  }
+  // 목표 분석 (현재 기록 → 목표 기록, 남은 기간으로 현실적인지)
+  function goalAnalysis(dd) {
+    const sk = sportKey(dd.sport), g = E.goalOf(dd);
+    const DM = { "5K": 5000, "10K": 10000, half: 21097, full: 42195 };
+    const PRK = { "5K": "run.5km", "10K": "run.10km", half: "run.하프마라톤", full: "run.마라톤" }[g.key];
+    const today = iso(new Date());
+    const A = (dd.races || []).filter((r) => r.date && r.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+    const race = A.find((r) => r.priority === "A") || A[0];
+    const weeksLeft = race ? Math.max(1, Math.round((new Date(race.date + "T00:00:00") - new Date()) / (7 * 864e5))) : null;
+    if (sk !== "run" || !DM[g.key]) return weeksLeft ? `<div class="goal-an">🏁 ${esc(race.name || "A 대회")}까지 <b>${weeksLeft}주</b> — 이 기간에 맞춰 기초·강화·조정기를 나눠요.</div>` : "";
+    const pr = parseTime(((dd.records || {})[PRK] || {}).pr), tg = g.time, D = DM[g.key];
+    const now = pr ? E.vdotFrom(D, pr) : (E.runInfo(dd) || {}).vdot, need = tg ? E.vdotFrom(D, tg) : null;
+    const lines = [];
+    if (now) { const R = E.runFrom(now); lines.push(`지금 수준 <b>VDOT ${now.toFixed(1)}</b>${pr ? "" : " (다른 기록 기준)"} · 훈련 페이스 E ${fmt(R.E[0])}–${fmt(R.E[1])} · T ${fmt(R.T)} · I ${fmt(R.I)} /km`); }
+    else lines.push("최고기록을 넣으면 지금 수준에 맞는 훈련 페이스를 계산해요.");
+    if (need) lines.push(`목표 ${esc(g.timeText)} → <b>VDOT ${need.toFixed(1)}</b> · 목표 레이스 페이스 <b>${fmt(tg / (D / 1000))}/km</b>`);
+    if (now && need) {
+      const diff = need - now, lv = (E.levelOf(dd) || { lv: 2 }).lv, step = lv <= 1 ? 1.5 : 1, wkNeed = diff > 0 ? Math.ceil(diff / step) * 4 : 0;
+      const v = diff <= 0 ? ["✅ 이미 가능한 기록", "#16a34a"] : !weeksLeft ? ["📅 대회 날짜를 넣으면 판단해요", "#64748b"] : wkNeed <= weeksLeft * 0.8 ? ["✅ 현실적인 목표", "#16a34a"] : wkNeed <= weeksLeft * 1.3 ? ["💪 도전적인 목표", "#ea580c"] : ["⚠️ 기간에 비해 무리한 목표", "#dc2626"];
+      lines.push(`<b style="color:${v[1]}">${v[0]}</b> — VDOT ${diff > 0 ? "+" : ""}${diff.toFixed(1)}, 보통 ${wkNeed}주${weeksLeft ? ` (A 대회까지 ${weeksLeft}주)` : ""}. 계획은 지금 페이스로 시작해 4주마다 VDOT +${step}씩 올려요.`);
+    }
+    return `<div class="goal-an">${lines.map((l) => `<div>${l}</div>`).join("")}</div>`;
   }
 
   function stepReview() {
     const ds = discsOf(draft.sport), g = E.goalOf(draft), h = E.hrInfo(draft);
     const vol = ds.filter((d) => num((draft.volume || {})[d])).map((d) => `${DISC[d].name} ${draft.volume[d]}${DISC[d].unit}`).join(" · ");
-    return `<h2>확인</h2><p class="sub">이대로 연간·월간·주간 계획을 만들까요?</p>
+    const rs = draft.races.filter((r) => r.name || r.date).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    return `<h2>확인</h2><p class="sub">끝까지 들었어요! 이 내용으로 연간·월간·주간 스케줄을 짜 드릴게요.</p>
+      ${rs.length ? `<div class="card"><h3>🏁 올해 대회</h3>${rs.map((r) => `<div class="spread" style="padding:6px 0;border-top:1px solid var(--line)"><span><b>${esc(r.name || "대회")}</b> <span class="hint">${esc(r.event || "")}</span></span><span>${esc(r.date || "날짜 미정")} <span class="zb" style="background:${r.priority === "A" ? "#ef4444" : r.priority === "B" ? "#f97316" : "#94a3b8"}">${r.priority || "B"}</span></span></div>`).join("")}<p class="hint" style="margin:8px 0 0">A 대회 2주 전부터 조정기, 대회 뒤에는 거리에 맞는 회복 기간이 들어가요.</p></div>` : ""}
       <div class="card"><div class="kv">
         <span>종목</span><b>${SPORTS[draft.sport].icon} ${draft.sport}</b>
         <span>목표</span><b>${esc(g.name)}${g.timeText ? ` · ${esc(g.timeText)}` : ""}</b>
@@ -347,6 +420,7 @@
   async function finish() {
     $("wzNext").disabled = true;
     draft.races = draft.races.filter((r) => r.name || r.date);
+    draft.goalSetAt = draft.goalSetAt || new Date().toISOString(); // 목표를 끝까지 들었으니 계획 전에 다시 묻지 않아요
     draft.updatedAt = new Date().toISOString();
     draft.bySport = draft.bySport || {};
     draft.bySport[draft.sport] = pickSport(draft); // 이 종목 문진표로 저장
@@ -381,6 +455,7 @@
       draft.records = draft.records || {};
       draft.records[t.dataset.rec] = Object.assign({}, draft.records[t.dataset.rec], { [t.dataset.col]: t.value });
     } else if (t.dataset.race !== undefined && t.dataset.k) draft.races[+t.dataset.race][t.dataset.k] = t.value;
+    if ($("goalAn")) $("goalAn").innerHTML = goalAnalysis(draft); // 대회·목표 단계: 입력하면 바로 다시 분석
   }
   $("wzBody").addEventListener("input", onWzInput);
   $("wzBody").addEventListener("change", (e) => {
@@ -481,8 +556,96 @@
     return `<div class="note" style="margin:8px 0 0;font-size:13px;line-height:1.7">🔍 두 안의 차이 (${weekIdx + 1}주차 기준)<br>${line("A안", a)}<br>${line("B안", b)}<br>
       고강도 비중: A안 ${100 - a.low}% vs B안 ${100 - b.low}% · 질 훈련: A안 주 ${a.q}회 vs B안 주 ${b.q}회</div>`;
   }
-  function openPlan() {
+  // ---------- 🎯 목표 먼저: 어떤 대회 · 어떤 거리 · 목표 기록 · 현재 최고기록 ----------
+  const PR_KEY = { "5K": "run.5km", "10K": "run.10km", half: "run.하프마라톤", full: "run.마라톤" };
+  const DIST_M = { "5K": 5000, "10K": 10000, half: 21097, full: 42195 };
+  function openGoal(after) {
     if (!profile) { openWizard(0); return; }
+    const g0 = clone(profile);
+    const sk = sportKey(g0.sport);
+    const goals = E.GOALS[sk] || [];
+    g0.goal = g0.goal || { event: "", time: "" };
+    g0.records = g0.records || {};
+    g0.races = g0.races || [];
+    const today = iso(new Date());
+    let raceSel = (() => { const up = g0.races.map((r, i) => [r, i]).filter(([r]) => r.date && r.date >= today).sort((a, b) => a[0].date.localeCompare(b[0].date)); const a = up.find(([r]) => r.priority === "A") || up[0]; return a ? a[1] : -1; })();
+    let ev = g0.goal.event || (goals[1] || goals[0])[0];
+    let d = $("goalDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "goalDlg"; document.body.appendChild(d); }
+    const prOf = () => (PR_KEY[ev] && g0.records[PR_KEY[ev]] && g0.records[PR_KEY[ev]].pr) || "";
+    function analysis() {
+      if (sk !== "run") {
+        const r = g0.races[raceSel];
+        return `<div class="goal-an"><b>${esc((goals.find((x) => x[0] === ev) || [])[1] || "")}</b> 맞춤 계획 — 핵심 훈련: ${esc((goals.find((x) => x[0] === ev) || [])[2] || "")}${r && r.date ? `<br>대회까지 <b>${Math.max(0, Math.round((new Date(r.date) - new Date()) / (7 * 864e5)))}주</b>` : ""}</div>`;
+      }
+      const D = DIST_M[ev], pr = parseTime(prOf()), tg = parseTime(g0.goal.time);
+      if (!D) return "";
+      const lines = [];
+      const now = pr ? E.vdotFrom(D, pr) : null, need = tg ? E.vdotFrom(D, tg) : null;
+      if (now) { const R = E.runFrom(now); lines.push(`현재 최고기록 ${prOf()} → <b>VDOT ${now.toFixed(1)}</b> · 지금 훈련 페이스 E ${fmt(R.E[0])}–${fmt(R.E[1])} · T ${fmt(R.T)} · I ${fmt(R.I)} /km`); }
+      else lines.push("현재 최고기록을 넣으면 지금 수준에 딱 맞는 훈련 페이스를 계산해요. (없으면 최근 5K·10K 기록도 OK)");
+      if (need) lines.push(`목표 ${g0.goal.time} → <b>VDOT ${need.toFixed(1)}</b> · 목표 레이스 페이스 <b>${fmt(tg / (D / 1000))}/km</b>`);
+      if (now && need) {
+        const r = g0.races[raceSel];
+        const weeksLeft = r && r.date ? Math.max(1, Math.round((new Date(r.date + "T00:00:00") - new Date()) / (7 * 864e5))) : null;
+        const diff = need - now, lv = (E.levelOf(g0) || { lv: 2 }).lv, step = lv <= 1 ? 1.5 : 1;
+        const wkNeed = diff > 0 ? Math.ceil(diff / step) * 4 : 0;
+        const verdict = diff <= 0 ? ["✅ 이미 가능한 기록", "#16a34a"] : !weeksLeft ? ["📅 대회 날짜를 정하면 판단해요", "#64748b"] : wkNeed <= weeksLeft * 0.8 ? ["✅ 현실적인 목표", "#16a34a"] : wkNeed <= weeksLeft * 1.3 ? ["💪 도전적인 목표", "#ea580c"] : ["⚠️ 기간에 비해 무리한 목표", "#dc2626"];
+        lines.push(`<b style="color:${verdict[1]}">${verdict[0]}</b> — VDOT ${diff > 0 ? "+" : ""}${diff.toFixed(1)} 필요, 보통 ${wkNeed || 0}주 걸려요${weeksLeft ? ` (대회까지 ${weeksLeft}주)` : ""}.`);
+        if (diff > 0) lines.push(`계획은 지금 기록(VDOT ${now.toFixed(1)}) 페이스로 시작해서 <b>4주마다 VDOT +${step}</b>씩 올려 목표 페이스에 다가가요. 처음부터 목표 페이스로 훈련하면 부상·과훈련 위험이 커요.`);
+        if (verdict[0].includes("무리")) lines.push(`추천: 이번 대회 목표를 ${(() => { const v = Math.min(need, now + step * Math.floor((weeksLeft || 4) / 4)); return TS.E.fmt(Math.round(E.predict(v, D))); })()} 정도로 잡고, 다음 시즌에 ${g0.goal.time}에 도전해요.`);
+      }
+      return `<div class="goal-an">${lines.map((l) => `<div>${l}</div>`).join("")}</div>`;
+    }
+    function draw() {
+      const up = g0.races.map((r, i) => [r, i]).filter(([r]) => !r.date || r.date >= today);
+      d.innerHTML = `<div style="padding:18px;display:grid;gap:14px;max-height:88vh;overflow:auto">
+        <div class="spread"><b style="font-size:17px">🎯 목표부터 정해요</b><button type="button" class="link" data-g="x" style="font-size:20px">✕</button></div>
+        <p class="hint" style="margin:0">목표 대회·거리·기록에 맞춰 훈련 페이스와 훈련 종류를 정확하게 짜요.</p>
+        <div><div class="eyebrow" style="margin:0 0 6px">1. 어떤 대회를 앞두고 있나요?</div>
+          <div class="chips">${up.map(([r, i]) => `<button type="button" class="chip${raceSel === i ? " on" : ""}" data-race="${i}">🏁 ${esc(r.name || r.event || "대회")}${r.date ? ` · ${r.date.slice(5).replace("-", "/")}` : ""}</button>`).join("")}
+            <button type="button" class="chip${raceSel === -1 ? " on" : ""}" data-race="-1">아직 없음</button><button type="button" class="chip" data-race="new">+ 대회 추가</button></div>
+          ${raceSel === -2 ? `<div class="fields mt" style="grid-template-columns:1fr 1fr"><label>대회 이름<input id="gRaceName" placeholder="예: 춘천마라톤" /></label><label>날짜<input id="gRaceDate" type="date" min="${today}" /></label></div>` : ""}</div>
+        <div><div class="eyebrow" style="margin:0 0 6px">2. 어떤 거리를 가장 잘하고 싶나요?</div>
+          <div class="chips">${goals.map(([k, n]) => `<button type="button" class="chip${ev === k ? " on" : ""}" data-ev="${k}">${esc(n)}</button>`).join("")}</div></div>
+        <div class="fields" style="grid-template-columns:1fr 1fr">
+          ${sk === "run" ? `<label>3. 이 거리 최고기록<input id="gPr" inputmode="decimal" data-time="1" placeholder="${ev === "full" ? "3:45:00" : ev === "half" ? "1:45:00" : ev === "10K" ? "48:00" : "23:00"}" value="${esc(prOf())}" /></label>` : ""}
+          <label>${sk === "run" ? "4" : "3"}. 목표 기록<input id="gTime" inputmode="decimal" data-time="1" placeholder="${ev === "full" ? "3:30:00" : ev === "half" ? "1:39:00" : ev === "10K" ? "45:00" : "21:30"}" value="${esc(g0.goal.time || "")}" /></label></div>
+        <div id="gAn">${analysis()}</div>
+        <div class="actions"><div class="right"><button type="button" data-g="x">나중에</button><button type="button" class="primary" data-g="save">이 목표로 계획 만들기</button></div></div>
+      </div>`;
+      d.querySelectorAll('[data-g="x"]').forEach((b) => { b.onclick = () => { d.close(); if (after) after(); }; });
+      d.querySelectorAll("[data-race]").forEach((b) => { b.onclick = () => { raceSel = b.dataset.race === "new" ? -2 : +b.dataset.race; const r = g0.races[raceSel]; if (r) { const k = E.GOALS[sk].find((x) => new RegExp(x[0] === "half" ? "half|하프" : x[0] === "full" ? "full|풀|마라톤" : x[0], "i").test(`${r.event} ${r.name}`)); if (k) ev = k[0]; } draw(); }; });
+      d.querySelectorAll("[data-ev]").forEach((b) => { b.onclick = () => { ev = b.dataset.ev; draw(); }; });
+      d.querySelectorAll("[data-time]").forEach((inp) => { inp.oninput = () => {
+        const f = E.autoTime(inp.value); if (f !== inp.value) inp.value = f;
+        if (inp.id === "gPr" && PR_KEY[ev]) g0.records[PR_KEY[ev]] = Object.assign({}, g0.records[PR_KEY[ev]], { pr: inp.value });
+        if (inp.id === "gTime") g0.goal.time = inp.value;
+        $("gAn").innerHTML = analysis();
+      }; });
+      d.querySelector('[data-g="save"]').onclick = async (e) => {
+        e.target.disabled = true;
+        g0.goal.event = ev;
+        if (raceSel === -2) {
+          const nm = (d.querySelector("#gRaceName") || {}).value || "", dt = (d.querySelector("#gRaceDate") || {}).value || "";
+          if (nm || dt) g0.races.push({ name: nm, date: dt, event: ev, priority: "A" });
+        } else if (raceSel >= 0 && g0.races[raceSel]) { g0.races[raceSel].priority = "A"; if (!g0.races[raceSel].event) g0.races[raceSel].event = ev; }
+        g0.goalSetAt = new Date().toISOString();
+        g0.bySport = g0.bySport || {};
+        if (g0.sport) g0.bySport[g0.sport] = pickSport(g0);
+        await saveProfile(g0);
+        setProfile(g0);
+        d.close();
+        if (after) after();
+      };
+    }
+    draw();
+    if (!d.open) d.showModal();
+  }
+  function openPlan(force) {
+    if (!profile) { openWizard(0); return; }
+    // 계획을 보여주기 전에: 어떤 대회·거리를 목표로, 목표 기록·현재 최고기록이 얼마인지 먼저 확인
+    if (!profile.goalSetAt && force !== true) { openGoal(() => openPlan(true)); return; }
     variants = makeVariants(profile);
     vSel = 0;
     plan = variants[0].plan;
@@ -541,6 +704,7 @@
       ${window.ZONE && s.type !== "Race" ? window.ZONE.guideLine(s.lvl) : ""}
       ${s.hiText && window.ZONE ? window.ZONE.mixBar(s.hiText, "이 훈련 강도 구성") : ""}
       <div class="lbl">구성</div>${stepTable(s.steps)}
+      ${s.alt ? `<div class="alt-box"><div class="alt-h">✅ 추천: <b>${esc(s.name)}</b> <span class="hint">— ${esc(s.recWhy || "이번 시기 목적에 가장 잘 맞아요")}</span></div><details><summary>🔁 대안: <b>${esc(s.alt.name)}</b> <span class="hint">— ${esc(s.alt.why)}</span></summary>${stepTable(s.alt.steps)}<div class="txt" style="margin-top:6px">${esc(s.alt.point || "")}</div></details></div>` : ""}
       ${s.targets.length ? `<div class="lbl">강도 목표</div><ul class="tg">${s.targets.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
       <details class="why"><summary>설명 보기 — 포인트 · 효과</summary>
         <div class="lbl">훈련 포인트</div><div class="txt">${esc(s.point)}</div>
@@ -611,7 +775,10 @@
         <p class="hint">${esc(W.phase.desc)} · 이번 주 집중: <b>${esc(W.phase.focus)}</b></p>
         ${distBar(W.lowPct, W)}
         ${ratioCtl(W)}
+        ${W.tss && plan.pmc ? (() => { const pw = plan.pmc(weekIdx + 1).weeks[weekIdx]; return `<p class="hint" style="margin:10px 0 0">📈 이번 주 훈련 부하 약 <b>${W.tss} TSS</b> · 주말 예상 체력 CTL <b>${Math.round(pw.ctl)}</b> (${pw.ramp >= 0 ? "+" : ""}${pw.ramp.toFixed(1)}) · 컨디션 TSB <b>${pw.tsb >= 0 ? "+" : ""}${Math.round(pw.tsb)}</b> <span>— 연간 탭에 그래프가 있어요</span></p>`; })() : ""}
       </div>
+      ${plan.level && weekIdx === 0 ? `<div class="note level-note"><b>🏅 레벨 ${plan.level.lv} · ${plan.level.name}</b> — 질 훈련 ${plan.level.q}. ${esc(plan.level.desc)}<br><span class="hint">추천 강도 비율 ${plan.level.ratio}:${100 - plan.level.ratio} · ${esc(plan.level.next)}</span></div>` : ""}
+      ${W.prep && W.prep.advice ? W.prep.advice.map((a) => `<div class="prep-box"><b>${esc(a.title)}</b><span class="zb" style="background:#ef4444;margin-left:6px">${esc(a.stage)}</span><ul>${a.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul></div>`).join("") : ""}
       ${(() => { const nt = plan.intensityNote(weekIdx); return `<div class="note" style="margin:0 0 12px;${nt.level === "high" ? "background:#fff1e6" : ""}">${nt.level === "high" ? "🔥" : "🌱"} ${esc(nt.text)}</div>`; })()}
       ${W.notes.length ? `<div class="card"><h3>📏 이번 주 강도·양 기준</h3><ul style="margin:0;padding-left:18px;line-height:1.7;font-size:14px">${W.notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
       <div class="plan-actions">
@@ -639,6 +806,25 @@
       <div class="plan-actions"><button type="button" class="primary" data-add="${monthIdx}:4">📅 이 4주를 달력에 넣기</button></div>`;
   }
 
+  // 📈 체력·피로·컨디션 예상 그래프 (TrainingPeaks 퍼포먼스 매니지먼트 차트 · 앨런/코건 TSS 방식)
+  function pmcCard() {
+    if (!plan.pmc) return "";
+    const P = plan.pmc(52), W = P.weeks;
+    const maxV = Math.max(10, ...W.map((w) => Math.max(w.ctl, w.atl))), minT = Math.min(-30, ...W.map((w) => w.tsb)), maxT = Math.max(30, ...W.map((w) => w.tsb));
+    const X = (i) => (i / (W.length - 1)) * 100, Y = (v) => 60 - (v / maxV) * 56, YT = (v) => 100 - ((v - minT) / (maxT - minT)) * 34;
+    const line = (f, c, w = 1.6) => `<polyline fill="none" stroke="${c}" stroke-width="${w}" vector-effect="non-scaling-stroke" points="${W.map((x, i) => `${X(i).toFixed(2)},${f(x).toFixed(2)}`).join(" ")}" />`;
+    const ramps = W.filter((w) => w.ramp > 7);
+    const races = P.races.map((r) => { const ok = r.tsb >= 5 && r.tsb <= 30; return `<div class="pr-row"><span>🏁 ${esc(r.name)} <span class="hint">${r.week + 1}주차</span></span><span>체력 CTL <b>${Math.round(r.ctl)}</b> · 컨디션 TSB <b style="color:${ok ? "#16a34a" : "#ea580c"}">${r.tsb >= 0 ? "+" : ""}${Math.round(r.tsb)}</b> ${ok ? "✅" : r.tsb < 5 ? "⚠️ 피로가 남아요" : "⚠️ 너무 쉬었어요"}</span></div>`; }).join("");
+    return `<div class="card"><div class="spread"><h3 style="margin:0">📈 체력·피로·컨디션 예상</h3><span class="hint">TSS 기준</span></div>
+      <svg viewBox="0 0 100 104" preserveAspectRatio="none" style="width:100%;height:180px;margin-top:8px;background:var(--panel2,#f8fafc);border-radius:10px">
+        <line x1="0" x2="100" y1="${YT(0)}" y2="${YT(0)}" stroke="#94a3b8" stroke-dasharray="1 1" stroke-width=".4" vector-effect="non-scaling-stroke" />
+        ${P.races.map((r) => `<line x1="${X(r.week)}" x2="${X(r.week)}" y1="0" y2="104" stroke="#ef4444" stroke-width="1.2" vector-effect="non-scaling-stroke" opacity=".6" />`).join("")}
+        ${line((w) => Y(w.atl), "#ec4899", 1.2)}${line((w) => Y(w.ctl), "#2563eb", 2.2)}${line((w) => YT(w.tsb), "#eab308", 1.6)}</svg>
+      <div class="race-legend" style="margin-top:6px"><span><i style="background:#2563eb"></i>체력 CTL (42일 평균 부하)</span><span><i style="background:#ec4899"></i>피로 ATL (7일)</span><span><i style="background:#eab308"></i>컨디션 TSB = 체력 − 피로</span><span><i style="background:#ef4444"></i>대회</span></div>
+      <p class="hint" style="margin:6px 0 0">체력은 천천히 오르고, 대회 전 조정기에 피로가 빠지면서 컨디션(TSB)이 플러스로 올라와요. A 대회 날 TSB +5~+25가 목표예요. 체력 상승(램프)은 주당 +5~7 이내가 안전해요.</p>
+      ${races ? `<div style="margin-top:8px">${races}</div>` : ""}
+      ${ramps.length ? `<div class="note" style="margin:8px 0 0">⚠️ ${ramps.map((w) => `${w.i + 1}주차`).slice(0, 4).join(", ")}에 체력이 주당 7 넘게 올라요 — 부상 위험이 있으니 컨디션을 잘 살펴보세요.</div>` : ""}</div>`;
+  }
   function renderYearTab() {
     const ss = plan.season;
     const all = ss.weeks.map((w) => plan.week(w.i));
@@ -652,6 +838,7 @@
         <div style="display:flex;height:22px;border-radius:8px;overflow:hidden;margin:10px 0">${segs.map((s) => `<div title="${esc(s.phase.name)} ${s.n}주" style="flex:${s.n};background:${s.phase.color}"></div>`).join("")}</div>
         <div class="bars" style="height:70px;gap:1px;margin-top:6px">${all.map((w) => `<div class="b" data-goweek="${w.i}" style="cursor:pointer"><i style="height:${Math.max(4, (w.total / maxT) * 100)}%;background:${w.races.length ? "#ef4444" : w.recovery ? "#cbd5e1" : w.phase.color};border-radius:2px"></i></div>`).join("")}</div>
         <p class="hint">막대 = 주간 훈련 시간 · 빨강 = 대회 주 · 회색 = 회복 주 (막대를 누르면 그 주로 이동)</p></div>
+      ${pmcCard()}
       <div class="card"><h3>시즌 단계</h3>
         ${segs.map((s) => `<div class="pr-row" data-goweek="${s.i}" style="cursor:pointer;align-items:flex-start">
           <span><span class="zb" style="background:${s.phase.color};color:#0f172a">${esc(s.phase.name)}</span> <span class="hint">${s.n}주</span><br><span class="hint">${esc(s.phase.focus)}</span></span>
@@ -675,6 +862,14 @@
         ${gap ? `<div class="note">목표 페이스 <b>${fmt(gap.pace)}/km</b> · 필요 VDOT <b>${gap.need.toFixed(1)}</b>${gap.now ? ` · 지금 <b>${gap.now.toFixed(1)}</b>` : ""}</div>` : ""}
       </div>
       <div class="card"><h3>🧭 ${esc(ph.name)}</h3><p class="txt" style="margin:0">${esc(ph.desc)}</p><p class="hint">${esc(ph.by)}</p></div>`;
+    html += `<div class="card"><h3>📚 이 계획이 참고한 방법</h3><div class="ref-list">
+      <div><b>조 프릴 · 철인3종 트레이닝 바이블</b><span>연간 계획을 준비기 → 기초 1~3 → 강화 1~2 → 피크 → 대회 → 전환기로 나누고, 3주 올리고 1주 회복해요. 종목별 핵심 능력(지구력·근력·근지구력·스피드)을 시기에 맞춰 키워요.</span></div>
+      <div><b>맷 피츠제럴드 · 80/20 트라이애슬론</b><span>훈련의 약 80%는 쉬운 강도, 20%만 힘들게. 주간 거리·시간에 따라 레벨을 나누고 질 훈련 횟수를 정해요.</span></div>
+      <div><b>잭 대니얼스 · 달리기와 과학</b><span>VDOT으로 E·M·T·I·R 페이스를 계산하고, T 10%·I 8%·R 5%처럼 질 훈련 양에 상한을 둬요. 4주 정도 소화가 잘 되면 VDOT을 1씩 올려요.</span></div>
+      <div><b>헌터 앨런 · 앤드류 코건 · 파워미터 훈련</b><span>FTP 기준 7개 파워 존과 TSS(훈련 부하)로 체력(CTL)·피로(ATL)·컨디션(TSB)을 관리해요. 대회 날 컨디션이 플러스가 되도록 조정기를 짜요.</span></div>
+      <div><b>TrainingPeaks · WKO5</b><span>퍼포먼스 매니지먼트 차트 방식으로 연간 부하 흐름을 보여줘요 (연간 탭의 그래프).</span></div>
+      <div><b>TriDot · Athletica · Humango</b><span>내 기록·컨디션·가능한 시간에 맞춰 계획을 자동으로 바꾸는 방식 — 요일별 시간, 컨디션 맞춤, 대회 앞뒤 자동 조정, 주마다 바뀌는 훈련에 반영했어요.</span></div>
+    </div></div>`;
 
     if (ds.includes("run")) {
       html += `<div class="card"><h3>🏃 달리기 — 다니엘스 VDOT ${R ? `<b>${R.vdot.toFixed(1)}</b>` : ""}</h3>
@@ -725,7 +920,10 @@
       ${cloudOk ? "" : `<div class="note" style="margin:0 0 12px">⚠️ 프로필이 이 기기에만 저장됐어요. Supabase SQL Editor에서 <code>schema_profile.sql</code>을 실행하면 다른 기기에서도 보여요.</div>`}
       <div class="card"><div class="kv">
         <span>종목 · 목표</span><b>${SPORTS[p.sport].icon} ${esc(g.name)}${g.timeText ? ` · ${esc(g.timeText)}` : ""}</b>
+        ${plan.feas ? `<span>목표 판단</span><b>VDOT ${plan.feas.now.toFixed(1)} → ${plan.feas.need.toFixed(1)} · 목표 페이스 ${fmt(plan.feas.pace)}/km · <span style="color:${plan.feas.verdict === "무리" ? "#dc2626" : plan.feas.verdict === "도전적" ? "#ea580c" : "#16a34a"}">${plan.feas.verdict}</span>${plan.feas.weeksLeft ? ` <span class="hint">(필요 약 ${plan.feas.weeksNeed}주 · 대회까지 ${plan.feas.weeksLeft}주)</span>` : ""}</b>` : ""}
+        <span></span><b><button type="button" class="pill" data-goaledit="1">🎯 목표 바꾸기</button> <button type="button" class="pill" data-predict="1">🔮 기록 예측</button></b>
         <span>훈련 시간</span><b>주 ${(p.days || []).length}회 · 주 최대 ${plan.availHours.toFixed(1)}시간</b>
+        ${plan.level ? `<span>레벨</span><b>🏅 레벨 ${plan.level.lv} · ${plan.level.name} <span class="hint">(${Object.entries(plan.level.per).map(([x, v]) => `${E.DISC[x].name} 주 ${x === "swim" ? v.vol.toLocaleString() + "m" : v.vol + "km"}`).join(" · ")})</span></b>` : ""}
       </div>
       <div class="eyebrow mt">계획 2가지 — 골라서 보세요</div>
       <div class="vpick">${variants.map((v, i) => { const st = vStats(v); return `<button type="button" data-v="${i}" class="${vSel === i ? "on" : ""}">
@@ -739,11 +937,12 @@
     $("planEdit").onclick = () => { closePlan(); openWizard(1); };
   }
   $("planBody").addEventListener("click", (e) => {
-    const el = e.target.closest("[data-tab],[data-wk],[data-mo],[data-goweek],[data-add],[data-v],[data-ratio],[data-ratioapply]");
+    const el = e.target.closest("[data-tab],[data-wk],[data-mo],[data-goweek],[data-add],[data-v],[data-ratio],[data-ratioapply],[data-goaledit]");
     if (!el) return;
     const d = el.dataset;
     if (d.ratio) { ratioDraft = +d.ratio; const y = $("planOv").scrollTop; renderPlan(); $("planOv").scrollTop = y; return; }
     if (d.ratioapply) { applyRatio(el); return; }
+    if (d.goaledit) { openGoal(() => openPlan(true)); return; }
     if (d.v !== undefined) { vSel = +d.v; plan = variants[vSel].plan; renderPlan(); return; }
     if (d.tab) planTab = d.tab;
     else if (d.wk) weekIdx = Math.max(0, Math.min(51, weekIdx + +d.wk));
@@ -770,9 +969,11 @@
       `포인트: ${s.point}`, "", "구성:", ...s.steps.map((x) => `- ${x}`), "",
       ...s.targets.map((x) => `목표: ${x}`), s.dist ? `목표: 권장 거리 ${s.dist}` : null, s.hiText ? `목표: 강도 거리 ${s.hiText}` : null, "",
       s.effect ? `효과: ${s.effect}` : null, ...s.envNotes,
+      ...(s.alt ? ["", `대안: ${s.alt.name} — ${s.alt.why}`, "대안구성:", ...s.alt.steps.map((x) => `- ${x}`)] : []),
     ].filter((x) => x !== null).join("\n");
   }
   async function addToCalendar(first, count, btn, noAsk) {
+    clearTimeout(syncTimer); // 직접 넣는 중에는 자동 맞춤을 잠시 멈춰요
     const last = Math.min(51, first + count - 1);
     const from = iso(plan.week(first).start), to = iso(addDays(plan.week(last).start, 6));
     btn.disabled = true;
@@ -809,7 +1010,7 @@
     await saveProfile(p);
     setProfile(p);
   }
-  Object.assign(TS, { getProfile: () => profile, openWizard, openPlan, isProfileCloud: () => cloudOk, discsOf, updateProfile });
+  Object.assign(TS, { getProfile: () => profile, openWizard, openPlan, openGoal, isProfileCloud: () => cloudOk, discsOf, updateProfile });
   // 오른쪽 위 종목 버튼: 종목만 바꾸고 바로 스케줄 보기 (문진표는 '설정'에서만)
   function openSportQuick() {
     if (!profile) { openWizard(0); return; }

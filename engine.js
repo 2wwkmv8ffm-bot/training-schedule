@@ -159,7 +159,11 @@
       if (best == null || v > best) { best = v; src = `철인3종 ${n} 달리기 (자전거 뒤 기록이라 3% 보정)`; }
     }
     if (best == null || best < 20 || best > 90) return null;
-    const v = best, I = paceAt(v, 0.975);
+    return runFrom(best, src);
+  }
+  // VDOT 하나로 모든 훈련 페이스 계산 (다니엘스)
+  function runFrom(v, src) {
+    const I = paceAt(v, 0.975);
     return {
       vdot: v, src, E: [paceAt(v, 0.70), paceAt(v, 0.645)], M: predict(v, 42195) / 42.195, T: paceAt(v, 0.88), I, R: I - 15,
       pred: { "5K": predict(v, 5000), "10K": predict(v, 10000), "하프": predict(v, 21097), "풀코스": predict(v, 42195) },
@@ -323,6 +327,30 @@
   }
   const TRAINING = (k) => !["taper", "race", "trans", "peak"].includes(k);
 
+  // 🏁 대회 2주 전 조정기 — 전문 코치의 단계별 안내 (D-14 ~ D-1)
+  function prepAdvice(r, to, sk) {
+    const e = String(r.event || "").toLowerCase();
+    const long = sk === "tri" ? /full|half|하프|풀|아이언|70/.test(e) : sk === "run" ? /half|full|하프|풀|마라톤|21|42/.test(e) : sk === "bike" ? /그란|gran|100|160/.test(e) : false;
+    const nm = `${r.name || "대회"}${r.event ? ` (${r.event})` : ""}`;
+    if (to > 14) return null;
+    if (to >= 8) return { stage: "조정기 1주차", title: `🏁 ${nm} D-${to} · 대회 준비기간(조정기) 시작`, lines: [
+      "지금부터는 '더 강해지는' 시기가 아니라 '쌓인 피로를 빼고 날을 세우는' 시기예요. 이 2주에 체력이 새로 생기지 않아요 — 욕심내서 더 하면 손해예요.",
+      `훈련량은 평소의 ${r.priority === "A" ? "80~85%" : "85~90%"}로 줄이되, 훈련 횟수와 강도는 유지해요 (강도까지 빼면 몸이 둔해져요).`,
+      long ? `마지막 롱 세션은 이번 주가 끝이에요 — ${sk === "run" ? (/full|풀|마라톤|42/.test(e) ? "풀코스는 D-21에 마지막 30km, 이번 주는 20km 안팎" : "하프는 16~18km") : "평소의 70% 길이"}로 레이스 페이스 구간을 섞어 보급·장비를 대회처럼 연습하세요.` : "레이스 페이스 구간을 짧게 넣어 대회 속도에 몸을 맞춰요.",
+      "대회 신발·옷·젤·시계 설정은 지금 정하고 훈련에서 꼭 한 번 써 보세요. 새 장비는 이제 금지.",
+      "수면 7~9시간, 술은 줄이고, 몸이 무거우면 쉬운 날을 더 쉽게.",
+    ] };
+    if (to >= 3) return { stage: "조정기 2주차 · 대회 주", title: `🏁 ${nm} D-${to} · 대회 주간`, lines: [
+      `훈련량은 평소의 ${r.priority === "A" ? "50~60%" : "65~75%"}. 짧은 레이스 페이스 자극만 1~2번 (예: ${sk === "swim" ? "100m × 4 레이스 페이스" : sk === "bike" ? "3분 × 3 레이스 강도" : "1km × 3 레이스 페이스"}) — 끝나고 '더 하고 싶다'가 정답이에요.`,
+      "롱 세션·고강도 인터벌은 없어요. 지금 피로를 남기면 그대로 대회로 가져가요.",
+      long ? "D-3부터 탄수화물 위주 식사(체중 1kg당 하루 7~10g: 밥·면·빵·바나나). 기름진 음식·새로운 음식은 피하기." : "평소처럼 먹되 대회 전날 저녁은 익숙하고 소화 잘 되는 탄수화물로.",
+      "코스·출발 시간·날씨 확인, 준비물 체크리스트 만들기. 레이스 페이스와 구간별 계획을 미리 정해 두세요.",
+      "긴장으로 잠을 못 자도 괜찮아요 — 대회 전 이틀 밤의 잠이 더 중요해요.",
+    ] };
+    return { stage: to === 2 ? "D-2" : "D-1", title: `🏁 ${nm} D-${to}`, lines: to === 2
+      ? ["휴식 또는 20~30분 아주 가볍게. 다리를 쉬게 하는 날이에요.", "물을 자주 마시고, 준비물(번호표·옷·신발·젤·시계 충전)을 미리 챙겨 두세요.", "오늘 밤 잠을 푹 — 내일 밤은 긴장으로 못 자도 괜찮아요."]
+      : ["20~30분 가볍게 + 레이스 페이스 1분 × 3~4로 몸만 깨워요 (오프너).", "저녁은 평소 먹던 탄수화물 위주로, 일찍 자기.", `내일 전략: 처음 ${sk === "run" ? "2~3km는 목표 페이스보다 5초/km 느리게" : "10분은 계획보다 살짝 여유 있게"} 출발하고, 후반에 올리기 (네거티브 스플릿). 시작부터 오버페이스가 가장 흔한 실수예요.`] };
+  }
   // 대회 뒤 회복 일수 (대회 거리·종목 기준). 앞 25%는 휴식·아주 가볍게, 나머지는 쉬운 강도만 (질 훈련 없음)
   function recoveryDays(r, sk) {
     const e = String(r.event || "").toLowerCase();
@@ -364,6 +392,7 @@
         const di = (d.getDay() + 6) % 7, cur = weeks[wi].raceDays[di];
         if (!cur || info.pri < cur.pri) weeks[wi].raceDays[di] = info; // 같은 날 겹치면 더 강한 회복 우선
       };
+      if (r.priority !== "C") for (let k = 3; k <= 14; k++) mark(-k, { kind: "taper", to: k, race: r, pri: 5 }); // 대회 2주 전부터 조정기
       mark(-2, { kind: "pre2", race: r, pri: 4 });
       mark(-1, { kind: "pre1", race: r, pri: 3 });
       for (let k = 1; k <= n; k++) mark(k, { kind: k <= Math.max(1, Math.round(n * 0.25)) ? "rest" : "post", day: k, of: n, race: r, pri: k <= Math.max(1, Math.round(n * 0.25)) ? 1 : 2 });
@@ -837,6 +866,74 @@
     return base;
   }
 
+  // Z4 이상 훈련의 대안 (같은 목적·같은 고강도 양, 다른 방식)
+  const ALT2 = {
+    run: { T_cruise: "T_tempo", T_tempo: "T_cruise", I: "T_cruise", R: "Hills", Hills: "Fartlek", Nor: "T_cruise", M_mid: "T_tempo", Steady: "Fartlek" },
+    bike: { Thr: "SS", VO2: "Thr", SS: "Thr", Race: "Thr", Ana: "VO2", Nor: "SS", Force: "Tempo" },
+    swim: { CSS: "CSS_long", VO2: "CSS", CSS_long: "CSS", Speed: "VO2", Nor: "CSS", OW: "CSS_long" },
+  };
+  const ALT_WHY = {
+    T_tempo: "끊지 않고 한 번에 버티는 힘을 키우고 싶을 때 (트랙이 없어도 OK)",
+    T_cruise: "끊어서 하면 페이스를 더 정확히 지킬 수 있어요 — 컨디션이 애매한 날 추천",
+    Hills: "트랙·평지가 없거나 다리 근력·자세 위주로 하고 싶을 때",
+    Fartlek: "기록 부담 없이 느낌으로 — 혼자 동기부여가 어려운 날",
+    SS: "강도를 조금 낮추고 더 길게 — 피로가 남아 있는 날",
+    Thr: "FTP 근처를 정확히 — 실내 트레이너에서 하기 좋아요",
+    VO2: "짧고 강하게 — 시간이 부족한 날",
+    Tempo: "강도를 낮춘 지속 훈련 — 몸이 무거운 날",
+    CSS: "짧은 반복으로 페이스를 정확히",
+    CSS_long: "긴 반복으로 레이스 지구력 위주로",
+  };
+  // ---------- 📈 훈련 부하 (TrainingPeaks · 헌터 앨런/앤드류 코건 'Training and Racing with a Power Meter') ----------
+  // TSS = 시간(h) × IF² × 100. 쉬운 구간 IF 0.60~0.72, 고강도 구간 IF 0.85~1.05
+  function tssOf(min, lvl, hiFrac) {
+    if (!min) return 0;
+    const ifLo = lvl <= 1 ? 0.6 : 0.72, ifHi = lvl >= 5 ? 1.05 : lvl >= 4 ? 0.95 : 0.85;
+    const f = Math.max(0, Math.min(1, hiFrac || 0));
+    return Math.round((min / 60) * 100 * ((1 - f) * ifLo * ifLo + f * ifHi * ifHi));
+  }
+  // 대회 TSS (대략): 거리가 길수록 커요
+  function raceTss(r, sk) {
+    const e = String((r && r.event) || "").toLowerCase();
+    if (sk === "tri") return /full|풀|아이언/.test(e) ? 600 : /half|하프|70/.test(e) ? 330 : /olympic|올림픽|51/.test(e) ? 180 : 100;
+    if (sk === "run") return /full|풀|마라톤|42/.test(e) && !/half|하프/.test(e) ? 300 : /half|하프|21/.test(e) ? 170 : /10/.test(e) ? 90 : 60;
+    if (sk === "bike") return /그란|gran|160/.test(e) ? 300 : 150;
+    return 80;
+  }
+  // ---------- 🏅 레벨 (주간 거리 기준) ----------
+  // 달리기: 50km ≈ 레벨 1, 100km ≈ 레벨 3 (다니엘스 주간 거리 단계 · 80/20 플랜 레벨 0~5 · 트레이닝피크 주간 시간 구간 참고)
+  const LEVEL_CUT = {
+    run: [30, 60, 90, 130, 170],        // km/주
+    bike: [80, 150, 250, 350, 500],     // km/주
+    swim: [3000, 6000, 10000, 15000, 25000], // m/주
+  };
+  const LEVELS = [
+    { lv: 0, name: "입문", q: "주 1회", desc: "몸을 만드는 단계. 질 훈련은 주 1회, 가벼운 템포·파틀렉·언덕 위주로 하고 인터벌(I·R·VO2)은 아직 넣지 않아요.", ratio: 90 },
+    { lv: 1, name: "초급", q: "주 1~2회", desc: "꾸준함이 가장 중요한 단계. 질 훈련 주 1~2회, 한 번에 고강도 약 5km(달리기) 이내로 짧게.", ratio: 85 },
+    { lv: 2, name: "중급", q: "주 2회", desc: "역치(T)·인터벌(I)을 주 2회. 롱 세션으로 지구력을 키우는 단계.", ratio: 80 },
+    { lv: 3, name: "중상급", q: "주 2~3회", desc: "질 훈련 주 2~3회, 한 번에 고강도 약 9km(달리기). 레이스 페이스 훈련과 긴 역치 세트가 들어가요.", ratio: 80 },
+    { lv: 4, name: "상급", q: "주 3회", desc: "질 훈련 주 3회, 긴 인터벌·레이스 특화 세트. 회복 관리(수면·영양)가 성적을 좌우해요.", ratio: 80 },
+    { lv: 5, name: "엘리트", q: "주 3~4회", desc: "많은 양 + 질 훈련 주 3~4회(더블 포함). 쉬운 날은 정말 쉽게 — 80/20을 지키는 게 핵심이에요.", ratio: 80 },
+  ];
+  const LEVEL_Q = [[1, 1], [1, 2], [2, 2], [2, 3], [3, 3], [3, 4]];
+  const LEVEL_IDEAL = (lv) => ({ run: [3, 5, 7, 9, 11, 13][lv], bike: [15, 25, 35, 45, 55, 65][lv], swim: [500, 800, 1200, 1600, 2000, 2500][lv] });
+  function levelOf(p) {
+    const v = p.volume || {}, ds = discsOf(p.sport);
+    const per = {};
+    ds.forEach((x) => {
+      const w = num(v[x]);
+      if (!w) return;
+      const cut = LEVEL_CUT[x];
+      per[x] = { vol: w, lv: cut.filter((c) => w >= c).length };
+    });
+    const ks = Object.keys(per);
+    if (!ks.length) return null;
+    // 철인3종은 종목 레벨의 평균 (반올림), 단일 종목은 그 종목 레벨
+    const lv = Math.round(ks.reduce((a, x) => a + per[x].lv, 0) / ks.length);
+    const next = ks.map((x) => { const c = LEVEL_CUT[x][per[x].lv]; return c ? `${DISC[x].name} ${x === "swim" ? c.toLocaleString() + "m" : c + "km"}` : null; }).filter(Boolean);
+    return { ...LEVELS[lv], per, next: next.length ? `다음 레벨: 주간 ${next.join(" · ")} 이상` : "최고 레벨이에요" };
+  }
+
   // ---------- 비율 모드: 질 훈련 하나의 구성 (고강도 거리 H를 정확히 넣고 나머지는 쉬운 강도) ----------
   // D: 그날 종목별 총 거리 {run: km, bike: km, swim: m}, H: 그날 종목별 고강도 거리
   function ratioSteps(disc, type, D, H, ctx, x) {
@@ -942,7 +1039,9 @@
     const hardN0 = Math.min(cand.length, allowExtra ? Math.max(baseHard, Math.min(marked.length, baseHard + 1)) : baseHard);
     // 설정한 저강도·고강도 비율에 맞추려고 질 훈련 개수를 조절해요 (buildPlan이 가장 가까운 개수를 골라요)
     // 비율을 맞추려면 '가볍게'로 정한 날도 필요할 때만 질 훈련 후보로 써요
-    const want = allowExtra ? Math.max(0, hardN0 + (opt.hardDelta || 0)) : hardN0;
+    const LQ = opt.level ? LEVEL_Q[opt.level.lv] : null; // 레벨별 주당 질 훈련 횟수 [최소, 최대]
+    const want0 = allowExtra ? Math.max(0, hardN0 + (opt.hardDelta || 0)) : hardN0;
+    const want = allowExtra && LQ && !BASE_LIKE.includes(phase) ? clamp(want0, LQ[0], LQ[1]) : allowExtra && LQ ? Math.min(want0, LQ[1]) : want0;
     const candX = want > cand.length ? [...cand, ...days.filter((d) => d !== longDay && !cand.includes(d))] : cand;
     const hardN = Math.min(want, candX.length);
     const hard = marked.slice(0, hardN);
@@ -971,6 +1070,22 @@
       })()]; }
     });
     if (phil === "norwegian" && (prog === 2 || !BASE_LIKE.includes(phase)) && hard.length && n >= 4 && plan[hard[0]] && plan[hard[0]][1] === "Nor" && plan[hard[0]][0] !== "swim") plan[hard[0]][1] = "Double"; // 더블 역치는 달리기·자전거만
+    if (opt.level && opt.level.lv === 0) { // 입문 레벨: 강한 인터벌 대신 부담 적은 질 훈련으로
+      const L0 = { I: "Fartlek", R: "Hills", T_cruise: "Steady", VO2: "Tempo", Ana: "Tempo", Thr: "Tempo", Speed: "CSS", Double: "Nor" };
+      Object.keys(plan).forEach((d) => { const t = plan[d][1]; if (L0[t]) plan[d] = [plan[d][0], L0[t]]; });
+    }
+    if (opt.level && opt.level.lv <= 1) Object.keys(plan).forEach((d) => { if (plan[d][1] === "Double") plan[d] = [plan[d][0], "Nor"]; });
+    { // 한 주 안에서 같은 질 훈련이 두 번 나오지 않게
+      const seenT = new Set(), base = BASE_LIKE.includes(phase);
+      const POOL = base ? { run: ["Steady", "Fartlek", "Hills"], bike: ["Tempo", "Force", "SS"], swim: ["CSS", "Tech"] } : { run: ["T_cruise", "I", "T_tempo", "R", "Hills"], bike: ["Thr", "VO2", "SS", "Tempo"], swim: ["CSS", "VO2", "CSS_long"] };
+      const hardOK = (c) => !(opt.level && opt.level.lv === 0 && ["I", "R", "VO2", "Thr", "Ana"].includes(c));
+      hard.forEach((d) => {
+        if (!plan[d]) return;
+        const [x, t] = plan[d];
+        if (seenT.has(x + t) && !["Nor", "Double", "Opener", "Brick"].includes(t)) { const c = (POOL[x] || []).find((y) => !seenT.has(x + y) && hardOK(y)); if (c) plan[d] = [x, c]; }
+        seenT.add(plan[d][0] + plan[d][1]);
+      });
+    }
 
     // 롱 데이
     if (longDay != null) {
@@ -1048,24 +1163,44 @@
       }
     }
 
-    // ---- 🏁 대회 앞뒤: 이틀 전 가볍게 · 전날 오프너 · 대회 뒤 회복 기간 (휴식 → 쉬운 강도만) ----
+    // ---- 🏁 대회 앞뒤: 조정기(D-14~D-3) · 이틀 전 가볍게 · 전날 오프너 · 대회 뒤 회복 기간 ----
     const RD = wk.raceDays || {};
     const raceDayIdx = new Set(wk.races.map((r) => (r.d.getDay() + 6) % 7));
     const notHard = (ty) => EASY.includes(ty) || ty === "Opener";
+    let wkHardInRaceWeek = 0;
     days.forEach((d) => {
       const x0 = plan[d][0] === "brick" ? "bike" : plan[d][0];
       if (raceDayIdx.has(d)) { plan[d] = [x0, "Test"]; return; } // 대회 날 (아래에서 대회로 바뀌어요, 거리 목표에서는 빠져요)
       const rd = RD[d];
       if (!rd) return;
+      if (rd.kind === "taper") { // 조정기: 1주차는 질 훈련 유지, 대회 주(D-7~D-3)는 짧은 레이스 페이스 자극 1번만
+        if (plan[d][1] === "Test") { plan[d] = [x0, easyType(x0, phil, phase)]; return; } // 조정기에는 테스트 안 해요
+        if (rd.to <= 7 && !notHard(plan[d][1])) { if (wkHardInRaceWeek++ >= 1 || plan[d][1] === "Long" || plan[d][1] === "M_long") plan[d] = [x0, easyType(x0, phil, phase)]; }
+        return;
+      }
       if (rd.kind === "rest") plan[d] = [x0, "Rec"];
       else if (rd.kind === "pre1") plan[d] = [x0, "Opener"];
       else if (!notHard(plan[d][1])) plan[d] = [x0, easyType(x0, phil, phase)]; // post·pre2: 질 훈련·롱 세션 금지
     });
-    if (longDay != null && RD[longDay] && RD[longDay].kind !== "pre2") longDay = null;
-    const raceNear = days.filter((d) => RD[d] || raceDayIdx.has(d)).length;
+    if (longDay != null && RD[longDay] && RD[longDay].kind !== "pre2" && !(RD[longDay].kind === "taper" && RD[longDay].to >= 8)) longDay = null;
+    const raceNear = days.filter((d) => (RD[d] && RD[d].kind !== "taper") || raceDayIdx.has(d)).length;
     const raceCut = raceNear ? Math.max(0.5, 1 - 0.08 * raceNear) : 1; // 대회 앞뒤 날이 많을수록 주간 거리를 줄여요
+    // 조정기 주간 거리: D-14~D-8은 80~90%, D-7~D-3은 50~75% (A대회가 더 많이 줄여요)
+    const tapDays = [0, 1, 2, 3, 4, 5, 6].map((d) => RD[d] && RD[d].kind === "taper" ? RD[d] : null);
+    const taperCut = tapDays.some(Boolean) && !["taper", "race"].includes(phase)
+      ? tapDays.reduce((a, t) => a + (!t ? 1 : t.to >= 8 ? (t.race.priority === "A" ? 0.82 : 0.88) : (t.race.priority === "A" ? 0.55 : 0.7)), 0) / 7 : 1;
     const raceNotes = [];
+    let prep = null;
     {
+      const stages = new Map();
+      [0, 1, 2, 3, 4, 5, 6].forEach((d) => { const t = RD[d]; if (t && (t.kind === "taper" || t.kind === "pre2" || t.kind === "pre1")) {
+        const to = t.kind === "taper" ? t.to : t.kind === "pre2" ? 2 : 1;
+        const a = prepAdvice(t.race, to, goal.sk);
+        if (a && !stages.has(a.stage)) stages.set(a.stage, a);
+        if (!prep || to < prep.to) prep = { race: t.race, to, stage: a && a.stage };
+      } });
+      stages.forEach((a) => raceNotes.push(`${a.title} — ${a.lines.join(" ")}`));
+      if (prep) prep.advice = [...stages.values()];
       const seen = new Set();
       Object.values(RD).forEach((rd) => {
         if (!rd.of || seen.has(rd.race)) return;
@@ -1073,7 +1208,6 @@
         const rest = Math.max(1, Math.round(rd.of * 0.25));
         raceNotes.push(`🏁 ${rd.race.name || "대회"}(${rd.race.event || ""}) 뒤 회복 ${rd.of}일 — 처음 ${rest}일은 휴식·아주 가볍게, 그 뒤 ${rd.of - rest}일은 쉬운 강도만 (질 훈련·롱 세션 없음).`);
       });
-      if (Object.values(RD).some((rd) => rd.kind === "pre1")) raceNotes.push("🏁 대회 전날은 20~30분 가볍게 + 짧은 자극(오프너), 이틀 전은 쉬운 강도로 컨디션을 맞춰요.");
     }
 
     // 시간 나누기
@@ -1131,7 +1265,7 @@
     const notes = [...raceNotes];
     const fmtVol = (x, v) => (x === "swim" ? `${(Math.round(v / 50) * 50).toLocaleString()}m` : `${round1(v)}km`);
     // 회복 주·테이퍼에는 거리도 줄여요 (보통 주는 설정한 거리 100%)
-    const distFactor = (phase === "taper" ? 0.6 : phase === "race" ? 0.4 : phase === "trans" ? 0.5 : wk.recovery ? 0.7 : 1) * (["taper", "race"].includes(phase) ? 1 : raceCut);
+    const distFactor = (phase === "taper" ? 0.6 : phase === "race" ? 0.4 : phase === "trans" ? 0.5 : wk.recovery ? 0.7 : 1) * (["taper", "race"].includes(phase) ? 1 : raceCut * taperCut);
     const css = (ctx.swim && ctx.swim.css) || 120;
     const lvlOf = (ty) => (ty === "Rec" ? 1 : EASY.includes(ty) || ty === "Long" ? 2
       : ["Steady", "Fartlek", "Tempo", "SS", "CSS_long", "OW", "Brick", "M_long", "M_mid", "Opener"].includes(ty) ? 3 : 4);
@@ -1177,7 +1311,7 @@
     let ratioScore = 0;
     if (ratioWeek) {
       const isQ = (ty) => lvlOf(ty) >= 3 && !["Test", "Opener"].includes(ty);
-      const WU = { run: 3, bike: 10, swim: 500 }, MINU = { run: 3, bike: 15, swim: 600 }, IDEAL = { run: 7, bike: 35, swim: 1200 }; // IDEAL: 질 훈련 1회의 알맞은 고강도 양
+      const WU = { run: 3, bike: 10, swim: 500 }, MINU = { run: 3, bike: 15, swim: 600 }, IDEAL = opt.level ? LEVEL_IDEAL(opt.level.lv) : { run: 7, bike: 35, swim: 1200 }; // IDEAL: 질 훈련 1회의 알맞은 고강도 양 (레벨이 높을수록 많게)
       ["swim", "bike", "run"].forEach((x) => {
         if (!targets[x]) return;
         let hu = units.filter((u) => sessDist[u.k] && sessDist[u.k][x] && isQ(u.p[1]));
@@ -1260,12 +1394,23 @@
         if (q) { x.steps = q.steps; x.hiFrac = q.frac; x.hiText = q.text; }
       } else if (ratioWeek && EASY.concat("Long").includes(type)) x.hiFrac = 0;
       const rdu = !u.s && RD[u.d];
+      // Z4 이상 날은 훈련 2가지: ✅ 추천(이번 시기 목적에 맞는 것) + 🔁 대안(같은 고강도 양, 다른 방식)
+      if (x.lvl >= 4 && disc !== "brick" && !["Test", "Opener", "Double"].includes(type) && !(rdu && rdu.kind === "rest")) {
+        const at = (ALT2[disc] || {})[type];
+        if (at) {
+          const y = workout(disc, at, { min: minutes, prog, ctx, goal, phase, weekKm, dist: sessDist[u.k] || null, v: wk.i + u.d + 1, noFinish: ratioWeek });
+          if (hp) { const q2 = ratioSteps(disc, at, sessDist[u.k], hp, ctx, y); if (q2) { y.steps = q2.steps; y.hiText = q2.text; } }
+          x.alt = { name: y.name, tag: y.tag, lvl: y.lvl, steps: y.steps, point: y.point, why: ALT_WHY[at] || "같은 고강도 양을 다른 방식으로" };
+          x.recWhy = `${PHASES[phase] ? PHASES[phase].name + " — " : ""}${PHASES[phase] ? PHASES[phase].focus : ""}에 가장 잘 맞아요`;
+        }
+      }
       if (rdu && rdu.kind === "rest") { // 대회 뒤 휴식
         Object.assign(x, { name: "대회 후 휴식", tag: "휴식", lvl: 1, hiFrac: 0, point: `${rdu.race.name || "대회"} 뒤 ${rdu.day}일째 — 몸이 회복하는 시간이에요. 쉬는 것도 훈련!`,
           steps: [`완전 휴식, 또는 ${minsU[u.k]}분 산책·아주 가벼운 ${DISC[disc] ? DISC[disc].name : "운동"}`, "스트레칭·폼롤러 10분, 잠 충분히, 탄수화물·단백질 보충"], effect: "대회로 생긴 근육 손상·피로를 회복해요." });
       } else if (rdu && rdu.kind === "post") x.point = `${rdu.race.name || "대회"} 뒤 회복 ${rdu.day}/${rdu.of}일째 — 쉬운 강도만. ${x.point}`;
       else if (rdu && rdu.kind === "pre1") x.point = `내일 ${rdu.race.name || "대회"}! 짧게 몸만 깨워요. ${x.point}`;
       else if (rdu && rdu.kind === "pre2") x.point = `${rdu.race.name || "대회"} 이틀 전 — 쉬운 강도로 컨디션 조절. ${x.point}`;
+      else if (rdu && rdu.kind === "taper") x.point = `🏁 ${rdu.race.name || "대회"} D-${rdu.to} 조정기 — ${rdu.to >= 8 ? "강도는 유지, 양은 줄여요." : "짧은 자극만, 피로는 남기지 않기."} ${x.point}`;
       const ds = disc === "brick" ? ["bike", "run"] : [disc];
       const icon = disc === "brick" ? "🚴🏃" : DISC[disc].icon;
       const slot = slotOf(u);
@@ -1279,6 +1424,7 @@
         rpe: RPE[x.lvl], dist: dist || x.dist || null,
         hiMin: Math.round(minutes * (x.hiFrac != null ? x.hiFrac : x.lvl >= 3 ? 0.45 : 0)),
         hiText: mixText(o, hp, x.hiFrac != null ? x.hiFrac : x.lvl >= 3 ? 0.45 : 0),
+        tss: tssOf(minutes, x.lvl, x.hiFrac != null ? x.hiFrac : x.lvl >= 3 ? 0.45 : 0),
         envNotes: ds.map((y) => ENV_NOTE[y][env[y] || "outdoor"]),
       };
     });
@@ -1307,7 +1453,7 @@
       const s = sessions.find((x) => x.day === dd && !x.s);
       const item = { day: dd, s: 0, slot: null, disc: tri ? "brick" : discs[0], discs: tri ? ["swim", "bike", "run"] : discs, type: "Race", minutes: 0, lvl: 5, tag: r.priority || "대회",
         title: `🏁 ${r.name || "대회"}`, name: "대회", point: r.priority === "A" ? "시즌 목표 대회! 계획한 레이스 강도를 지키세요." : r.priority === "B" ? "B 대회 — 전력이지만 앞뒤 2~3일은 가볍게." : "C 대회 — 강한 훈련 삼아.",
-        steps: [`${r.event || ""} 레이스`, `레이스 강도: ${goal.race}`], targets: [], effect: "", rpe: "9–10", hiMin: 0, envNotes: [], dist: null };
+        steps: [`${r.event || ""} 레이스`, `레이스 강도: ${goal.race}`], targets: [], effect: "", rpe: "9–10", hiMin: 0, envNotes: [], dist: null, tss: raceTss(r, goal.sk), raceDate: r.d };
       if (s) Object.assign(s, item); else sessions.push(item);
     });
     sessions.sort((a, b) => a.day - b.day || (a.s || 0) - (b.s || 0));
@@ -1346,7 +1492,7 @@
       const wkm = round1(weekKm);
       notes.push(`이번 주 달리기 약 ${wkm}km 기준 (다니엘스): T 최대 ${round1(Math.max(2, wkm * 0.1))}km · I 최대 ${round1(Math.max(2, Math.min(wkm * 0.08, 10)))}km · R 최대 ${round1(Math.max(1.2, Math.min(wkm * 0.05, 8)))}km · 롱런 ${wkm < 64 ? 30 : 25}% 이하`);
     }
-    return { sessions, notes, weekKm, targets, ratio: ratioWeek ? ratio : null, ratioScore };
+    return { sessions, notes, weekKm, targets, ratio: ratioWeek ? ratio : null, ratioScore, prep };
   }
 
   const ENV_NOTE = {
@@ -1362,6 +1508,7 @@
       phil: PHIL[p.philosophy] ? p.philosophy : "polarized", env: p.env || {}, goal: goalOf(p),
     };
     const ss = season(p, ctx);
+    const level = levelOf(p, ctx);
     const lowTarget0 = clamp(num(p.lowPct) || 80, 50, 100); // 저강도 목표 % (추천 80)
     // 노르웨이 방식은 역치 훈련량이 많아서 설정한 비율보다 고강도를 8% 더 (예: 80:20 → 72:28)
     const lowTarget = ctx.phil === "norwegian" ? Math.max(50, lowTarget0 - 8) : lowTarget0;
@@ -1377,8 +1524,9 @@
           : tot ? Math.round(((tot - hi) / tot) * 100) : 100;
         return { tot, low, byDist: R.length > 0, err: R.length ? r.ratioScore : Math.abs(low - lowTarget) };
       };
-      const o0 = { lowPct: lowTarget };
-      let r = buildWeek(p, ctx, wk, o0), m = lowOf(r);
+      const o0 = { lowPct: lowTarget, level };
+      const cw = ctxOfWeek(wk.i);
+      let r = buildWeek(p, cw, wk, o0), m = lowOf(r);
       // 질 훈련 개수를 ±3까지 바꿔 보고 고르기
       //  · 거리 목표가 있으면: 고강도 거리는 이미 정확히 맞춰져 있어서, 한 번의 질 훈련 양이 알맞은(너무 많거나 적지 않은) 개수로
       //  · 거리 목표가 없으면: 시간 기준 비율이 목표에 가장 가까운 개수로
@@ -1386,12 +1534,37 @@
       const easyWeek = wk.recovery || ["trans", "taper", "race"].includes(wk.key) || ctx.phil === "maf";
       if (!easyWeek) {
         for (const dl of [-1, 1, -2, 2, -3, 3]) {
-          const r2 = buildWeek(p, ctx, wk, { ...o0, hardDelta: dl }), m2 = lowOf(r2);
+          const r2 = buildWeek(p, cw, wk, { ...o0, hardDelta: dl }), m2 = lowOf(r2);
           if (m2.err < m.err - (m.byDist ? 0.15 : 1)) { r = r2; m = m2; }
         }
       }
-      return { ...wk, ...r, total: m.tot, lowPct: m.low, lowTarget, byDist: m.byDist };
+      if (cw.run && prog && cw.run.vdot !== ctx.run.vdot) r.notes.unshift(`🎯 이번 주 훈련 페이스는 VDOT ${round1(cw.run.vdot)} 기준이에요 — 현재 기록 VDOT ${round1(prog.now)}에서 목표 VDOT ${round1(prog.need)}까지 ${prog.every}주마다 ${prog.step}씩 올려요. (E ${fmt(cw.run.E[0])}–${fmt(cw.run.E[1])} · T ${fmt(cw.run.T)} · I ${fmt(cw.run.I)} /km)`);
+      if (prog && ["r4", "taper", "race", "peak", "build2"].includes(wk.key)) r.notes.push(`🏁 목표 레이스 페이스 ${fmt(prog.pace)}/km — 레이스 특화 시기라 M·T 세션 일부와 오프너를 이 페이스로 연습해요.`);
+      return { ...wk, ...r, total: m.tot, lowPct: m.low, lowTarget, byDist: m.byDist, vdotWeek: cw.run ? cw.run.vdot : null, tss: r.sessions.reduce((a, s) => a + (s.tss || 0), 0) };
     })());
+    // 📈 체력(CTL·42일)·피로(ATL·7일)·컨디션(TSB) 예상 — TrainingPeaks 퍼포먼스 매니지먼트 차트 방식
+    let pmcCache = null;
+    function pmc(nWeeks = 52) {
+      if (pmcCache && pmcCache.n >= nWeeks) return pmcCache;
+      const w0 = week(0);
+      let ctl = Math.max(20, (w0.tss || 0) / 7 * 0.85), atl = ctl; // 지금 하던 양을 꾸준히 해 왔다고 가정해서 시작
+      const weeks = [], races = [];
+      for (let i = 0; i < nWeeks; i++) {
+        const W = week(i), startCtl = ctl;
+        const daily = [0, 0, 0, 0, 0, 0, 0];
+        W.sessions.forEach((s) => { daily[s.day] += s.tss || 0; });
+        for (let d = 0; d < 7; d++) {
+          const tsb = ctl - atl; // 그날 아침 컨디션
+          const race = W.sessions.find((s) => s.type === "Race" && s.day === d);
+          if (race) races.push({ name: race.title.replace("🏁 ", ""), week: i, day: d, ctl, atl, tsb });
+          ctl += (daily[d] - ctl) / 42;
+          atl += (daily[d] - atl) / 7;
+        }
+        weeks.push({ i, tss: W.tss || 0, ctl, atl, tsb: ctl - atl, ramp: ctl - startCtl });
+      }
+      pmcCache = { n: nWeeks, weeks, races };
+      return pmcCache;
+    }
     // 이번 주가 저강도 위주라면, 몇 주 뒤부터 강도가 올라가는지 알려주기
     const intense = (w) => w.sessions.some((s) => s.lvl >= 4 && s.type !== "Test" && s.type !== "Race");
     function intensityNote(i) {
@@ -1410,17 +1583,38 @@
     if (ctx.goal.sk === "run" && ctx.goal.time && ctx.goal.dist) {
       gap = { need: vdotFrom(ctx.goal.dist, ctx.goal.time), now: ctx.run ? ctx.run.vdot : null, pace: ctx.goal.time / (ctx.goal.dist / 1000) };
     }
+    // 🎯 목표 기록까지 훈련 페이스를 단계적으로 올리기 (다니엘스: 4주 정도 소화가 잘 되면 VDOT +1)
+    let prog = null;
+    if (gap && gap.now && gap.need > gap.now + 0.3) {
+      const lv = level ? level.lv : 2;
+      const step = lv <= 1 ? 1.5 : 1, every = 4;
+      prog = { now: gap.now, need: gap.need, step, every, pace: gap.pace };
+    }
+    function ctxOfWeek(i) {
+      if (!prog || !ctx.run) return ctx;
+      const v = Math.min(prog.need, prog.now + prog.step * Math.floor(i / prog.every));
+      return v === ctx.run.vdot ? ctx : { ...ctx, run: runFrom(v, ctx.run.src) };
+    }
+    // 목표가 현실적인지: 남은 주 수 vs 필요한 주 수
+    let feas = null;
+    if (gap && gap.now) {
+      const A = ss.A, weeksLeft = A ? Math.max(1, Math.round((A.d - new Date()) / (7 * 864e5))) : null;
+      const diff = gap.need - gap.now, step = prog ? prog.step : 1;
+      const weeksNeed = diff > 0 ? Math.ceil(diff / step) * 4 : 0;
+      const verdict = diff <= 0 ? "이미 가능" : !weeksLeft ? "기간 미정" : weeksNeed <= weeksLeft * 0.8 ? "현실적" : weeksNeed <= weeksLeft * 1.3 ? "도전적" : "무리";
+      feas = { now: gap.now, need: gap.need, diff, weeksNeed, weeksLeft, verdict, pace: gap.pace };
+    }
     const sMin = num(p.sessionMin) || 60, n = (p.days || []).length;
     const wh = num(p.weeklyHours);
     const dO = p.dayOpts || {};
     const dayTot = (p.days || []).reduce((a, d) => a + (num((dO[d] || {}).min) || sMin), 0) || n * sMin;
     const avail = (wh ? Math.min(wh * 60, dayTot) : dayTot) / 60;
-    return { ctx, season: ss, week, gap, availHours: avail, intensityNote };
+    return { ctx, season: ss, week, gap, availHours: avail, intensityNote, level, prog, feas, pmc };
   }
 
   TS.E = {
     parseTime, autoTime, fmt, minLabel, num, DISC, sportKey, discsOf, SWIM_EVENTS, SWIM_PH, RUN_EVENTS, TRI_RACES, TRI_LEGS, GOALS,
-    goalOf, runInfo, bikeInfo, swimInfo, hrInfo, buildPlan, vdotFrom, predict, PHASES,
+    goalOf, runInfo, bikeInfo, swimInfo, hrInfo, buildPlan, vdotFrom, predict, PHASES, levelOf, LEVELS, LEVEL_CUT, recoveryDays, prepAdvice, runFrom,
     RUN_PACES, runPaceText, COGGAN, watt, SWIM_Z, swimPace, FRIEL_RUN, FRIEL_BIKE, frielRange, MAF_ADJ, PHIL, RPE,
   };
   TS.parseTime = parseTime;

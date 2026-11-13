@@ -200,7 +200,54 @@
     .zt th { color: var(--muted); font-weight: 500; }
     .zguide { margin-top: 8px; padding: 8px 10px; border-left: 4px solid; border-radius: 8px; background: var(--panel2, #f8fafc); font-size: 13px; line-height: 1.6; }
     .zguide .link { padding: 0; margin-left: 4px; }
-    .zone-btn { background: linear-gradient(90deg, #60a5fa, #22c55e, #eab308, #f97316, #ef4444); color: #fff; border: 0; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+    .zone-btn { background: var(--panel); border: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 600; padding: 5px 12px; }
+
+    .mc i[data-sp] { position: relative; padding-left: 2px; border-left: 3px solid transparent; }
+    .mc i[data-sp="swim"] { border-left-color: #0284c7; } .mc i[data-sp="bike"] { border-left-color: #7c3aed; } .mc i[data-sp="run"] { border-left-color: #0f172a; } .mc i[data-sp="brick"] { border-left-color: #db2777; }
+    .mc i .si { margin-right: 1px; }
+    .sp-tag { display: inline-block; font-size: 11px; font-weight: 800; padding: 1px 8px; border-radius: 999px; margin-bottom: 2px; color: #fff; }
+    .sp-tag[data-sp="swim"], .sp-k[data-sp="swim"] { background: #0284c7; } .sp-tag[data-sp="bike"], .sp-k[data-sp="bike"] { background: #7c3aed; } .sp-tag[data-sp="run"], .sp-k[data-sp="run"] { background: #0f172a; } .sp-tag[data-sp="brick"], .sp-k[data-sp="brick"] { background: #db2777; }
+    .sp-legend .sp-k { color: #fff; font-weight: 700; padding: 2px 10px; border-radius: 999px; }
+    .ref-list { display: grid; gap: 10px; font-size: 13.5px; } .ref-list div { display: grid; gap: 2px; } .ref-list span { color: var(--muted); line-height: 1.6; }
+    .sg-wrap { display: grid; gap: 6px; } .sg { border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px; } .sg summary { cursor: pointer; font-weight: 700; font-size: 14px; padding: 4px 0; }
+    .sg-q { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0 4px; } .sg-q .pill { font-size: 12.5px; padding: 6px 11px; }
+    .pred-btn { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; margin-bottom: 12px; border-radius: 14px; border: 1px solid var(--line); background: linear-gradient(90deg, #eef4ff, #fdf2ff); font-weight: 700; font-size: 15px; }
+    .pred-head { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin-top: 12px; }
+    .pred-head > div { padding: 10px; border-radius: 10px; background: var(--panel2, #f8fafc); display: grid; }
+    .pred-head span { font-size: 12px; color: var(--muted); } .pred-head b { font-size: 22px; }
+    .pred-t { width: 100%; border-collapse: collapse; font-size: 13.5px; } .pred-t th, .pred-t td { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; } .pred-t th { font-size: 12px; color: var(--muted); }
+    .pred-ul { margin: 6px 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+    .pred-race { display: grid; gap: 6px; padding: 12px; border-radius: 12px; background: #fff1f2; font-size: 14px; }
+    .goal-an { display: grid; gap: 6px; padding: 12px; border-radius: 12px; background: #eef4ff; font-size: 13.5px; line-height: 1.6; }
+    .alt-box { margin-top: 10px; padding: 10px; border-radius: 10px; border: 1px dashed var(--line); font-size: 13px; }
+    .alt-box details summary { cursor: pointer; margin-top: 6px; }
+    .level-note { margin: 0 0 12px; background: #eef4ff; }
+    .prep-box, .prep-home { margin: 0 0 12px; padding: 12px; border-radius: 12px; background: #fff1f2; border: 1px solid #fecdd3; font-size: 13.5px; }
+    .prep-box ul, .prep-home ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.7; }
+    .mc.race { background: linear-gradient(160deg, #ef4444, #f97316 70%, #facc15); border: 2px solid #b91c1c; box-shadow: 0 0 0 3px rgba(239,68,68,.25), 0 6px 16px rgba(239,68,68,.35); position: relative; animation: racePulse 1.8s ease-in-out infinite; }
+    .mc.race .mn { color: #fff !important; } .mc.race i { opacity: .9; }
+    .mc .rflag { position: absolute; top: 2px; right: 3px; font-size: 16px; }
+    @keyframes racePulse { 0%,100% { box-shadow: 0 0 0 3px rgba(239,68,68,.25), 0 6px 16px rgba(239,68,68,.35); } 50% { box-shadow: 0 0 0 6px rgba(239,68,68,.12), 0 6px 20px rgba(239,68,68,.5); } }
+    .race-banner { margin: 0 0 12px; padding: 14px; border-radius: 14px; font-size: 14px; line-height: 1.6; }
+    .race-banner.soft { background: #fff7ed; border: 1px solid #fed7aa; }
+    .race-banner.hot { background: linear-gradient(135deg, #fee2e2, #ffedd5); border: 2px solid #ef4444; }
+    .race-banner.today { background: linear-gradient(135deg, #ef4444, #f97316); color: #fff; text-align: center; }
+    .rb-big { font-size: 22px; font-weight: 900; color: #b91c1c; } .race-banner.today .rb-big { color: #fff; }
+    .rb-stage { background: #ef4444; color: #fff; font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 999px; }
+    .rb-sub { margin: 4px 0 8px; }
+    .rb-bar { position: relative; height: 18px; border-radius: 999px; background: #fecaca; overflow: hidden; }
+    .rb-bar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #f97316, #ef4444); }
+    .rb-bar span { position: relative; display: block; text-align: center; font-size: 11px; font-weight: 800; line-height: 18px; color: #7f1d1d; }
+    .race-banner details { margin-top: 8px; } .race-banner ul { margin: 6px 0 0; padding-left: 18px; }
+    .day.race { border: 2px solid #ef4444; background: linear-gradient(135deg, #fee2e2, #fff7ed); }
+    .day.taper { background: repeating-linear-gradient(135deg, #fff7ed, #fff7ed 8px, #ffedd5 8px, #ffedd5 16px); }
+    .rtag { color: #fff; background: #ef4444; padding: 1px 8px; border-radius: 999px; font-size: 12px; margin-left: 4px; }
+    .ttag { color: #c2410c; background: #ffedd5; padding: 1px 8px; border-radius: 999px; font-size: 11px; margin-left: 4px; }
+    .mc.race .rc { display: block; font-size: 10.5px; font-weight: 900; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mc.taper { background: repeating-linear-gradient(135deg, #fff7ed, #fff7ed 6px, #ffedd5 6px, #ffedd5 12px); }
+    .mc .dd { font-size: 9px; color: #c2410c; font-weight: 700; }
+    .race-legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); margin: 0 2px 8px; flex-wrap: wrap; }
+    .race-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: -2px; }
     .zlegend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; margin: 0 2px 8px; color: var(--muted); }
     .zlegend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
     .ztable { display: grid; gap: 4px; margin-top: 10px; }
@@ -414,7 +461,7 @@
         <div class="brand" data-home="1" style="cursor:pointer">Z<i>O</i>NE</div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
           <button class="pill" id="sportBtn">종목 선택</button>
-          <button type="button" class="pill zone-btn" data-zguide="0">❤️ 내 존 영역</button>
+          <button type="button" class="pill zone-btn" data-zguide="0">♡ 심박 존</button>
         </div>
       </header>
       <div id="homeBody"></div>
@@ -446,6 +493,7 @@
         <div class="stat"><b id="sDone">0</b><span>완료</span></div>
         <div class="stat"><b id="sMin">0분</b><span>총 훈련 시간</span></div>
       </div>
+      <div id="raceBanner"></div>
       <div class="week" id="week"></div>
     </section>
 
@@ -457,6 +505,7 @@
         <button class="pill" id="manualBtn">+ 직접 기록</button></div>
         <input type="file" id="importFile" accept=".fit,.gpx,.tcx,.zip" multiple hidden />
       </header>
+      <button type="button" class="pred-btn" data-predict="1">🔮 내 훈련으로 대회 기록 예측하기 <span>›</span></button>
       <div id="actBody"></div>
     </section>
 
@@ -602,18 +651,19 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="config.js?v=20261113"></script>
-  <script src="zones.js?v=20261113"></script>
-  <script src="app.js?v=20261113"></script>
-  <script src="engine.js?v=20261113"></script>
-  <script src="profile.js?v=20261113"></script>
-  <script src="garmin.js?v=20261113"></script>
-  <script src="tracker.js?v=20261113"></script>
-  <script src="hub.js?v=20261113"></script>
-  <script src="auth.js?v=20261113"></script>
-  <script src="community.js?v=20261113"></script>
-  <script src="strava.js?v=20261113"></script>
-  <script src="coach.js?v=20261113"></script>
-  <script src="nav.js?v=20261113"></script>
+  <script src="config.js?v=202611131114"></script>
+  <script src="zones.js?v=202611131114"></script>
+  <script src="app.js?v=202611131114"></script>
+  <script src="engine.js?v=202611131114"></script>
+  <script src="profile.js?v=202611131114"></script>
+  <script src="garmin.js?v=202611131114"></script>
+  <script src="tracker.js?v=202611131114"></script>
+  <script src="hub.js?v=202611131114"></script>
+  <script src="auth.js?v=202611131114"></script>
+  <script src="community.js?v=202611131114"></script>
+  <script src="strava.js?v=202611131114"></script>
+  <script src="coach.js?v=202611131114"></script>
+  <script src="predict.js?v=202611131114"></script>
+  <script src="nav.js?v=202611131114"></script>
 </body>
 </html>

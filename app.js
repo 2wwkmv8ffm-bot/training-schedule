@@ -152,8 +152,40 @@
   }
 
   // ---------- 화면 ----------
+  // 🏁 대회·조정기 정보 (문진표의 대회 일정에서)
+  function raceCtx() {
+    const races = ((TS.getProfile && TS.getProfile() && TS.getProfile().races) || []).filter((r) => r.date);
+    const raceOn = {}, taperOn = {};
+    races.forEach((r) => {
+      raceOn[r.date] = r;
+      if (r.priority === "C") return;
+      const rd = new Date(r.date + "T00:00:00");
+      for (let k = 1; k <= 14; k++) { const t = iso(addDays(rd, -k)); if (!taperOn[t] || taperOn[t].k > k) taperOn[t] = { r, k }; }
+    });
+    const today = iso(new Date());
+    const next = races.filter((r) => r.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0] || null;
+    return { races, raceOn, taperOn, next, dd: next ? Math.round((new Date(next.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5) : null };
+  }
+  // 달력 위 대회 카운트다운 (D-14부터는 조정기 안내를 크게)
+  function renderRaceBanner() {
+    const box = $("raceBanner");
+    if (!box) return;
+    const { next, dd } = raceCtx();
+    if (!next || dd > 60) { box.innerHTML = ""; return; }
+    const nm = escapeHtml(next.name || next.event || "대회"), dt = next.date.slice(5).replace("-", "/");
+    if (dd === 0) { box.innerHTML = `<div class="race-banner today"><div class="rb-big">🏁 오늘은 ${nm}!</div><div>준비한 대로, 처음은 천천히 — 후반에 올리기. 화이팅! 💪</div></div>`; return; }
+    if (dd > 14) { box.innerHTML = `<div class="race-banner soft"><b>🏁 다음 대회 ${nm}</b> · ${dt} · <b>D-${dd}</b><span class="hint"> — ${dd - 14}일 뒤부터 2주 조정기가 시작돼요</span></div>`; return; }
+    const sk = TS.E && TS.E.sportKey ? TS.E.sportKey((TS.getProfile() || {}).sport) : "run";
+    const a = TS.E && TS.E.prepAdvice ? TS.E.prepAdvice(next, dd, sk) : null;
+    box.innerHTML = `<div class="race-banner hot">
+      <div class="spread"><div class="rb-big">🏁 ${nm} D-${dd}</div><span class="rb-stage">${escapeHtml(a ? a.stage : "조정기")}</span></div>
+      <div class="rb-sub">대회까지 ${dd < 7 ? "일주일도 안" : dd === 7 ? "딱 일주일" : "2주도 안"} 남았어요 — 지금은 <b>대회 준비기간(조정기)</b>이에요. ${dt} 대회에 맞춰 훈련량을 줄이고 컨디션을 끌어올려요.</div>
+      <div class="rb-bar"><i style="width:${Math.round(((14 - dd) / 14) * 100)}%"></i><span>조정기 ${15 - dd}/14일째</span></div>
+      ${a ? `<details><summary>코치 안내 보기 (${a.lines.length}가지)</summary><ul>${a.lines.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul></details>` : ""}</div>`;
+  }
   function render() {
     document.querySelectorAll("#viewSeg [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
+    renderRaceBanner();
     if (view === "month") { renderMonth(); return; }
     const end = addDays(weekStart, 6);
     $("range").textContent = `${weekStart.getFullYear()}. ${label(weekStart)} – ${label(end)}`;
@@ -169,9 +201,10 @@
       const d = addDays(weekStart, i);
       const dIso = iso(d);
       const col = document.createElement("section");
-      col.className = "day" + (dIso === todayIso ? " today" : "");
+      const RC = raceCtx(), rc = RC.raceOn[dIso], tp = !rc && RC.taperOn[dIso];
+      col.className = "day" + (dIso === todayIso ? " today" : "") + (rc ? " race" : tp ? " taper" : "");
       const cls = i === 6 ? "sun" : i === 5 ? "sat" : "";
-      col.innerHTML = `<div class="day-head"><span class="${cls}">${DAYS[i]} ${label(d)}</span><button title="이 날에 추가">+</button></div><div class="items"></div>`;
+      col.innerHTML = `<div class="day-head"><span class="${cls}">${DAYS[i]} ${label(d)}${rc ? ` <b class="rtag">🏁 ${escapeHtml(rc.name || "대회")} D-DAY</b>` : tp ? ` <b class="ttag">조정기 D-${tp.k}</b>` : ""}</span><button title="이 날에 추가">+</button></div><div class="items"></div>`;
       col.querySelector("button").onclick = () => openForm(null, dIso);
 
       const list = col.querySelector(".items");
@@ -192,6 +225,9 @@
   // 강도(존) 색: Z1 파랑 · Z2 초록 · Z3 노랑 · Z4 주황 · Z5 빨강
   const ZCOL = window.ZONE ? window.ZONE.colors : ["#60a5fa", "#22c55e", "#eab308", "#f97316", "#ef4444"];
   const zoneOf = (s) => (window.ZONE ? window.ZONE.zoneOfSession(s) : null);
+  // 종목 표시 (철인3종은 한 주에 세 종목이 섞여서 아이콘·테두리로 바로 구분돼요)
+  const SICON = { 수영: "🏊", 사이클: "🚴", 러닝: "🏃", 브릭: "🚴🏃" };
+  const SKEY = { 수영: "swim", 사이클: "bike", 러닝: "run", 브릭: "brick" };
   function renderMonth() {
     const { y, m, start, end } = monthGrid();
     $("range").textContent = `${y}년 ${m + 1}월`;
@@ -204,18 +240,23 @@
     const week = $("week");
     week.className = "mcal-wrap";
     let cells = "";
+    // 🏁 대회 날·조정기(대회 2주 전) 표시
+    const races = ((TS.getProfile && TS.getProfile() && TS.getProfile().races) || []).filter((r) => r.date);
+    const raceOn = {}, taperOn = {};
+    races.forEach((r) => { raceOn[r.date] = r; const rd = new Date(r.date + "T00:00:00"); if (r.priority !== "C") for (let k = 1; k <= 14; k++) { const t = iso(addDays(rd, -k)); if (!taperOn[t] || taperOn[t].k > k) taperOn[t] = { r, k }; } });
     for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
       const dIso = iso(d);
       const items = visible.filter((s) => s.date === dIso);
       const wd = (d.getDay() + 6) % 7;
-      cells += `<button type="button" class="mc${d.getMonth() !== m ? " out" : ""}${dIso === todayIso ? " today" : ""}${dIso === selDay ? " sel" : ""}" data-day="${dIso}">
-        <span class="mn ${wd === 6 ? "sun" : wd === 5 ? "sat" : ""}">${d.getDate()}</span>
-        ${items.slice(0, 3).map((s) => { const z = zoneOf(s); return `<i class="${s.completed ? "dn" : ""}" style="background:${s.completed ? "#cbd5e1" : z ? ZCOL[z - 1] : COLORS[s.category] || COLORS.기타};color:${s.completed ? "#475569" : z === 3 ? "#422006" : "#fff"}">${z ? `<b>Z${z}</b> ` : ""}${escapeHtml(s.title.replace(/^[^\wㄱ-힣]+/, "").replace(/^(달리기|자전거|수영|브릭)\s*·\s*/, ""))}</i>`; }).join("")}
+      const rc = raceOn[dIso], tp = !rc && taperOn[dIso];
+      cells += `<button type="button" class="mc${d.getMonth() !== m ? " out" : ""}${dIso === todayIso ? " today" : ""}${dIso === selDay ? " sel" : ""}${rc ? " race" : tp ? " taper" : ""}" data-day="${dIso}" title="${rc ? escapeHtml("🏁 " + (rc.name || "대회")) : tp ? `${escapeHtml(tp.r.name || "대회")} D-${tp.k}` : ""}">
+        <span class="mn ${wd === 6 ? "sun" : wd === 5 ? "sat" : ""}">${d.getDate()}</span>${rc ? `<span class="rflag">🏁</span><span class="rc">${escapeHtml(rc.name || rc.event || "대회")}</span>` : tp ? `<span class="dd">D-${tp.k}</span>` : ""}
+        ${items.slice(0, 3).map((s) => { const z = zoneOf(s); return `<i class="${s.completed ? "dn" : ""}" data-sp="${SKEY[s.category] || ""}" style="background:${s.completed ? "#cbd5e1" : z ? ZCOL[z - 1] : COLORS[s.category] || COLORS.기타};color:${s.completed ? "#475569" : z === 3 ? "#422006" : "#fff"}"><span class="si">${SICON[s.category] || ""}</span>${z ? `<b>Z${z}</b> ` : ""}${escapeHtml(s.title.replace(/^[^\wㄱ-힣]+/, "").replace(/^(달리기|자전거|수영|브릭)\s*·\s*/, ""))}</i>`; }).join("")}
         ${items.length > 3 ? `<em>+${items.length - 3}</em>` : ""}</button>`;
     }
     const dayItems = visible.filter((s) => s.date === selDay);
     const sd = new Date(selDay + "T00:00:00");
-    week.innerHTML = `${window.ZONE ? window.ZONE.legend() : ""}<div class="mcal">${DAYS.map((x, i) => `<div class="mh ${i === 6 ? "sun" : i === 5 ? "sat" : ""}">${x}</div>`).join("")}${cells}</div>
+    week.innerHTML = `${window.ZONE ? window.ZONE.legend() : ""}${sport === "철인3종" ? `<div class="race-legend sp-legend"><span class="sp-k" data-sp="swim">🏊 수영</span><span class="sp-k" data-sp="bike">🚴 자전거</span><span class="sp-k" data-sp="run">🏃 달리기</span><span class="sp-k" data-sp="brick">🚴🏃 브릭</span></div>` : ""}${races.length ? `<div class="race-legend"><span><i style="background:linear-gradient(160deg,#ef4444,#facc15)"></i>🏁 대회 날</span><span><i style="background:#ffedd5"></i>조정기 (대회 2주 전)</span></div>` : ""}<div class="mcal">${DAYS.map((x, i) => `<div class="mh ${i === 6 ? "sun" : i === 5 ? "sat" : ""}">${x}</div>`).join("")}${cells}</div>
       <section class="day mday"><div class="day-head"><span>${sd.getMonth() + 1}월 ${sd.getDate()}일 ${DAYS[(sd.getDay() + 6) % 7]}요일</span><button title="이 날에 추가">+</button></div><div class="items"></div></section>`;
     week.querySelectorAll(".mc").forEach((b) => { b.onclick = () => { selDay = b.dataset.day; renderMonth(); }; });
     week.querySelector(".mday .day-head button").onclick = () => openForm(null, selDay);
@@ -244,7 +285,7 @@
       s.intensity ? "강도 " + s.intensity : null,
     ].filter(Boolean).join(" · ");
     el.innerHTML = `<div class="row"><input type="checkbox" ${s.completed ? "checked" : ""} title="완료 표시" />` +
-      `<div><div class="t">${escapeHtml(s.title)}</div><div class="meta">${escapeHtml(meta)}</div></div></div>`;
+      `<div>${SKEY[s.category] ? `<span class="sp-tag" data-sp="${SKEY[s.category]}">${SICON[s.category]} ${{ swim: "수영", bike: "자전거", run: "달리기", brick: "브릭" }[SKEY[s.category]]}</span>` : ""}<div class="t">${escapeHtml(SKEY[s.category] ? s.title.replace(/^((?:🌅 오전|🌇 오후) · )?\S+ (?:수영|자전거|달리기) · /, "$1") : s.title)}</div><div class="meta">${escapeHtml(meta)}</div></div></div>`;
     const cb = el.querySelector("input");
     cb.onclick = (e) => { e.stopPropagation(); toggleDone(s); };
     el.onclick = () => (TS.sessHtml ? openView(s) : openForm(s));

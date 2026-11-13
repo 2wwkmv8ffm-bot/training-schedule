@@ -255,10 +255,13 @@
     const head = lines[0] || "";
     const z = zoneOfNotes(head);
     const hp = head.replace("[자동 계획]", "").split("·").map((x) => x.trim());
-    const steps = [];
+    const steps = [], altSteps = [];
+    let inAlt = false;
     let inSteps = false;
     lines.forEach((l) => {
       if (l.startsWith("구성:")) { inSteps = true; return; }
+      if (l.startsWith("대안구성:")) { inAlt = true; inSteps = false; return; }
+      if (inAlt && l.startsWith("- ")) { altSteps.push(l.slice(2)); return; }
       if (inSteps && l.startsWith("- ")) steps.push(l.slice(2));
       else if (inSteps && !l.trim()) inSteps = false;
     });
@@ -268,6 +271,7 @@
       z, tag: head.startsWith("[자동 계획]") ? hp[1] : "", rpe: head.startsWith("[자동 계획]") ? (hp[2] || "").replace("RPE ", "") : "",
       steps, dist, point: ((lines.find((l) => l.startsWith("포인트:")) || "").replace("포인트: ", "")),
       hiText: ((lines.find((l) => l.startsWith("목표: 강도 거리 ")) || "").replace("목표: 강도 거리 ", "")),
+      alt: (() => { const a = lines.find((l) => l.startsWith("대안: ")); if (!a) return null; const [name, why] = a.replace("대안: ", "").split(" — "); return { name, why: why || "", steps: altSteps }; })(),
     };
   }
 
@@ -284,6 +288,7 @@
       ${window.ZONE ? (n.hiText ? window.ZONE.mixBar(n.hiText) : n.dist && n.z && n.z <= 2 ? window.ZONE.mixBar(`고강도 0% 0km · 저강도 100% ${n.dist}`) : n.dist && n.z ? `<p class="hint" style="margin:8px 0 0">⚖️ 계획에서 '달력에 넣기'를 다시 누르면 고강도·저강도 km가 보여요.</p>` : "") : ""}
       ${window.ZONE && n.z ? window.ZONE.guideLine(n.z) : ""}
       ${n.steps.length && TS.stepTable ? `<div style="margin-top:8px">${TS.stepTable(n.steps)}</div>` : ""}
+      ${n.alt && TS.stepTable ? `<div class="alt-box"><div class="alt-h">✅ 추천: <b>${esc(s.title.replace(/^.*?· /, ""))}</b> <span class="hint">— 이번 시기 목적에 가장 잘 맞아요</span></div><details><summary>🔁 대안: <b>${esc(n.alt.name)}</b> <span class="hint">— ${esc(n.alt.why)}</span></summary>${TS.stepTable(n.alt.steps)}</details></div>` : ""}
       ${n.point && !s.completed ? `<p class="hint" style="margin:8px 0 0">💡 ${esc(n.point)}</p>` : ""}
       <div class="spread" style="margin-top:10px">${s.completed ? '<span class="hint">완료 ✓</span>' : `<span class="hint">${canStart ? "준비되면 시작하세요" : ""}</span>`}
         ${s.completed || !canStart ? "" : `<button type="button" class="primary pill" data-start="${esc(s.id)}">${s.category === "수영" ? "📝 기록하기" : "▶ 이 훈련 시작"}</button>`}</div>
@@ -370,6 +375,13 @@
     $("homeBody").innerHTML = `
       <div style="margin-bottom:14px"><div class="eyebrow">${now.getMonth() + 1}월 ${now.getDate()}일 ${DAY[(now.getDay() + 6) % 7]}요일</div>
         <h1 class="big">${name}${greet}</h1></div>
+      ${(() => { // 🏁 대회 2주 전부터: 조정기 안내
+        if (!race || !TS.E || !TS.E.prepAdvice) return "";
+        const dd = Math.round((new Date(race.date + "T00:00:00") - today0) / 864e5);
+        const a = TS.E.prepAdvice(race, dd, TS.E.sportKey ? TS.E.sportKey(p.sport) : "run");
+        if (!a || dd < 1) return "";
+        return `<div class="card prep-home"><div class="spread"><b>${esc(a.title)}</b><span class="zb" style="background:#ef4444">${esc(a.stage)}</span></div><ul>${a.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul></div>`;
+      })()}
 
       <div class="card">
         <div class="spread"><div class="eyebrow" style="margin:0">📅 이번 주 스케줄</div>
@@ -710,6 +722,8 @@
         <div class="set-row"><span>프로필 · 종목 · 기록 · 대회</span><button type="button" class="pill" id="meEdit">수정</button></div>
         <div class="set-row"><span>자동 훈련 계획</span><button type="button" class="pill" id="mePlan">보기</button></div>
         <div class="set-row"><span>❤️ 심박 존 가이드 (최대심박 계산기)</span><button type="button" class="pill" data-zguide="0">열기</button></div>
+        <div class="set-row"><span>🔮 대회 기록 예측</span><button type="button" class="pill" data-predict="1">보기</button></div>
+        <div class="set-row"><span>🎯 목표 대회·기록</span><button type="button" class="pill" id="meGoal">바꾸기</button></div>
         <div class="set-row"><span>기록 중 음성 안내</span><button type="button" class="pill" id="meVoice">${voiceOn() ? "켜짐 🔊" : "꺼짐 🔇"}</button></div>
         <div class="set-row"><span>데이터 저장</span><span class="hint">${TS.store.cloud && TS.isProfileCloud() ? "Supabase ✓" : "일부 이 기기에만 저장 — <code>schema_profile.sql</code> 실행 필요"}</span></div>
       </div>`;
@@ -717,6 +731,7 @@
     bindAvatar();
     $("meEdit").onclick = () => TS.openWizard(1);
     $("mePlan").onclick = () => TS.openPlan();
+    if ($("meGoal")) $("meGoal").onclick = () => TS.openGoal(() => TS.openPlan(true));
     $("meVoice").onclick = () => {
       try { localStorage.setItem("training.voice", voiceOn() ? "off" : "on"); } catch (e) { /* 무시 */ }
       renderMe();

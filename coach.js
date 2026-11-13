@@ -57,17 +57,131 @@
     { k: "race", re: /대회|레이스|시합|테이퍼|D-|디데이|마라톤 전/, t: "대회 준비" },
     { k: "food", re: /먹|보급|영양|젤|탄수|단백|물|수분|식단|카페인/, t: "보급·영양" },
     { k: "weather", re: /비 ?와|비가|더워|더위|추워|추위|날씨|미세먼지|실내|트레드밀|로라/, t: "날씨·실내" },
-    { k: "missed", re: /못 ?했|놓쳤|빠졌|건너|밀렸|바빠|시간이 ?없|시간 ?부족/, t: "훈련을 놓쳤어요" },
+    { k: "missed", re: /못 ?했|놓쳤|빠졌|건너|밀렸|바빠|시간이 ?없|시간 ?부족|밖에 ?없/, t: "훈련을 놓쳤어요" },
     { k: "strength", re: /근력|웨이트|코어|스쿼트|보강|스트레칭|요가/, t: "보강 운동" },
     { k: "recover", re: /회복|쉬는 ?날|휴식|마사지|폼롤/, t: "회복" },
   ];
   function nextKey(I) {
     return I.week.find((s) => s.date >= I.today && !s.completed && isHard(s));
   }
+  // ---------- 더 많은 주제 (먼저 확인해요) ----------
+  const DOW = "일월화수목금토";
+  const fmtT = (s) => TS.E.fmt(Math.round(s));
+  const sessLine = (s) => {
+    const z = zoneOf(s);
+    const dist = ((s.notes || "").split("\n").find((l) => l.startsWith("목표: 권장 거리 ")) || "").replace("목표: 권장 거리 ", "");
+    return `${s.date.slice(5).replace("-", "/")}(${DOW[new Date(s.date + "T00:00:00").getDay()]}) ${s.title.replace(/^.*?· /, "")}${z ? ` · Z${z}` : ""}${s.duration_min ? ` · ${s.duration_min}분` : ""}${dist ? ` · ${dist}` : ""}${s.completed ? " ✓" : ""}`;
+  };
+  const MORE = [
+    { k: "postrace", re: /대회 ?(끝|후|뒤|마치)|끝나고.*(언제|다시)|회복 ?기간/, t: "대회 후 회복" },
+    { k: "easy", re: /쉬운 ?날|천천히 ?뛰|80 ?\/ ?20|느리게 뛰|왜 ?(천천히|느리게)/, t: "왜 쉬운 날은 천천히?" },
+    { k: "predict", re: /예측|예상 ?기록|몇 ?분.*(나올|가능)|기록.*(나올|가능)|가능할까/, t: "대회 기록 예측" },
+    { k: "goal", re: /목표 ?(기록|페이스)|목표.*(현실|가능|무리)|서브 ?[34]|sub/i, t: "내 목표가 현실적인지" },
+    { k: "level", re: /레벨|내 수준|몇 급|초보|중급|상급/, t: "내 레벨" },
+    { k: "today", re: /오늘.*(훈련|뭐|운동)|내일.*(훈련|뭐|운동)|남은 훈련|이번 ?주 ?(일정|스케줄|계획)/, t: "오늘·내일 훈련" },
+    { k: "taper", re: /테이퍼|조정기|대회 ?(2|두) ?주|대회 ?주간|대회 ?전 ?주/, t: "대회 2주 전 조정기" },
+    { k: "carbo", re: /카보|로딩|글리코겐|대회 전 ?(식사|음식|뭐 먹)/, t: "카보로딩·대회 전 식사" },
+    { k: "raceday", re: /당일|레이스 ?(전략|운영|페이스)|페이스 ?(전략|운영|조절)|출발.*(빠르|느리)|네거티브/, t: "대회 당일 전략" },
+    { k: "workout", re: /^(?!.*페이스).*(인터벌|템포|역치|크루즈|vo2|롱런|lsd|파틀렉|언덕|스트라이드|R ?반복)/i, t: "훈련 종류 설명 (인터벌·템포·롱런)" },
+    { k: "zone", re: /^(?!.*페이스).*(존|zone|심박 ?구간|최대 ?심박)/i, t: "심박 존" },
+    { k: "form", re: /^(?!.*(자전거|수영|페달)).*(케이던스|자세|보폭|착지|팔치기|러닝 ?폼)/, t: "러닝 자세·케이던스" },
+    { k: "shoes", re: /신발|러닝화|카본|운동화/, t: "러닝화" },
+    { k: "swimtech", re: /호흡.*(수영|물)|수영.*(자세|호흡|느려|팔)|물 ?잡기|드릴|자유형/, t: "수영 기술" },
+    { k: "bikeTech", re: /페달|자전거.*케이던스|ftp ?테스트|피팅|안장|파워미터/i, t: "자전거 기술·FTP" },
+    { k: "brick", re: /브릭|바꿈터|트랜지션|\bt[12]\b/i, t: "브릭·바꿈터" },
+    { k: "ow", re: /오픈 ?워터|바다|웻 ?슈트|사이팅/, t: "오픈워터" },
+    { k: "overtrain", re: /과훈련|오버 ?트레이닝|정체|기록이 안|늘지 않|번아웃/, t: "기록 정체·과훈련" },
+    { k: "weight", re: /체중|다이어트|살 ?빼|살이|몸무게/, t: "체중 관리" },
+    { k: "warm", re: /워밍업|준비 ?운동|쿨다운|정리 ?운동/, t: "워밍업·쿨다운" },
+    { k: "doms", re: /근육통|알이 ?배|뭉쳤|다리가 ?무거/, t: "근육통" },
+    { k: "cross", re: /크로스|다른 ?운동|등산|축구|헬스|필라테스/, t: "다른 운동과 같이 하기" },
+    { k: "motiv", re: /동기|하기 ?싫|귀찮|의욕|꾸준/, t: "동기부여·꾸준함" },
+    { k: "age", re: /나이|[456]0대|마스터즈/, t: "나이와 훈련" },
+    { k: "breath", re: /숨이|호흡이|숨 ?쉬|옆구리/, t: "달릴 때 호흡·옆구리 통증" },
+  ];
+  async function answerMore(q, I) {
+    const tp = MORE.find((x) => x.re.test(q));
+    if (!tp) return null;
+    const { p, c, plan, week } = I;
+    const R = c && c.run;
+    switch (tp.k) {
+      case "postrace": {
+        const races = ((p && p.races) || []).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+        const r = races.find((x) => x.date && x.date <= I.today) || races[0];
+        const n = r && TS.E.recoveryDays ? TS.E.recoveryDays(r, TS.E.sportKey(p.sport)) : 7;
+        const rest = Math.max(1, Math.round(n * 0.25));
+        return `🛌 대회 후 회복${r ? ` (${r.name || "대회"} ${r.event || ""})` : ""}\n· 회복 기간 약 ${n}일 — 처음 ${rest}일은 휴식·산책·아주 가벼운 조깅, 그 뒤 ${n - rest}일은 쉬운 강도만\n· 대략 '대회 거리 km ÷ 3일' 동안은 질 훈련 없이 (10K → 3일, 하프 → 7일, 풀 → 2주)\n· 다리가 가볍게 느껴져도 근육·힘줄은 아직 회복 중이에요 — 이때 다치기 쉬워요\n· 잠·단백질·탄수화물 충분히, 마사지·폼롤러는 2~3일 뒤부터 가볍게\n· 앱 계획에는 이 회복 기간이 자동으로 들어가 있어요 (대회 날짜 기준)`;
+      }
+      case "easy": return "🐢 왜 쉬운 날은 천천히?\n· 지구력의 바탕(미토콘드리아·모세혈관·지방 대사)은 Z2 쉬운 강도에서 가장 많이, 피로는 가장 적게 쌓여요\n· 쉬운 날을 조금 빨리 뛰면(회색 지대) 효과는 비슷한데 피로만 쌓여서, 정작 힘든 날(인터벌·템포)을 제대로 못 해요\n· 엘리트도 훈련의 약 80%를 쉬운 강도로 해요 (세일러·피츠제럴드 80/20)\n· 기준: 대화가 되는 속도, 최대심박의 60~70%, RPE 3~4\n· '너무 느린 것 같은데?' 싶으면 딱 맞는 거예요";
+      case "predict": {
+        if (!TS.predict) return "기록 예측 기능을 불러오지 못했어요.";
+        const o = await TS.predict.compute();
+        if (!o.rows) return "예측할 정보가 부족해요. 문진표에 5K·10K 기록을 넣거나 달리기 기록을 3회 이상 쌓아 주세요.";
+        const lines = [`🔮 지금 예상 기록 (VDOT ${o.vdot.toFixed(1)} · 신뢰도 ${o.conf[0]})`, ...o.rows.map((r) => `· ${r.nm} ${fmtT(r.t)} (${fmtT(r.pace)}/km)`)];
+        if (o.race) lines.push(`🏁 ${o.race.r.name || "목표 대회"}: ${fmtT(o.race.row.t)}${o.race.goal ? ` — 목표 ${fmtT(o.race.goal)} ${o.race.goal >= o.race.row.t ? "가능 ✅" : `까지 ${fmtT(o.race.row.t - o.race.goal)} 더 필요`}` : ""}`);
+        lines.push("자세한 분석(방법별 계산·구간 기록표·주간 거리를 늘리면?)은 활동 탭 위 '🔮 기록 예측'에서 볼 수 있어요.");
+        return lines.join("\n");
+      }
+      case "goal": {
+        const f = plan && plan.feas;
+        if (!f) return "목표 기록과 현재 최고기록을 넣으면 현실적인지 계산해 드려요. 나 → 🎯 목표 대회·기록 → 바꾸기";
+        const msg = { "이미 가능": "지금 기록으로도 충분해요 — 목표를 조금 올려도 돼요.", 현실적: "계획대로 꾸준히 하면 충분히 가능해요.", 도전적: "가능하지만 빠짐없이 훈련해야 해요. 질 훈련을 놓치지 마세요.", 무리: "이번 대회엔 무리예요. 중간 목표를 잡고 다음 대회에 도전하는 걸 추천해요.", "기간 미정": "대회 날짜를 넣으면 판단할 수 있어요." }[f.verdict];
+        return `🎯 목표 판단: ${f.verdict}\n· 지금 VDOT ${f.now.toFixed(1)} → 목표 VDOT ${f.need.toFixed(1)} (${f.diff > 0 ? "+" : ""}${f.diff.toFixed(1)})\n· 목표 레이스 페이스 ${fmtT(f.pace)}/km\n${f.weeksLeft ? `· 보통 ${f.weeksNeed}주 필요 · 대회까지 ${f.weeksLeft}주\n` : ""}${msg}\n계획은 지금 기록 페이스로 시작해서 4주마다 VDOT을 올려 목표 페이스에 다가가요.`;
+      }
+      case "level": {
+        const L = plan && plan.level;
+        if (!L) return "문진표의 주간 훈련량(거리)을 넣으면 레벨을 알려드려요.";
+        return `🏅 레벨 ${L.lv} · ${L.name}\n${Object.entries(L.per).map(([x, v]) => `· ${{ run: "달리기", bike: "자전거", swim: "수영" }[x]} 주 ${x === "swim" ? v.vol.toLocaleString() + "m" : v.vol + "km"} → 레벨 ${v.lv}`).join("\n")}\n질 훈련 ${L.q}. ${L.desc}\n추천 강도 비율 ${L.ratio}:${100 - L.ratio} · ${L.next}`;
+      }
+      case "today": {
+        const tmr = iso(addDays(new Date(), 1));
+        const todayS = week.filter((s) => s.date === I.today), tmrS = week.filter((s) => s.date === tmr);
+        const left = week.filter((s) => s.date >= I.today && !s.completed);
+        return [`📅 오늘: ${todayS.length ? todayS.map(sessLine).join(" / ") : "휴식"}`, `📅 내일: ${tmrS.length ? tmrS.map(sessLine).join(" / ") : "휴식 (또는 다음 주 일정)"}`,
+          left.length ? `이번 주 남은 훈련 ${left.length}개:\n${left.map((s) => "· " + sessLine(s)).join("\n")}` : "이번 주 남은 훈련이 없어요 👍"].join("\n");
+      }
+      case "taper": {
+        const races = ((p && p.races) || []).filter((r) => r.date >= I.today).sort((a, b) => (a.date < b.date ? -1 : 1));
+        if (!races.length) return "등록된 대회가 없어요. 대회를 넣으면 2주 전부터 조정기 안내를 해 드려요.";
+        const r = races[0], dd = Math.round((new Date(r.date + "T00:00:00") - new Date(I.today + "T00:00:00")) / 864e5);
+        const a = TS.E.prepAdvice(r, Math.min(Math.max(dd, 1), 14), TS.E.sportKey(p.sport));
+        return `${dd > 14 ? `🏁 ${r.name || "대회"}까지 D-${dd} — 조정기는 D-14부터 시작해요. 그때 할 일:\n` : ""}${a ? `${a.title}\n${a.lines.map((l) => "· " + l).join("\n")}` : ""}`;
+      }
+      case "carbo": return "🍝 카보로딩 (하프·풀코스·하프 아이언맨 이상)\n· D-3 ~ D-1: 체중 1kg당 하루 탄수화물 7~10g (60kg이면 420~600g) — 밥·면·빵·떡·바나나·감자\n· 양을 늘리는 대신 지방·섬유질(채소·튀김)은 줄여 속을 편하게\n· 물도 평소보다 조금 더. 체중이 1~2kg 느는 건 글리코겐·수분이라 정상이에요\n· 대회 당일 아침: 출발 3~4시간 전 익숙한 탄수화물 식사, 1시간 전 이후엔 물·젤 정도만\n· 10K 이하는 따로 로딩할 필요 없어요 — 전날 평소처럼 탄수화물 위주면 충분";
+      case "raceday": {
+        const o = TS.predict ? await TS.predict.compute() : null;
+        const row = o && o.race ? o.race.row : null, long = row && row.d > 20000;
+        return `🏁 대회 당일 전략\n· 출발 2~3시간 전까지 식사, 30~40분 전 워밍업 (10K 이하: 10분 조깅 + 스트라이드 4회 / 하프·풀: 5분 걷기·조깅)\n· 처음 ${long ? "5km" : "1~2km"}는 목표보다 3~5초/km 느리게 — 초반 오버페이스가 가장 흔한 실패 원인이에요\n· 중반은 일정하게, 마지막 ${long ? "10km" : "2km"}에서 남은 힘으로 올리기 (네거티브 스플릿)\n${row ? `· 지금 예상 기록 ${fmtT(row.t)} → 평균 페이스 ${fmtT(row.pace)}/km (구간표는 '🔮 기록 예측'에서)\n` : ""}· 하프 이상은 급수대마다 물 몇 모금, 젤은 ${row && row.d > 40000 ? "7~10km마다" : "10~12km쯤 1개"}\n· 쥐가 나면 속도를 줄이고 걷기 → 소금·물 보충`;
+      }
+      case "workout": return `🏃 훈련 종류 (내 페이스 기준)\n· E 이지 런${R ? ` ${fmtT(R.E[0])}–${fmtT(R.E[1])}/km` : ""} — 대화 가능, 주간 거리의 대부분. 심장·모세혈관·지방 대사\n· 롱런 — E 페이스로 길게. 지구력·보급 연습. 주간 거리의 25~30% 이하\n· T 템포·크루즈 인터벌${R ? ` ${fmtT(R.T)}/km` : ""} — '편하게 힘든' 1시간 레이스 강도. 젖산 역치 ↑ (10K~하프 핵심)\n· I 인터벌${R ? ` ${fmtT(R.I)}/km` : ""} — 3~5분 반복, 휴식은 같은 시간 조깅. VO2max ↑ (5K·10K 핵심)\n· R 반복${R ? ` ${fmtT(R.R)}/km` : ""} — 200~400m 빠르게, 완전 회복. 스피드·자세\n· 파틀렉·언덕 — 느낌으로 하는 속도 놀이, 언덕은 근력+자세 (기초기)\n· 스트라이드 — 이지 런 끝에 20초 빠르게 × 6. 다리를 가볍게`;
+      case "zone": {
+        const M = window.ZONE && window.ZONE.maxHr();
+        return `❤️ 심박 존 (최대심박의 %)${M ? ` — 최대 ${M.v}bpm 기준` : ""}\n${(window.ZONE ? window.ZONE.list : []).map((z) => `· Z${z.z} ${z.name} ${z.pct[0]}–${z.pct[1]}%${M ? ` (${window.ZONE.bpm(z.z, M.v)})` : ""} · RPE ${z.rpe} — ${z.good[0]}`).join("\n")}\n자세한 설명과 최대심박 계산기는 홈 오른쪽 위 '심박 존'에서 볼 수 있어요.`;
+      }
+      case "form": return "👟 러닝 자세·케이던스\n· 케이던스(분당 걸음 수) 170~185가 보통 — 지금보다 5% 올리면 착지 충격과 무릎 부담이 줄어요\n· 발이 몸 바로 아래에 떨어지게 (앞으로 멀리 뻗지 않기)\n· 상체는 살짝 앞으로, 어깨 힘 빼고 팔은 90도로 앞뒤로\n· 시선은 15~20m 앞, 턱 당기기\n· 연습: 이지 런 끝 스트라이드 20초 × 6, 주 2회 러닝 드릴(A스킵·B스킵·하이니) 10분";
+      case "shoes": return "👟 러닝화\n· 쿠션화: 이지 런·롱런 (주력) / 가벼운 레이싱화·카본화: 템포·인터벌·대회\n· 카본화는 대회와 핵심 훈련에만 — 매일 신으면 종아리·아킬레스 부담이 커요\n· 수명 약 600~800km. 밑창이 한쪽만 닳거나 쿠션이 꺼지면 교체\n· 2켤레를 번갈아 신으면 부상 위험이 줄어요\n· 대회 신발은 대회 전 롱런·템포에서 최소 2번 이상 신어 보기";
+      case "swimtech": return "🏊 수영 기술 (Swim Smooth 기준)\n· 숨은 물속에서 코로 계속 내쉬기 — 고개 돌렸을 때는 들이마시기만 (숨이 차는 가장 큰 원인)\n· 몸이 가라앉으면: 머리를 들지 말고 시선은 바닥, 킥은 작고 빠르게\n· 물잡기: 손이 들어간 뒤 팔꿈치를 높게 두고 손바닥·팔뚝으로 물을 뒤로 밀기\n· 드릴: 사이드 킥 → 한 팔 수영 → 캐치업 → 손끝 끌기 (각 50m)\n· 25m 스트로크 수를 세서 매번 1개씩 줄여보기 = 효율 ↑\n· CSS 테스트(400m·200m)를 4~8주마다 해서 페이스 업데이트";
+      case "bikeTech": return `🚴 자전거 기술·FTP${c && c.bike ? ` (지금 FTP ${c.bike.ftp}W)` : ""}\n· 케이던스 85~95rpm이 효율적 — 언덕은 기어를 가볍게 해서 유지\n· FTP 테스트: 워밍업 20분 → 5분 강하게 → 10분 회복 → 20분 최대 → 평균 파워 × 0.95 = FTP (4~8주마다)\n· 피팅: 페달이 가장 아래일 때 무릎이 살짝(25~35°) 굽혀지게 안장 높이. 무릎·허리가 아프면 피팅부터\n· 파워미터가 없으면 심박과 RPE로 — 존은 홈 '심박 존'에서\n· 실내 트레이너는 시간 대비 효과가 커요 (선풍기 필수)`;
+      case "brick": return "🔁 브릭·바꿈터 (철인3종)\n· 브릭 = 자전거 직후 바로 달리기. 다리가 무거운 느낌에 적응하는 훈련 — 2주에 1번, 대회 2달 전부터 주 1번\n· 달리기 첫 1km는 짧은 보폭·빠른 케이던스로, 페이스는 2km부터 올리기\n· T1(수영→자전거): 수경 이마로 → 웻슈트 상체 벗으며 이동 → 헬멧 먼저 채우고 자전거\n· T2(자전거→달리기): 물건은 순서대로, 연습 때 2~3번 리허설";
+      case "ow": return "🌊 오픈워터\n· 6~8스트로크마다 고개를 앞으로 살짝 들어 방향 확인 (사이팅) — 수영장에서도 연습\n· 출발은 무리 옆이나 뒤에서 — 처음 200m는 숨을 고르며\n· 앞사람 발끝 뒤(드래프팅)에 붙으면 힘이 10~20% 덜 들어요\n· 웻슈트는 대회 전에 최소 2~3번 입고 연습, 목 쓸림에 바셀린\n· 절대 혼자 들어가지 말고, 눈에 띄는 수모·부이 사용";
+      case "overtrain": {
+        const prev = kmOf(I.acts, "run", 14) - kmOf(I.acts, "run", 7), now = kmOf(I.acts, "run", 7);
+        return `📉 기록 정체·과훈련 체크\n· 아침 안정시 심박이 평소보다 5~10 높음, 잠이 안 옴, 의욕 없음, 같은 페이스가 더 힘듦 → 과훈련 신호\n· 이럴 땐 1주를 회복 주(양 50~60%, 강도 없이)로 — 쉬고 나면 오히려 기록이 좋아져요\n· 정체의 흔한 원인: 쉬운 날을 너무 빨리 뜀(회색 지대), 매주 같은 훈련, 잠·영양 부족\n· 해결: 80/20 지키기, 훈련 종류 바꾸기(앱이 자동으로 해요), 3주 올리고 1주 쉬기${prev > 5 ? `\n· 최근 달리기: 지난주 ${prev.toFixed(1)}km → 이번 주 ${now.toFixed(1)}km` : ""}`;
+      }
+      case "weight": return "⚖️ 체중 관리 (지구력 운동)\n· 훈련 많은 날 굶으면 회복·면역이 떨어져요 — 하루 300~500kcal 정도만 적게, 주 0.5kg 이내 감량\n· 감량은 비시즌·기초기에, 대회 4주 전부터는 체중보다 컨디션\n· 단백질 체중 1kg당 1.6g 정도, 탄수화물은 훈련량에 맞춰 (힘든 날 많이·쉬는 날 적게)\n· 질 훈련 전엔 꼭 먹기\n· 생리 불순·잦은 부상·계속되는 피로는 너무 적게 먹는 신호 — 먹는 양을 늘리세요";
+      case "warm": return "🔥 워밍업·쿨다운\n· 이지 런: 첫 5분을 더 천천히 시작하면 충분\n· 질 훈련·대회: 10~15분 조깅 → 동적 스트레칭(레그 스윙·런지) → 스트라이드 20초 × 4 → 본 훈련\n· 짧은 대회일수록 워밍업을 길게 (5K: 20분, 마라톤: 5~10분 걷기·조깅)\n· 쿨다운: 5~10분 천천히 → 정적 스트레칭은 운동 후에";
+      case "doms": return "🦵 근육통(DOMS)\n· 운동 1~3일 뒤 뻐근한 건 정상 — 새 훈련·내리막·빠른 속도 뒤에 잘 생겨요\n· 완전히 쉬기보다 가벼운 회복 조깅·자전거 20~30분이 더 빨리 풀려요\n· 폼롤러·가벼운 마사지, 잠·단백질 충분히\n· 한 곳만 날카롭게 아프거나 붓거나 3~4일 넘게 가면 부상일 수 있어요 → '통증' 질문 참고\n· 오늘 훈련은 '컨디션 맞춤'에서 🦵 근육통을 고르면 자동으로 바꿔 드려요";
+      case "cross": return "🏋️ 다른 운동과 같이 하기\n· 근력(웨이트·필라테스)은 주 2회 — 질 훈련 하는 날 저녁에 붙이면 쉬운 날이 진짜 쉬워져요\n· 등산·축구 같은 강한 운동은 '고강도'로 생각하고, 다음 날 질 훈련은 피하기\n· 요가·스트레칭은 쉬는 날 OK\n· 부상으로 못 뛸 땐 자전거·수영·아쿠아 조깅으로 유산소 유지";
+      case "motiv": return "🔥 꾸준함이 실력이에요\n· 하기 싫은 날은 '10분만 하자'로 시작 — 대부분 끝까지 하게 돼요\n· 목표 대회를 정하고 달력에 넣기 → 날짜가 생기면 동기가 생겨요\n· 커뮤니티에 기록 올리기, 친구와 같이 뛰기\n· 완벽한 주보다 '빠지지 않는 주'가 중요해요 — 놓친 날은 보내고 다음 훈련만\n· 4주 단위로 작은 목표 (예: 롱런 15km 완주, 5K 30초 단축)";
+      case "age": return "🎂 나이와 훈련\n· 40대 이후엔 회복이 느려져요 — 질 훈련 사이 48~72시간, 3주 올리고 1주 쉬기를 꼭 지키기\n· 근력 운동 주 2회는 필수 (근육량 감소 방지, 부상 예방)\n· 최대심박은 나이로 추정하면 오차가 커요 — 직접 재서 넣으면 존이 정확해져요\n· 양을 조금 줄이고 질을 지키는 게 나이 든 선수에게 효과적이에요";
+      case "breath": return "😮‍💨 달릴 때 호흡·옆구리 통증\n· 이지 런에서 숨이 차면 너무 빠른 거예요 — 대화가 될 만큼 느리게\n· 입과 코 같이 써도 돼요. 2~3걸음 들이쉬고 2~3걸음 내쉬는 리듬\n· 옆구리 통증: 속도 줄이고 길게 내쉬기, 아픈 곳을 살짝 누르기\n· 운동 1~2시간 전엔 많이 먹지 않기, 단 음료 피하기";
+    }
+    return null;
+  }
   function answer(q, I) {
     const tp = TOPICS.find((x) => x.re.test(q));
     const { p, c, week, acts } = I;
-    if (!tp) return `이런 걸 물어보시면 바로 답해 드려요:\n${TOPICS.map((x) => "· " + x.t).join("\n")}\n\n(예: "내일 인터벌 페이스는?", "무릎이 아파요", "대회 2주 남았어요")`;
+    if (!tp) return `이런 걸 물어보시면 바로 답해 드려요:\n${[...MORE, ...TOPICS].map((x) => "· " + x.t).join("\n")}\n\n(예: "내일 인터벌 페이스는?", "무릎이 아파요", "대회 2주 남았어요")`;
     switch (tp.k) {
       case "review": {
         const done = week.filter((s) => s.completed), past = week.filter((s) => s.date < I.today), missed = past.filter((s) => !s.completed);
@@ -211,7 +325,15 @@
     if (!d) { d = document.createElement("dialog"); d.id = "coachDlg"; document.body.appendChild(d); d.onclick = (e) => { if (e.target === d) d.close(); }; }
     return d;
   }
-  const SUGGEST = ["이번 주 평가해 주세요", "내 페이스·존 알려주세요", "무릎이 살짝 아파요", "대회 준비 어떻게 해요?", "피곤해요", "비 오는 날은요?"];
+  const SUGGEST = ["이번 주 평가해 주세요", "내 대회 기록 예측해 줘", "내 목표 현실적이야?", "오늘 내일 훈련 뭐야?", "내 레벨은?", "인터벌이랑 템포 차이", "카보로딩 어떻게 해?", "대회 당일 전략", "무릎이 살짝 아파요", "기록이 안 늘어요"];
+  const SUGGEST_GROUPS = [
+    ["📅 내 훈련", ["오늘 내일 훈련 뭐야?", "이번 주 평가해 주세요", "내 레벨은?", "내 페이스·존 알려주세요", "다음 핵심 훈련 페이스는?", "훈련을 놓쳤어요", "시간이 30분밖에 없어요", "기록이 안 늘어요"]],
+    ["🏁 대회 준비", ["내 대회 기록 예측해 줘", "내 목표 현실적이야?", "대회 2주 전 조정기 뭐 해요?", "대회 당일 전략", "카보로딩 어떻게 해?", "대회 준비 어떻게 해요?", "대회 끝나고 언제 다시 달려요?", "레이스 페이스 어떻게 정해요?"]],
+    ["🏃 훈련 이해", ["인터벌이랑 템포 차이", "롱런은 얼마나 길게?", "심박 존이 뭐예요?", "왜 쉬운 날을 천천히 뛰어요?", "스트라이드가 뭐예요?", "언덕 훈련 효과는?", "워밍업 어떻게 해요?", "보강 운동 뭐 해요?"]],
+    ["🩹 몸 관리", ["무릎이 살짝 아파요", "정강이가 아파요", "근육통이 있어요", "피곤해요", "잠을 못 잤어요", "감기 기운이 있어요", "회복은 어떻게 해요?", "옆구리가 아파요"]],
+    ["🍌 영양·생활", ["달리기 전에 뭐 먹어요?", "보급은 언제 해요?", "체중 줄이고 싶어요", "러닝화 언제 바꿔요?", "카본화 신어도 돼요?", "하기 싫은 날은 어떻게 해요?", "40대인데 훈련 어떻게 해요?", "다른 운동이랑 같이 해도 돼요?"]],
+    ["🏊🚴 수영·자전거·철인", ["수영 호흡이 힘들어요", "수영 자세 팁", "FTP 테스트 어떻게 해요?", "자전거 케이던스는?", "브릭 훈련 어떻게 해요?", "바꿈터 연습", "오픈워터 팁", "비 오는 날은요?"]],
+  ];
   function openChat() {
     const d = dlg();
     const draw = () => {
@@ -222,7 +344,7 @@
         <div id="coachLog" style="flex:1;overflow-y:auto;padding:12px 16px;display:grid;gap:10px;align-content:start">
           ${hist.length ? "" : '<p class="hint" style="margin:0">내 페이스·이번 주 계획·최근 기록을 보고 코칭 기준대로 답해요.</p>'}
           ${hist.map((m) => `<div class="cmsg ${m.role === "user" ? "me" : "ai"}">${esc(m.content)}</div>`).join("")}
-          <div style="display:flex;flex-wrap:wrap;gap:6px">${SUGGEST.map((s) => `<button type="button" class="pill" data-q="${esc(s)}">${esc(s)}</button>`).join("")}</div>
+          <div class="sg-wrap">${SUGGEST_GROUPS.map(([g, qs], gi) => `<details class="sg" ${gi === 0 && !hist.length ? "open" : ""}><summary>${g} <span class="hint">${qs.length}</span></summary><div class="sg-q">${qs.map((s) => `<button type="button" class="pill" data-q="${esc(s)}">${esc(s)}</button>`).join("")}</div></details>`).join("")}</div>
         </div>
         <form id="coachForm" style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line)">
           <input id="coachIn" placeholder="예: 내일 인터벌 페이스는?" autocomplete="off" style="flex:1" />
@@ -239,7 +361,8 @@
       q = String(q || "").trim();
       if (!q) return;
       const I = await gather();
-      hist.push({ role: "user", content: q }, { role: "assistant", content: answer(q, I) });
+      const more = await answerMore(q, I).catch(() => null);
+      hist.push({ role: "user", content: q }, { role: "assistant", content: more || answer(q, I) });
       saveHist(); draw();
     }
     draw();
