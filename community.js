@@ -47,7 +47,7 @@
   async function uploadImage(file, path, max) {
     const blob = await shrink(file, max);
     const { error } = await db.storage.from(BUCKET).upload(path, blob, { contentType: "image/jpeg", upsert: true });
-    if (error) throw new Error(/bucket|not found/i.test(error.message) ? "사진 저장 공간이 없어요. schema_community.sql을 실행해 주세요." : error.message);
+    if (error) throw new Error(/bucket|not found/i.test(error.message) ? "지금은 사진을 올릴 수 없어요. 잠시 뒤 다시 시도해 주세요." : error.message);
     return path;
   }
   TS.uploadImage = uploadImage;
@@ -86,7 +86,7 @@
     }
     if (A.memberError) {
       box.innerHTML = `<div class="card"><h3>⚙️ 커뮤니티 준비가 필요해요</h3>
-        <p class="txt">Supabase SQL Editor에서 <code>schema_community.sql</code>을 실행하면 커뮤니티가 열려요.</p>
+        <p class="txt">커뮤니티 서버가 아직 준비 중이에요. 잠시 뒤 다시 확인해 주세요.</p>
         <p class="hint">${esc(A.memberError.message || "")}</p><button type="button" id="comRetry">다시 확인</button></div>`;
       $("comRetry").onclick = async () => { await A.reloadMember(); render(); };
       return;
@@ -107,7 +107,7 @@
         <div class="seg" style="margin:0;flex:1"><button type="button" data-scope="friends" class="${scope === "friends" ? "on" : ""}">👥 친구</button>
           <button type="button" data-scope="all" class="${scope === "all" ? "on" : ""}">🌏 전체</button></div>
         <button type="button" class="pill" id="comFriends">친구 ${fr.accepted.length}${nIn ? ` <span class="zb z5">${nIn}</span>` : ""}</button></div>
-      ${error ? `<div class="note">불러오기 실패: ${esc(error.message)}${/posts/.test(error.message) ? " — schema_community.sql을 실행해 주세요." : ""}</div>` : ""}
+      ${error ? `<div class="note">글을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.</div>` : ""}
       ${feed.length ? feed.map(card).join("") : `<div class="card" style="text-align:center"><p class="hint">${scope === "friends"
         ? (fr.accepted.length ? "친구들의 글이 아직 없어요." : "아직 친구가 없어요. 친구를 추가하거나 🌏 전체를 눌러 보세요.")
         : "아직 올라온 글이 없어요. 첫 글을 올려 보세요!"}</p></div>`}
@@ -424,7 +424,7 @@
       if (scope === "all" && vis !== "public") scope = "friends";
       render();
     } catch (e) {
-      msg.textContent = "올리기 실패: " + (e.message || e) + (/posts/.test(e.message || "") ? " — schema_community.sql을 실행해 주세요." : "");
+      msg.textContent = "올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.";
       btn.disabled = false; btn.textContent = "올리기";
     }
   }

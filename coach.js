@@ -181,7 +181,10 @@
   function answer(q, I) {
     const tp = TOPICS.find((x) => x.re.test(q));
     const { p, c, week, acts } = I;
-    if (!tp) return `이런 걸 물어보시면 바로 답해 드려요:\n${[...MORE, ...TOPICS].map((x) => "· " + x.t).join("\n")}\n\n(예: "내일 인터벌 페이스는?", "무릎이 아파요", "대회 2주 남았어요")`;
+    if (!tp) return `🤔 이 질문은 아직 정확히 답하기 어려워요.
+아래 '💡 이런 걸 물어보시면 바로 답해 드려요'에서 비슷한 질문을 눌러 보세요 (질문 ${QCOUNT}개).
+
+답할 수 있는 주제: ${[...MORE, ...TOPICS].map((x) => x.t).join(" · ")}`;
     switch (tp.k) {
       case "review": {
         const done = week.filter((s) => s.completed), past = week.filter((s) => s.date < I.today), missed = past.filter((s) => !s.completed);
@@ -327,24 +330,33 @@
   }
   const SUGGEST = ["이번 주 평가해 주세요", "내 대회 기록 예측해 줘", "내 목표 현실적이야?", "오늘 내일 훈련 뭐야?", "내 레벨은?", "인터벌이랑 템포 차이", "카보로딩 어떻게 해?", "대회 당일 전략", "무릎이 살짝 아파요", "기록이 안 늘어요"];
   const SUGGEST_GROUPS = [
-    ["📅 내 훈련", ["오늘 내일 훈련 뭐야?", "이번 주 평가해 주세요", "내 레벨은?", "내 페이스·존 알려주세요", "다음 핵심 훈련 페이스는?", "훈련을 놓쳤어요", "시간이 30분밖에 없어요", "기록이 안 늘어요"]],
-    ["🏁 대회 준비", ["내 대회 기록 예측해 줘", "내 목표 현실적이야?", "대회 2주 전 조정기 뭐 해요?", "대회 당일 전략", "카보로딩 어떻게 해?", "대회 준비 어떻게 해요?", "대회 끝나고 언제 다시 달려요?", "레이스 페이스 어떻게 정해요?"]],
-    ["🏃 훈련 이해", ["인터벌이랑 템포 차이", "롱런은 얼마나 길게?", "심박 존이 뭐예요?", "왜 쉬운 날을 천천히 뛰어요?", "스트라이드가 뭐예요?", "언덕 훈련 효과는?", "워밍업 어떻게 해요?", "보강 운동 뭐 해요?"]],
-    ["🩹 몸 관리", ["무릎이 살짝 아파요", "정강이가 아파요", "근육통이 있어요", "피곤해요", "잠을 못 잤어요", "감기 기운이 있어요", "회복은 어떻게 해요?", "옆구리가 아파요"]],
-    ["🍌 영양·생활", ["달리기 전에 뭐 먹어요?", "보급은 언제 해요?", "체중 줄이고 싶어요", "러닝화 언제 바꿔요?", "카본화 신어도 돼요?", "하기 싫은 날은 어떻게 해요?", "40대인데 훈련 어떻게 해요?", "다른 운동이랑 같이 해도 돼요?"]],
-    ["🏊🚴 수영·자전거·철인", ["수영 호흡이 힘들어요", "수영 자세 팁", "FTP 테스트 어떻게 해요?", "자전거 케이던스는?", "브릭 훈련 어떻게 해요?", "바꿈터 연습", "오픈워터 팁", "비 오는 날은요?"]],
+    ["📅 내 훈련", "오늘·내일 할 훈련, 이번 주 평가, 레벨, 페이스", ["오늘 내일 훈련 뭐야?", "이번 주 남은 훈련 알려줘", "이번 주 평가해 주세요", "내 레벨은?", "내 페이스·존 알려주세요", "다음 핵심 훈련 페이스는?", "훈련을 놓쳤어요", "시간이 30분밖에 없어요", "기록이 안 늘어요", "이번 주 훈련 너무 많지 않아?"]],
+    ["🏁 대회 준비", "기록 예측, 목표 판단, 조정기, 당일 전략, 회복", ["내 대회 기록 예측해 줘", "하프 마라톤 몇 분 나올까?", "내 목표 현실적이야?", "대회 2주 전 조정기 뭐 해요?", "대회 전날 뭐 해요?", "대회 당일 전략", "레이스 페이스 어떻게 정해요?", "카보로딩 어떻게 해?", "대회 준비 어떻게 해요?", "대회 끝나고 언제 다시 달려요?"]],
+    ["🏃 훈련 이해", "인터벌·템포·롱런, 심박 존, 80/20, 보강", ["인터벌이랑 템포 차이", "역치가 뭐예요?", "VO2max 올리는 법", "롱런은 얼마나 길게?", "파틀렉이 뭐예요?", "심박 존이 뭐예요?", "왜 쉬운 날을 천천히 뛰어요?", "80/20이 뭐예요?", "스트라이드가 뭐예요?", "언덕 훈련 효과는?", "워밍업 어떻게 해요?", "보강 운동 뭐 해요?"]],
+    ["🩹 몸 관리", "통증·부상, 피로, 감기, 근육통, 회복", ["무릎이 살짝 아파요", "정강이가 아파요", "발바닥이 아파요", "아킬레스건이 아파요", "허리가 아파요", "근육통이 있어요", "피곤해요", "잠을 못 잤어요", "감기 기운이 있어요", "과훈련 증상", "회복은 어떻게 해요?", "옆구리가 아파요"]],
+    ["🍌 영양·생활", "먹는 것·보급·물, 체중, 신발, 날씨, 동기", ["달리기 전에 뭐 먹어요?", "보급은 언제 해요?", "물은 얼마나 마셔요?", "카페인 먹어도 돼요?", "체중 줄이고 싶어요", "러닝화 언제 바꿔요?", "카본화 신어도 돼요?", "더운 날 달리기", "미세먼지 심한 날", "하기 싫은 날은 어떻게 해요?", "40대인데 훈련 어떻게 해요?", "다른 운동이랑 같이 해도 돼요?"]],
+    ["🏊🚴 수영·자전거·철인", "수영 기술·CSS, FTP·케이던스, 브릭·바꿈터, 오픈워터", ["수영 호흡이 힘들어요", "수영 자세 팁", "CSS가 뭐예요?", "FTP 테스트 어떻게 해요?", "자전거 케이던스는?", "실내 로라 훈련", "브릭 훈련 어떻게 해요?", "바꿈터 연습", "오픈워터 팁", "웻슈트 팁", "러닝 자세 교정", "비 오는 날은요?"]],
   ];
+  const QCOUNT = SUGGEST_GROUPS.reduce((a, g) => a + g[2].length, 0);
+  function guideHtml(open) {
+    return `<div class="coach-guide${open ? " open" : ""}">
+      <div class="cg-h">💡 이런 걸 물어보시면 바로 답해 드려요 <span>질문 ${QCOUNT}개 · 주제 ${MORE.length + TOPICS.length}가지</span></div>
+      <p class="cg-sub">내 페이스·이번 주 계획·최근 기록·대회 일정을 보고 답해요. 아래 질문을 누르거나, 비슷하게 직접 써도 돼요.</p>
+      ${SUGGEST_GROUPS.map(([g, sub, qs], gi) => `<details class="sg" ${open && gi === 0 ? "open" : ""}><summary><b>${g}</b> <span class="hint">${esc(sub)} · ${qs.length}</span></summary><div class="sg-q">${qs.map((s) => `<button type="button" class="pill" data-q="${esc(s)}">${esc(s)}</button>`).join("")}</div></details>`).join("")}
+      <details class="sg"><summary><b>🗂 답할 수 있는 주제 전체</b> <span class="hint">${MORE.length + TOPICS.length}가지</span></summary><div class="cg-topics">${[...MORE, ...TOPICS].map((t) => `<span>${esc(t.t)}</span>`).join("")}</div></details>
+    </div>`;
+  }
   function openChat() {
     const d = dlg();
     const draw = () => {
       d.innerHTML = `<div style="display:flex;flex-direction:column;height:min(80vh,640px)">
         <div class="spread" style="padding:14px 16px;border-bottom:1px solid var(--line)"><b>🧑‍🏫 코치에게 물어보기</b>
-          <span><button type="button" class="link" data-c="clear" style="font-size:13px">대화 지우기</button>
+          <span><button type="button" class="link" data-c="guide" style="font-size:13px">💡 질문 목록</button> <button type="button" class="link" data-c="clear" style="font-size:13px">대화 지우기</button>
           <button type="button" class="link" data-c="x" aria-label="닫기" style="font-size:20px;margin-left:8px">✕</button></span></div>
         <div id="coachLog" style="flex:1;overflow-y:auto;padding:12px 16px;display:grid;gap:10px;align-content:start">
-          ${hist.length ? "" : '<p class="hint" style="margin:0">내 페이스·이번 주 계획·최근 기록을 보고 코칭 기준대로 답해요.</p>'}
+          ${hist.length ? "" : guideHtml(true)}
           ${hist.map((m) => `<div class="cmsg ${m.role === "user" ? "me" : "ai"}">${esc(m.content)}</div>`).join("")}
-          <div class="sg-wrap">${SUGGEST_GROUPS.map(([g, qs], gi) => `<details class="sg" ${gi === 0 && !hist.length ? "open" : ""}><summary>${g} <span class="hint">${qs.length}</span></summary><div class="sg-q">${qs.map((s) => `<button type="button" class="pill" data-q="${esc(s)}">${esc(s)}</button>`).join("")}</div></details>`).join("")}</div>
+          ${hist.length ? guideHtml(false) : ""}
         </div>
         <form id="coachForm" style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line)">
           <input id="coachIn" placeholder="예: 내일 인터벌 페이스는?" autocomplete="off" style="flex:1" />
@@ -354,6 +366,7 @@
       const log = d.querySelector("#coachLog"); log.scrollTop = log.scrollHeight;
       d.querySelector('[data-c="x"]').onclick = () => d.close();
       d.querySelector('[data-c="clear"]').onclick = () => { hist = []; saveHist(); draw(); };
+      d.querySelector('[data-c="guide"]').onclick = () => { const g = d.querySelector(".coach-guide"); if (g) { g.querySelector("details").open = true; g.scrollIntoView({ behavior: "smooth", block: "start" }); } };
       d.querySelectorAll("[data-q]").forEach((b) => { b.onclick = () => send(b.dataset.q); });
       d.querySelector("#coachForm").onsubmit = (e) => { e.preventDefault(); send(d.querySelector("#coachIn").value); };
     };
@@ -394,7 +407,7 @@
       const notes = notesOf(s);
       const fake = { id: "coach", title: s.title, category: s.category, duration_min: s.duration_min || null, intensity: "", completed: false, notes };
       d.innerHTML = `<div style="padding:18px;display:grid;gap:12px;max-height:85vh;overflow:auto">${head}
-        ${TS.sessHtml ? TS.sessHtml(fake, false) : esc(s.title)}
+        ${TS.sessHtml ? TS.sessHtml(fake, false, true) : esc(s.title)}
         <div class="note" style="margin:0">🧑‍🏫 ${esc(s.reason)}</div>
         <div class="actions"><button type="button" data-c="again">상태 다시 고르기</button>
           <div class="right"><button type="button" data-c="x">그대로 두기</button><button type="button" class="primary" data-c="apply">${sess ? "이걸로 바꾸기" : "달력에 넣기"}</button></div></div></div>`;

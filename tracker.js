@@ -173,8 +173,20 @@
   // ---------- 화면 켜짐 유지 ----------
   async function lock() { try { if ("wakeLock" in navigator) st.lock = await navigator.wakeLock.request("screen"); } catch (e) { /* 지원 안 함 */ } }
   function releaseLock() { try { if (st && st.lock) st.lock.release(); } catch (e) { /* 무시 */ } }
+  const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   document.addEventListener("visibilitychange", () => {
-    if (st && st.status === "running" && document.visibilityState === "visible") lock();
+    if (!st || st.status !== "running" || TS.nativeGps) return;
+    if (document.visibilityState === "hidden") { st.hiddenAt = Date.now(); return; }
+    lock();
+    // 화면이 꺼졌던 동안은 GPS가 끊겼을 수 있어요 → 돌아오면 알려주기
+    const gap = st.hiddenAt ? (Date.now() - st.hiddenAt) / 1000 : 0;
+    st.hiddenAt = null;
+    if (gap > 15) {
+      const el = document.createElement("div"); el.className = "toast";
+      el.textContent = `⚠️ 화면이 꺼져 있던 ${gap >= 60 ? Math.round(gap / 60) + "분" : Math.round(gap) + "초"} 동안은 GPS가 끊겼을 수 있어요. 기록 중에는 화면을 켜 두세요.`;
+      document.body.appendChild(el); setTimeout(() => el.remove(), 6000);
+      try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { /* 무시 */ }
+    }
   });
 
   // 목표 거리 고르기 (m)
@@ -203,6 +215,11 @@
       <div class="goal-pick"><div class="eyebrow" style="text-align:center">🎯 목표 거리 ${st.goalFromPlan ? "<span class='hint'>(오늘 계획)</span>" : ""}</div>
         <div class="chips center">${goalOptions().map(([m, l]) => `<button type="button" class="chip${(st.goalM || 0) === m ? " on" : ""}" data-goal="${m}">${l}</button>`).join("")}
           <span class="unit" style="width:auto"><input type="number" inputmode="decimal" id="tkGoalIn" min="0" step="0.1" placeholder="직접" style="width:72px;padding:6px 8px" /><span>km</span></span></div></div>
+      ${TS.nativeGps ? "" : `<div class="gps-warn">
+        <b>📱 ${IOS ? "아이폰은" : "웹에서는"} 화면이 꺼지거나 다른 앱으로 넘어가면 GPS 기록이 멈춰요</b>
+        <span>기록하는 동안 화면이 꺼지지 않게 해 둘게요. <b>휴대폰을 잠그지 말고, 다른 앱을 켜지 마세요.</b></span>
+        ${"wakeLock" in navigator ? "" : `<span>⚠️ 이 브라우저는 화면 꺼짐을 막을 수 없어요 — <b>설정 → 디스플레이 및 밝기 → 자동 잠금 → '안 함'</b>으로 바꾼 뒤 시작해 주세요.</span>`}
+      </div>`}
       <button type="button" class="go" id="tkGo">시작</button>
       <p class="hint" style="text-align:center">${TS.nativeGps
         ? "📱 앱 모드: 화면을 꺼도 GPS가 계속 기록돼요. 휴대폰은 팔·허리·주머니 어디든 괜찮아요."

@@ -67,7 +67,7 @@
         if (error) throw error;
         if (!data.session) {
           msg.style.color = "var(--text)";
-          msg.innerHTML = "가입 확인 메일을 보냈어요. 메일의 링크를 누른 뒤 로그인해 주세요.<br><span class='hint'>메일이 안 오면 Supabase → Authentication → Sign In / Providers → Email 에서 'Confirm email'을 끄면 바로 로그인돼요.</span>";
+          msg.innerHTML = "가입 확인 메일을 보냈어요. 메일의 링크를 누른 뒤 로그인해 주세요.<br><span class='hint'>메일이 안 보이면 스팸함도 확인해 주세요. 몇 분 뒤에 도착할 수도 있어요.</span>";
           btn.disabled = false;
           return;
         }

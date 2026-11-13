@@ -68,7 +68,7 @@
       intensity: s.lvl <= 2 ? "낮음" : s.lvl === 3 ? "보통" : "높음", notes: notesText(s), completed: false };
   }
   async function syncCalendar() {
-    if (!profile || syncBusy) return 0;
+    if (!profile || syncBusy || profile.holdSync) return 0; // 대회를 추가하고 "나중에"를 고르면 자동으로 바꾸지 않아요
     syncBusy = true;
     try {
       const P = makeVariants(profile)[0].plan;
@@ -96,7 +96,99 @@
       return rows.length;
     } finally { syncBusy = false; }
   }
+  // 🏁 홈에서 대회 추가 → 이 대회에 맞춰 스케줄을 바꿀지 물어보기
+  const RACE_PRI = [["A", "A 메인", "시즌 목표 대회 — 이 날짜에서 거꾸로 연간 계획을 짜고, 2주 조정기 + 대회 후 회복까지 넣어요. 목표 거리도 이 대회로 맞춰요."],
+    ["B", "B 중요", "전력으로 뛰지만 1~2주 전부터 양을 조금만 줄여요 (A 대회 준비 흐름은 유지)."],
+    ["C", "C 연습", "훈련 삼아 뛰는 대회 — 조정기 없이 강한 훈련 하루로 생각해요."]];
+  function openRaceAdd() {
+    if (!profile) { openWizard(0); return; }
+    const sk = sportKey(profile.sport), goals = E.GOALS[sk] || [];
+    const hasA = (profile.races || []).some((r) => r.priority === "A" && r.date >= iso(new Date()));
+    const st = { name: "", date: "", ev: (goals.find((g) => g[0] === (profile.goal || {}).event) || goals[1] || goals[0] || [""])[0], evText: "", pri: hasA ? "B" : "A" };
+    let d = $("raceDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "raceDlg"; document.body.appendChild(d); }
+    const draw = () => {
+      d.innerHTML = `<div style="padding:18px;display:grid;gap:12px;max-height:88vh;overflow:auto">
+        <div class="spread"><b style="font-size:17px">🏁 대회 추가</b><button type="button" class="link" data-r="x" style="font-size:20px">✕</button></div>
+        <div class="fields" style="grid-template-columns:1fr 1fr"><label>대회 이름<input id="rName" value="${esc(st.name)}" placeholder="예: 춘천마라톤" /></label>
+          <label>날짜<input id="rDate" type="date" min="${iso(new Date())}" value="${esc(st.date)}" /></label></div>
+        ${(() => { // 종목과 대회가 안 맞으면 알려주기 (예: 수영 종목인데 마라톤 대회)
+          const nm = (st.name || "").toLowerCase();
+          const want = /마라톤|러닝|10k|5k|하프|풀코스/.test(nm) && !/철인|트라이|아이언/.test(nm) ? "육상" : /철인|트라이|아이언/.test(nm) ? "철인3종" : /그란폰도|자전거|사이클|라이딩/.test(nm) ? "자전거" : /수영|오픈워터/.test(nm) ? "수영" : null;
+          return want && want !== profile.sport && !(want === "육상" && profile.sport === "철인3종") ? `<div class="note" style="margin:0">💡 지금 종목은 <b>${esc(profile.sport)}</b>이에요. '${esc(st.name)}'가 ${want} 대회라면 홈 오른쪽 위 종목 버튼에서 <b>${want}</b>으로 바꾼 뒤 추가해 주세요 — 그래야 거리·훈련이 맞게 짜여요.</div>` : "";
+        })()}
+        <div><div class="eyebrow" style="margin:0 0 6px">어떤 거리를 뛰나요? <span class="hint">(${esc(profile.sport)} 종목 기준)</span></div>
+          <div class="chips">${goals.map(([k, n]) => `<button type="button" class="chip${st.ev === k ? " on" : ""}" data-ev="${k}">${esc(n)}</button>`).join("")}<button type="button" class="chip${st.ev === "etc" ? " on" : ""}" data-ev="etc">기타</button></div>
+          ${st.ev === "etc" ? `<input id="rEv" class="mt" value="${esc(st.evText)}" placeholder="예: 트레일 30km" style="width:100%" />` : ""}</div>
+        <div><div class="eyebrow" style="margin:0 0 6px">얼마나 중요한 대회인가요?</div>
+          <div class="chips">${RACE_PRI.map(([k, n]) => `<button type="button" class="chip${st.pri === k ? " on" : ""}" data-pri="${k}">${n}</button>`).join("")}</div>
+          <p class="hint" style="margin:6px 0 0">${esc(RACE_PRI.find((x) => x[0] === st.pri)[2])}</p></div>
+        <div class="actions"><div class="right"><button type="button" data-r="x">취소</button><button type="button" class="primary" data-r="save">대회 저장</button></div></div></div>`;
+      const keep = () => { st.name = d.querySelector("#rName").value; st.date = d.querySelector("#rDate").value; const e = d.querySelector("#rEv"); if (e) st.evText = e.value; };
+      d.querySelectorAll('[data-r="x"]').forEach((b) => { b.onclick = () => d.close(); });
+      d.querySelector("#rName").onchange = () => { keep(); draw(); }; // 이름을 다 쓰면 종목이 맞는지 다시 확인
+      d.querySelectorAll("[data-ev]").forEach((b) => { b.onclick = () => { keep(); st.ev = b.dataset.ev; draw(); }; });
+      d.querySelectorAll("[data-pri]").forEach((b) => { b.onclick = () => { keep(); st.pri = b.dataset.pri; draw(); }; });
+      d.querySelector('[data-r="save"]').onclick = async () => {
+        keep();
+        if (!st.date) { d.querySelector("#rDate").focus(); return; }
+        const evName = st.ev === "etc" ? st.evText : ((goals.find((g) => g[0] === st.ev) || [0, st.ev])[1]); // 화면에 보이는 이름으로 저장 (예: "하프 마라톤")
+        const p = clone(profile);
+        p.races = (p.races || []).concat([{ name: st.name, date: st.date, event: evName, priority: st.pri }]);
+        if (st.pri === "A" && st.ev !== "etc") { p.goal = Object.assign({}, p.goal, { event: st.ev }); p.races.forEach((r) => { if (r.priority === "A" && r.date !== st.date && r.date >= iso(new Date())) r.priority = "B"; }); }
+        p.holdSync = true; // 바꿀지 물어보기 전까지 달력은 그대로
+        p.bySport = p.bySport || {}; if (p.sport) p.bySport[p.sport] = pickSport(p);
+        await saveProfile(p); setProfile(p);
+        d.close();
+        await askScheduleChange(`🏁 ${st.name || "대회"} (${(goals.find((g) => g[0] === st.ev) || [0, evName])[1]}) · ${st.date.slice(5).replace("-", "/")} 를 등록했어요.`, st.pri);
+      };
+    };
+    draw();
+    d.showModal();
+  }
+  async function removeRace(idx) {
+    if (!profile || !profile.races || !profile.races[idx]) return;
+    const r = profile.races[idx];
+    if (!await TS.ask(`🏁 ${r.name || "대회"} (${r.date})를 삭제할까요?`, "삭제", "취소")) return;
+    const p = clone(profile);
+    p.races.splice(idx, 1);
+    p.holdSync = true;
+    p.bySport = p.bySport || {}; if (p.sport) p.bySport[p.sport] = pickSport(p);
+    await saveProfile(p); setProfile(p);
+    await askScheduleChange(`🗑 ${r.name || "대회"}를 삭제했어요.`, r.priority);
+  }
+  async function askScheduleChange(head, pri) {
+    const yes = await TS.ask(`${head}\n\n이 대회 일정에 맞춰 스케줄도 바꿀까요?\n• 대회 2주 전 조정기 · 대회 날 · 대회 후 회복이 들어가요${pri === "A" ? "\n• A 대회라 시즌 계획(기초 → 강화 → 조정기)도 이 날짜에 맞춰져요" : ""}\n• 완료한 훈련 · 코치로 바꾼 날 · 직접 넣은 일정은 그대로예요`, "네, 바꿔줘", "나중에");
+    if (yes) {
+      const n = await applyPlanToCalendar();
+      const p = clone(profile); delete p.holdSync; await saveProfile(p); profile = p;
+      toastP(`📅 대회에 맞춰 스케줄을 바꿨어요 (${n}개)`);
+    } else toastP("대회만 저장했어요. 계획 화면에서 '지금 반영'을 누르면 언제든 스케줄에 넣을 수 있어요.");
+    TS.reload();
+    window.dispatchEvent(new Event("ts:profile"));
+  }
+  function toastP(msg) { const el = document.createElement("div"); el.className = "toast"; el.textContent = msg; document.body.appendChild(el); setTimeout(() => el.remove(), 4000); }
+  // 오늘부터 대회(+회복)까지 (4~16주) 앞으로의 자동 계획을 새 계획으로 바꿔요
+  async function applyPlanToCalendar() {
+    clearTimeout(syncTimer);
+    const P = makeVariants(profile)[0].plan;
+    const today = iso(new Date());
+    const up = (profile.races || []).filter((r) => r.date >= today).map((r) => r.date).sort();
+    const lastRace = up.length ? new Date(up[up.length - 1] + "T00:00:00") : null;
+    const nW = lastRace ? Math.min(16, Math.max(4, Math.ceil((lastRace - P.week(0).start) / (7 * 864e5)) + 2)) : 4;
+    const end = iso(addDays(P.week(0).start, 7 * nW - 1));
+    const { data: old } = await TS.mine(db.from(TS.TABLE).select("id,date,notes,completed")).gte("date", today).lte("date", end).like("notes", "[자동 계획]%");
+    const keep = new Set((old || []).filter((s) => s.completed || /🧑‍🏫 코치:/.test(s.notes || "")).map((s) => s.date));
+    const del = (old || []).filter((s) => !keep.has(s.date));
+    if (del.length) await db.from(TS.TABLE).delete().in("id", del.map((x) => x.id));
+    const rows = [];
+    for (let i = 0; i < nW; i++) { const W = P.week(i); W.sessions.forEach((s) => { const dd = iso(addDays(W.start, s.day)); if (dd >= today && dd <= end && !keep.has(dd)) rows.push(rowOf(s, dd)); }); }
+    if (rows.length) await db.from(TS.TABLE).insert(rows);
+    return rows.length;
+  }
   function setProfile(p) {
+    // 예전에 "middle"처럼 내부 이름으로 저장된 대회 거리는 화면용 이름으로 바꿔서 보여줘요
+    if (p && p.races && p.sport) { const G = E.GOALS[sportKey(p.sport)] || []; p.races.forEach((r) => { const g = G.find((x) => x[0] === r.event); if (g) r.event = g[1]; }); }
     profile = p;
     if (p) scheduleSync();
     TS.setSport(p ? p.sport : null);
@@ -774,6 +866,7 @@
           <b>${minLabel(W.total)}</b></div>
         <p class="hint">${esc(W.phase.desc)} · 이번 주 집중: <b>${esc(W.phase.focus)}</b></p>
         ${distBar(W.lowPct, W)}
+        ${profile.holdSync ? `<div class="note" style="margin:10px 0 0">🏁 새 대회 일정이 아직 달력에 반영되지 않았어요. <button type="button" class="pill" data-syncnow="1">지금 반영</button></div>` : ""}
         ${ratioCtl(W)}
         ${W.tss && plan.pmc ? (() => { const pw = plan.pmc(weekIdx + 1).weeks[weekIdx]; return `<p class="hint" style="margin:10px 0 0">📈 이번 주 훈련 부하 약 <b>${W.tss} TSS</b> · 주말 예상 체력 CTL <b>${Math.round(pw.ctl)}</b> (${pw.ramp >= 0 ? "+" : ""}${pw.ramp.toFixed(1)}) · 컨디션 TSB <b>${pw.tsb >= 0 ? "+" : ""}${Math.round(pw.tsb)}</b> <span>— 연간 탭에 그래프가 있어요</span></p>`; })() : ""}
       </div>
@@ -917,7 +1010,7 @@
     const body = { week: renderWeekTab, month: renderMonthTab, year: renderYearTab, basis: renderBasisTab }[planTab]();
     $("planBody").innerHTML = `
       <div class="wz-top"><h2 style="margin:0;flex:1">📋 내 훈련 계획</h2><button type="button" class="pill" data-home="1">🏠 홈</button><button type="button" id="planEdit">⚙️ 설정</button><button type="button" id="planClose">닫기</button></div>
-      ${cloudOk ? "" : `<div class="note" style="margin:0 0 12px">⚠️ 프로필이 이 기기에만 저장됐어요. Supabase SQL Editor에서 <code>schema_profile.sql</code>을 실행하면 다른 기기에서도 보여요.</div>`}
+      ${cloudOk ? "" : `<div class="note" style="margin:0 0 12px">⚠️ 프로필이 지금은 이 기기에만 저장됐어요. 로그인하고 인터넷이 연결되면 다른 기기에서도 보여요.</div>`}
       <div class="card"><div class="kv">
         <span>종목 · 목표</span><b>${SPORTS[p.sport].icon} ${esc(g.name)}${g.timeText ? ` · ${esc(g.timeText)}` : ""}</b>
         ${plan.feas ? `<span>목표 판단</span><b>VDOT ${plan.feas.now.toFixed(1)} → ${plan.feas.need.toFixed(1)} · 목표 페이스 ${fmt(plan.feas.pace)}/km · <span style="color:${plan.feas.verdict === "무리" ? "#dc2626" : plan.feas.verdict === "도전적" ? "#ea580c" : "#16a34a"}">${plan.feas.verdict}</span>${plan.feas.weeksLeft ? ` <span class="hint">(필요 약 ${plan.feas.weeksNeed}주 · 대회까지 ${plan.feas.weeksLeft}주)</span>` : ""}</b>` : ""}
@@ -937,12 +1030,13 @@
     $("planEdit").onclick = () => { closePlan(); openWizard(1); };
   }
   $("planBody").addEventListener("click", (e) => {
-    const el = e.target.closest("[data-tab],[data-wk],[data-mo],[data-goweek],[data-add],[data-v],[data-ratio],[data-ratioapply],[data-goaledit]");
+    const el = e.target.closest("[data-tab],[data-wk],[data-mo],[data-goweek],[data-add],[data-v],[data-ratio],[data-ratioapply],[data-goaledit],[data-syncnow]");
     if (!el) return;
     const d = el.dataset;
     if (d.ratio) { ratioDraft = +d.ratio; const y = $("planOv").scrollTop; renderPlan(); $("planOv").scrollTop = y; return; }
     if (d.ratioapply) { applyRatio(el); return; }
     if (d.goaledit) { openGoal(() => openPlan(true)); return; }
+    if (d.syncnow) { el.disabled = true; applyPlanToCalendar().then(async (n) => { const p = clone(profile); delete p.holdSync; await saveProfile(p); profile = p; toastP(`📅 대회에 맞춰 스케줄을 바꿨어요 (${n}개)`); TS.reload(); renderPlan(); }); return; }
     if (d.v !== undefined) { vSel = +d.v; plan = variants[vSel].plan; renderPlan(); return; }
     if (d.tab) planTab = d.tab;
     else if (d.wk) weekIdx = Math.max(0, Math.min(51, weekIdx + +d.wk));
@@ -1010,7 +1104,7 @@
     await saveProfile(p);
     setProfile(p);
   }
-  Object.assign(TS, { getProfile: () => profile, openWizard, openPlan, openGoal, isProfileCloud: () => cloudOk, discsOf, updateProfile });
+  Object.assign(TS, { getProfile: () => profile, openWizard, openPlan, openGoal, isProfileCloud: () => cloudOk, discsOf, updateProfile, openRaceAdd, removeRace });
   // 오른쪽 위 종목 버튼: 종목만 바꾸고 바로 스케줄 보기 (문진표는 '설정'에서만)
   function openSportQuick() {
     if (!profile) { openWizard(0); return; }

@@ -71,14 +71,14 @@
   }
   function explainError(err) {
     const msg = (err && err.message) || String(err);
+    // 사용자에게는 쉬운 말로 (자세한 원인은 개발자 도구 콘솔에 남겨요)
+    try { console.warn("[ZONE] 저장소 오류:", err); } catch (e) { /* 무시 */ }
     if (err && (err.code === "42P01" || err.code === "PGRST205" || /does not exist|schema cache/i.test(msg))) {
-      return "Supabase에 <code>training_sessions</code> 테이블이 아직 없습니다. " +
-        "Supabase 대시보드 → <b>SQL Editor</b>에서 이 폴더의 <code>schema.sql</code> 내용을 실행한 뒤 새로고침하세요.";
+      return "서버가 아직 준비되지 않았어요. 잠시 뒤 다시 열어 주세요. 계속되면 앱 관리자에게 알려 주세요.";
     }
-    if (err && err.code === "42501") {
-      return "권한이 없습니다(RLS). <code>schema.sql</code>의 정책 부분을 실행했는지 확인하세요.";
-    }
-    return "Supabase 오류: " + escapeHtml(msg);
+    if (err && err.code === "42501") return "이 작업을 할 권한이 없어요. 로그인했는지 확인해 주세요.";
+    if (/Failed to fetch|NetworkError|network/i.test(msg)) return "인터넷 연결을 확인해 주세요. 연결되면 자동으로 다시 불러와요.";
+    return "저장 중 문제가 생겼어요. 잠시 뒤 다시 시도해 주세요.";
   }
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -122,7 +122,7 @@
       showBanner(explainError(error));
       sessions = [];
     } else {
-      setStatus(true, "Supabase 연결됨");
+      setStatus(true, "저장됨");
       showBanner("");
       sessions = data;
     }
@@ -303,7 +303,7 @@
     d.innerHTML = `<div style="padding:18px 18px 16px;max-height:85vh;overflow:auto">
       <div class="spread" style="margin-bottom:4px"><span class="eyebrow" style="margin:0">${isToday ? "오늘 · " : ""}${escapeHtml(when)}</span>
         <button type="button" class="link" data-v="x" aria-label="닫기" style="font-size:20px;line-height:1">✕</button></div>
-      ${TS.sessHtml(s, isToday)}
+      ${TS.sessHtml(s, isToday, true)}
       <div class="actions" style="margin-top:14px"><span><button type="button" data-v="edit">✏️ 수정</button>
         ${TS.coach && !s.completed ? '<button type="button" data-v="ai">🧑‍🏫 컨디션 맞춤</button>' : ""}</span>
         <div class="right"><button type="button" data-v="done">${s.completed ? "완료 취소" : "✓ 완료"}</button></div></div>

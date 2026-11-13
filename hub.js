@@ -276,7 +276,7 @@
   }
 
   // 훈련 한 개를 깔끔한 카드로 (홈·계획 탭에서 같이 씀)
-  function sessHtml(s, canStart) {
+  function sessHtml(s, canStart, expanded) { // expanded: 팝업에서는 자세히까지 펼쳐서
     const n = parseNotes(s);
     return `<div class="hsess${s.completed ? " done" : ""}">
       <div class="spread"><b class="t">${esc(s.title)}</b>${n.z ? `<span class="zb" style="background:${ZC[n.z - 1]};color:${ZFG(n.z)}">Z${n.z}${n.tag ? " " + esc(n.tag) : ""}</span>` : ""}</div>
@@ -285,13 +285,15 @@
         <div><span>시간</span><b>${s.duration_min ? s.duration_min + "분" : "-"}</b></div>
         <div><span>강도</span><b style="color:${n.z ? (n.z === 3 ? "#a16207" : ZC[n.z - 1]) : "inherit"}">${n.z ? `Z${n.z}` : esc(s.intensity || "-")}</b></div>
         <div><span>힘든 정도</span><b>${n.rpe ? "RPE " + esc(n.rpe) : "-"}</b></div></div>
+      <div class="spread" style="margin-top:10px">${s.completed ? '<span class="hint">완료 ✓</span>' : `<span class="hint">${canStart ? "준비되면 시작하세요" : ""}</span>`}
+        ${s.completed || !canStart ? "" : `<button type="button" class="primary pill" data-start="${esc(s.id)}">${s.category === "수영" ? "📝 기록하기" : "▶ 이 훈련 시작"}</button>`}</div>
+      ${(n.hiText || n.steps.length || n.alt || n.point) ? `<details class="sess-more" ${expanded ? "open" : ""}><summary>구성 · 강도 · 대안 자세히 보기</summary>
       ${window.ZONE ? (n.hiText ? window.ZONE.mixBar(n.hiText) : n.dist && n.z && n.z <= 2 ? window.ZONE.mixBar(`고강도 0% 0km · 저강도 100% ${n.dist}`) : n.dist && n.z ? `<p class="hint" style="margin:8px 0 0">⚖️ 계획에서 '달력에 넣기'를 다시 누르면 고강도·저강도 km가 보여요.</p>` : "") : ""}
       ${window.ZONE && n.z ? window.ZONE.guideLine(n.z) : ""}
       ${n.steps.length && TS.stepTable ? `<div style="margin-top:8px">${TS.stepTable(n.steps)}</div>` : ""}
       ${n.alt && TS.stepTable ? `<div class="alt-box"><div class="alt-h">✅ 추천: <b>${esc(s.title.replace(/^.*?· /, ""))}</b> <span class="hint">— 이번 시기 목적에 가장 잘 맞아요</span></div><details><summary>🔁 대안: <b>${esc(n.alt.name)}</b> <span class="hint">— ${esc(n.alt.why)}</span></summary>${TS.stepTable(n.alt.steps)}</details></div>` : ""}
       ${n.point && !s.completed ? `<p class="hint" style="margin:8px 0 0">💡 ${esc(n.point)}</p>` : ""}
-      <div class="spread" style="margin-top:10px">${s.completed ? '<span class="hint">완료 ✓</span>' : `<span class="hint">${canStart ? "준비되면 시작하세요" : ""}</span>`}
-        ${s.completed || !canStart ? "" : `<button type="button" class="primary pill" data-start="${esc(s.id)}">${s.category === "수영" ? "📝 기록하기" : "▶ 이 훈련 시작"}</button>`}</div>
+      </details>` : ""}
     </div>`;
   }
   function startSession(s) {
@@ -380,7 +382,10 @@
         const dd = Math.round((new Date(race.date + "T00:00:00") - today0) / 864e5);
         const a = TS.E.prepAdvice(race, dd, TS.E.sportKey ? TS.E.sportKey(p.sport) : "run");
         if (!a || dd < 1) return "";
-        return `<div class="card prep-home"><div class="spread"><b>${esc(a.title)}</b><span class="zb" style="background:#ef4444">${esc(a.stage)}</span></div><ul>${a.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul></div>`;
+        // 첫 화면을 가리지 않게 2줄 요약 + 눌러서 자세히
+        return `<details class="card prep-home"><summary><div class="spread"><b>🏁 ${esc(race.name || "대회")} D-${dd}</b><span class="zb" style="background:#ef4444">${esc(a.stage)}</span></div>
+          <div class="hint" style="margin-top:2px">대회 준비기간(조정기)이에요 — 양은 줄이고 컨디션을 끌어올려요. <u>코치 안내 ${a.lines.length}가지 보기</u></div></summary>
+          <ul>${a.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul></details>`;
       })()}
 
       <div class="card">
@@ -394,6 +399,16 @@
       <div class="card"><div class="spread"><div class="eyebrow" style="margin:0">${dayTitle}</div>
         <button type="button" class="link" id="hToPlan">전체 계획 ›</button></div>${todayHtml}</div>
 
+      ${(() => { // 🏁 내 대회 + 대회 추가
+        const all = ((p && p.races) || []).map((r, i) => [r, i]).filter(([r]) => r.date && new Date(r.date + "T00:00:00") >= today0).sort((a, b) => a[0].date.localeCompare(b[0].date));
+        const PC = { A: "#ef4444", B: "#f97316", C: "#94a3b8" };
+        return `<div class="card race-card"><div class="spread"><div class="eyebrow" style="margin:0">🏁 내 대회</div>
+            <button type="button" class="primary pill" data-raceadd="1">+ 대회 추가</button></div>
+          ${all.length ? all.slice(0, 5).map(([r, i]) => { const dd = Math.round((new Date(r.date + "T00:00:00") - today0) / 864e5); return `<div class="race-item${dd <= 14 ? " soon" : ""}">
+              <div><b>${esc(r.name || "대회")}</b> <span class="zb" style="background:${PC[r.priority] || PC.B}">${esc(r.priority || "B")}</span><br><span class="hint">${esc(r.event || "")} · ${esc(r.date.slice(5).replace("-", "/"))}${dd <= 14 && dd > 0 ? " · 조정기" : ""}</span></div>
+              <div style="display:flex;align-items:center;gap:8px"><b class="num rdd">${dd === 0 ? "D-DAY" : `D-${dd}`}</b><button type="button" class="link" data-racerm="${i}" aria-label="삭제">✕</button></div></div>`; }).join("")
+            : `<p class="hint" style="margin:8px 0 0">올해 나가는 대회를 추가하면, 대회 날짜에 맞춰 조정기·회복까지 스케줄을 짜 드려요.</p>`}</div>`;
+      })()}
       ${TS.coach ? `<div class="card coach-card"><div class="spread" style="align-items:flex-start;gap:10px">
           <div><div class="eyebrow" style="margin:0 0 2px">🧑‍🏫 코치</div><span class="hint">컨디션·시간에 맞춰 ${homeDay === todayIso ? "오늘" : "이날"} 훈련을 조정하거나, 궁금한 걸 물어보세요</span></div></div>
         <div style="display:flex;gap:8px;margin-top:10px"><button type="button" class="primary" data-coach="adjust" style="flex:1;padding:12px;border-radius:12px">${list.some((s) => !s.completed) ? "컨디션 맞춤" : "훈련 짜 주기"}</button>
@@ -410,15 +425,14 @@
         <div class="progress"><i style="width:${Math.min(100, (mKm / mTarget) * 100)}%"></i></div>
       </div>
 
-      ${race ? `<div class="card"><div class="eyebrow">다음 대회</div><div class="spread"><b>${esc(race.name || "대회")}</b>
-        <b class="num" style="font-size:34px;color:var(--accent)">D-${Math.round((new Date(race.date + "T00:00:00") - today0) / 864e5)}</b></div>
-        <div class="hint">${esc(race.event || "")} · ${esc(race.date)}</div></div>` : ""}
 
       ${acts[0] ? `<div class="eyebrow mt">최근 활동</div>${actCard(acts[0])}` : ""}
     `;
     if ($("hGo")) $("hGo").onclick = () => TS.openTracker();
     if ($("hMakePlan")) $("hMakePlan").onclick = () => TS.openPlan();
     $("hToPlan").onclick = () => showTab("plan");
+    $("homeBody").querySelectorAll("[data-raceadd]").forEach((b) => { b.onclick = () => TS.openRaceAdd(); });
+    $("homeBody").querySelectorAll("[data-racerm]").forEach((b) => { b.onclick = () => TS.removeRace(+b.dataset.racerm); });
     $("homeBody").querySelectorAll("[data-coach]").forEach((b) => {
       b.onclick = () => b.dataset.coach === "chat" ? TS.coach.openChat() : TS.coach.openAdjust(homeDay, list.find((s) => !s.completed) || null);
     });
@@ -493,7 +507,7 @@
         </div>
         ${vals.length ? bars(vals, labels) : ""}
       </div>
-      ${TS.store.cloud ? "" : `<div class="note" style="margin-bottom:12px">⚠️ 활동 기록이 이 기기에만 저장되고 있어요. ${TS.auth && TS.auth.user ? "Supabase SQL Editor에서 <code>schema_profile.sql</code> → <code>schema_garmin.sql</code> → <code>schema_community.sql</code> 순서로 실행하면 계정에 저장돼요." : "로그인하면 계정에 저장돼요 (나 → 로그인)."}</div>`}
+      ${TS.store.cloud ? "" : `<div class="note" style="margin-bottom:12px">⚠️ 활동 기록이 이 기기에만 저장되고 있어요. ${TS.auth && TS.auth.user ? "서버 저장이 잠시 안 되고 있어요 — 연결되면 계정에 저장돼요." : "로그인하면 계정에 저장돼요 (나 → 로그인)."}</div>`}
       ${list.length ? list.map(actCard).join("") : `<div class="card" style="text-align:center"><p class="hint">이 기간에 기록이 없어요.</p>
         <button type="button" class="primary" id="aGo">▶ 첫 기록 시작하기</button></div>`}
     `;
@@ -604,7 +618,7 @@
 
   // ---------- 사진·동영상 (Supabase Storage 'media' 버킷, 활동 id 폴더) ----------
   const BUCKET = "media";
-  const MEDIA_HELP = "사진·동영상 저장 공간이 아직 없어요. Supabase SQL Editor에서 schema_media.sql을 실행해 주세요.";
+  const MEDIA_HELP = "사진·동영상을 지금은 올릴 수 없어요. 잠시 뒤 다시 시도해 주세요.";
   const isVideo = (name) => /\.(mp4|mov|webm|m4v|3gp)$/i.test(name);
   async function loadMedia(a) {
     const box = $("dMedia"), msg = $("dMediaMsg");
@@ -725,7 +739,7 @@
         <div class="set-row"><span>🔮 대회 기록 예측</span><button type="button" class="pill" data-predict="1">보기</button></div>
         <div class="set-row"><span>🎯 목표 대회·기록</span><button type="button" class="pill" id="meGoal">바꾸기</button></div>
         <div class="set-row"><span>기록 중 음성 안내</span><button type="button" class="pill" id="meVoice">${voiceOn() ? "켜짐 🔊" : "꺼짐 🔇"}</button></div>
-        <div class="set-row"><span>데이터 저장</span><span class="hint">${TS.store.cloud && TS.isProfileCloud() ? "Supabase ✓" : "일부 이 기기에만 저장 — <code>schema_profile.sql</code> 실행 필요"}</span></div>
+        <div class="set-row"><span>데이터 저장</span><span class="hint">${TS.store.cloud && TS.isProfileCloud() ? "계정에 저장 중 ✓" : "일부는 이 기기에만 저장돼요 (로그인하면 계정에 저장)"}</span></div>
       </div>`;
     bindAccount();
     bindAvatar();
@@ -770,7 +784,7 @@
         }
       }
       try { localStorage.setItem(AV_KEY, dataUrl); } catch (e) { /* 저장 공간 없음 */ }
-      if (!saved && A.user) alert("사진을 이 기기에만 저장했어요. 커뮤니티에도 보이게 하려면 Supabase에서 schema_community.sql을 실행해 주세요.");
+      if (!saved && A.user) alert("사진을 이 기기에만 저장했어요. 잠시 뒤 다시 시도하면 계정에도 저장돼요.");
     } catch (e) { alert("사진을 읽지 못했어요: " + (e.message || e)); }
     renderMe();
   }
@@ -804,12 +818,12 @@
          ${nLocal ? `<div class="set-row"><span>이 기기에만 있는 기록 ${nLocal}개</span><button type="button" class="pill" id="acUp">계정에 올리기</button></div>` : ""}
          <div class="set-row"><span>로그아웃</span><button type="button" class="pill" id="acOut">로그아웃</button></div>`;
     return `<div class="card"><h3>👤 계정 · 공개 설정</h3>${acct}
-      <div class="set-row"><span>🟧 스트라바 연동 <span class="hint">(내 기록 자동 가져오기 · 나만 보기)</span></span>${TS.strava ? TS.strava.statusHtml() : ""}</div>
+      ${""/* 스트라바는 한국에서 서비스가 제한돼서 숨겨요 (strava.js는 그대로 남겨 둬요) */}
       <div class="set-row"><span>새 기록 기본 공개 범위</span>
         <select id="acVis" style="width:auto">${[["friends", "👥 친구만"], ["public", "🌏 전체 공개"], ["private", "🔒 나만"]].map(([v, l]) => `<option value="${v}"${pv.visibility === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
       <div class="set-row"><span>지도에서 출발·도착 200m 가리기 <span class="hint">(집 위치 보호)</span></span>
         <label class="check"><input type="checkbox" id="acHide" ${pv.hideEnds ? "checked" : ""} /> 켜기</label></div>
-      ${A.user && !TS.store.cloud && TS.store.reason === "sql" ? `<div class="note">⚠️ 계정 저장을 쓰려면 Supabase에서 <code>schema_community.sql</code>을 실행해 주세요. 지금은 이 기기에 저장돼요.</div>` : ""}</div>`;
+      ${A.user && !TS.store.cloud && TS.store.reason === "sql" ? `<div class="note">⚠️ 지금은 계정 저장이 잠시 안 돼서 이 기기에 저장돼요.</div>` : ""}</div>`;
   }
   function bindAccount() {
     const A = TS.auth || {};
@@ -819,7 +833,7 @@
     if ($("acUp")) $("acUp").onclick = async (e) => {
       e.target.disabled = true; e.target.textContent = "올리는 중…";
       const r = await TS.uploadLocal();
-      alert(`${r.ok}개 올렸어요${r.fail ? `, ${r.fail}개 실패 (schema_community.sql 실행 필요)` : ""}.`);
+      alert(`${r.ok}개 올렸어요${r.fail ? `, ${r.fail}개는 실패했어요 — 잠시 뒤 다시 시도해 주세요` : ""}.`);
       refresh();
     };
     $("acVis").onchange = (e) => TS.setPrivacy({ visibility: e.target.value });
