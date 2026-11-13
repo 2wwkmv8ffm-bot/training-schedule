@@ -704,10 +704,10 @@
     $("meBody").innerHTML = `
       <div class="card" style="text-align:center">
         <button type="button" class="avatar avatar-btn" id="meAvatar" style="margin:0 auto 6px" aria-label="프로필 사진 바꾸기">${avatarSrc() ? `<img src="${esc(avatarSrc())}" alt="프로필 사진" />` : (p && p.sport ? TS.SPORTS[p.sport].icon : "🏁")}<span class="cam">📷</span></button>
-        <input type="file" id="meAvCam" accept="image/*" capture="user" hidden /><input type="file" id="meAvAlb" accept="image/*" hidden /><input type="file" id="meAvDoc" accept="image/*,.heic,.heif" hidden />
-        <div class="chips" id="meAvPick" hidden style="justify-content:center;margin:6px 0"><button type="button" class="pill" data-avp="meAvCam">📷 카메라로 찍기</button><button type="button" class="pill" data-avp="meAvAlb">🖼️ 앨범에서 고르기</button><button type="button" class="pill" data-avp="meAvDoc">📁 파일에서 고르기</button></div>
-        <div><button type="button" class="link" id="meAvatarEdit">${avatarSrc() ? "사진 바꾸기" : "프로필 사진 등록"}</button>${avatarSrc() ? ` <button type="button" class="link" id="meAvatarDel">삭제</button>` : ""}</div>
-        <b style="font-size:20px">${esc((p && p.nickname) || "나")}${TS.isOwner && TS.auth && TS.auth.user && TS.isOwner(TS.auth.user.id) ? '<span class="obadge" title="ZONE 운영자">✔ ZONE</span>' : ""}</b>
+        <input type="file" id="meAvCam" accept="image/*" capture="user" hidden /><input type="file" id="meAvAlb" accept="image/*" hidden />
+        <div class="chips" id="meAvPick" hidden style="justify-content:center;margin:6px 0"><button type="button" class="pill" data-avp="meAvCam">📷 카메라로 찍기</button><button type="button" class="pill" data-avp="meAvAlb">🖼️ 앨범에서 고르기</button></div>
+        ${avatarSrc() ? `<div><button type="button" class="link" id="meAvatarDel">사진 삭제</button></div>` : ""}
+        <b style="font-size:20px">${TS.auth && TS.auth.member ? `${esc(TS.auth.member.nickname)}<span class="ntag">#${TS.tagNo ? TS.tagNo(TS.auth.member.id) : ""}</span>` : esc((p && p.nickname) || "나")}${TS.isOwner && TS.auth && TS.auth.user && TS.isOwner(TS.auth.user.id) ? '<span class="obadge" title="ZONE 운영자">✔ ZONE</span>' : ""}</b>
         <div class="hint">${p && p.sport ? `${p.sport} 선수` : "종목을 골라주세요"}</div>
         <div class="mt"><span class="lvl">Lv.${lv.n} ${lv.name}</span></div>
         <div class="progress mt"><i style="width:${lv.pct}%"></i></div>
@@ -817,9 +817,8 @@
   function bindAvatar() {
     const pick = () => { const b = $("meAvPick"); b.hidden = !b.hidden; }; // 카메라 · 앨범 · 파일 중 고르기
     $("meAvatar").onclick = pick;
-    $("meAvatarEdit").onclick = pick;
     $("meBody").querySelectorAll("[data-avp]").forEach((b) => { b.onclick = () => $(b.dataset.avp).click(); });
-    ["meAvCam", "meAvAlb", "meAvDoc"].forEach((id) => { $(id).onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; $("meAvPick").hidden = true; setAvatar(f); }; });
+    ["meAvCam", "meAvAlb"].forEach((id) => { $(id).onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; $("meAvPick").hidden = true; setAvatar(f); }; });
     if ($("meAvatarDel")) $("meAvatarDel").onclick = removeAvatar;
   }
 

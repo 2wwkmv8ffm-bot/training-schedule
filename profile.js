@@ -45,16 +45,22 @@
   }
 
   // ---------- 저장 ----------
+  // 이 기기에 저장된 프로필이 누구 것인지 (다른 계정으로 바꿔 로그인하면 남의 프로필을 가져오지 않게)
+  const OWNER_KEY = "training.profileOwner";
+  const localOwner = () => { try { return localStorage.getItem(OWNER_KEY) || ""; } catch (e) { return ""; } };
   async function loadProfile() {
     let local = null;
     try { local = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) { /* 무시 */ }
+    const uid = TS.auth && TS.auth.user ? TS.auth.user.id : "";
+    const own = localOwner();
+    if (uid && own && own !== uid) local = null; // 다른 계정의 프로필 → 쓰지 않아요
     const { data, error } = await db.from(PROFILE_TABLE).select("data").eq("id", pid()).maybeSingle();
     if (error) { cloudOk = false; return local; }
     cloudOk = true;
     return (data && data.data) || local;
   }
   async function saveProfile(p) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch (e) { /* 무시 */ }
+    try { localStorage.setItem(LS_KEY, JSON.stringify(p)); localStorage.setItem(OWNER_KEY, TS.auth && TS.auth.user ? TS.auth.user.id : ""); } catch (e) { /* 무시 */ }
     const { error } = await db.from(PROFILE_TABLE).upsert({ id: pid(), data: p, updated_at: new Date().toISOString() });
     cloudOk = !error;
   }
@@ -1298,7 +1304,10 @@
     const p = await loadProfile();
     if (p && p.sport && SPORTS[p.sport]) {
       setProfile(p);
-      if (uid) saveProfile(p); // 이 기기 프로필을 내 계정에도 저장
+      if (uid) saveProfile(p); // 이 기기 프로필을 내 계정에도 저장 (이때 이 기기 프로필의 주인도 이 계정으로 표시돼요)
+    } else if (uid) {
+      setProfile(null); // 새 계정: 다른 사람 프로필 대신 빈 상태로 시작 → 문진표를 새로 써요
+      try { localStorage.removeItem(LS_KEY); localStorage.setItem(OWNER_KEY, uid); } catch (e) { /* 무시 */ }
     }
   });
 })();

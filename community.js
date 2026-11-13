@@ -680,7 +680,8 @@
         <button type="button" class="chip" id="pcToday">📋 오늘 훈련 불러오기</button></div>
       <div><div class="spread"><span class="eyebrow" style="margin:0">📷 사진 (최대 ${MAX_PHOTOS}장)</span>
         </div>
-        <div class="chips" style="margin-top:6px">
+        <button type="button" class="pc-cam" id="pcCamBtn" aria-label="사진 추가">📷</button>
+        <div class="chips" id="pcPickMenu" hidden style="margin-top:6px">
           <button type="button" class="pill" data-pick="pcCam">📷 카메라로 찍기</button>
           <button type="button" class="pill" data-pick="pcAlb">🖼️ 앨범에서 고르기</button>
           <button type="button" class="pill" data-pick="pcDoc">📁 파일에서 고르기</button></div>
@@ -698,8 +699,10 @@
     $("pcClose").onclick = () => $("postDlg").close();
     $("postBody").querySelectorAll("[data-pick]").forEach((b) => { b.onclick = () => {
       if (picked.length >= MAX_PHOTOS) { $("pcMsg").textContent = `사진은 최대 ${MAX_PHOTOS}장까지 올릴 수 있어요.`; return; }
+      $("pcPickMenu").hidden = true;
       $(b.dataset.pick).click();
     }; });
+    $("pcCamBtn").onclick = () => { const m = $("pcPickMenu"); m.hidden = !m.hidden; };
     $("postBody").querySelectorAll("[data-addtag]").forEach((b) => { b.onclick = () => { const t = $("pcText"); if (!t.value.includes(b.dataset.addtag)) t.value = (t.value.trim() + " " + b.dataset.addtag).trim(); b.classList.add("on"); }; });
     $("pcToday").onclick = () => { // 오늘 달력의 훈련·일지로 문구 만들기
       const today = TS.iso(new Date()), ss = (TS.getSessions ? TS.getSessions() : []).filter((s) => s.date === today);
