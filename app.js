@@ -204,8 +204,9 @@
       const RC = raceCtx(), rc = RC.raceOn[dIso], tp = !rc && RC.taperOn[dIso];
       col.className = "day" + (dIso === todayIso ? " today" : "") + (rc ? " race" : tp ? " taper" : "");
       const cls = i === 6 ? "sun" : i === 5 ? "sat" : "";
-      col.innerHTML = `<div class="day-head"><span class="${cls}">${DAYS[i]} ${label(d)}${rc ? ` <b class="rtag">🏁 ${escapeHtml(rc.name || "대회")} D-DAY</b>` : tp ? ` <b class="ttag">조정기 D-${tp.k}</b>` : ""}</span><button title="이 날에 추가">+</button></div><div class="items"></div>`;
-      col.querySelector("button").onclick = () => openForm(null, dIso);
+      col.innerHTML = `<div class="day-head"><span class="${cls}">${DAYS[i]} ${label(d)}${rc ? ` <b class="rtag">🏁 ${escapeHtml(rc.name || "대회")} D-DAY</b>` : tp ? ` <b class="ttag">조정기 D-${tp.k}</b>` : ""}</span><span class="dh-btns"><button type="button" class="jn-b" title="일지" data-jn="${dIso}">${TS.journal && TS.journal.mark(dIso) ? TS.journal.mark(dIso) : "📝"}</button><button title="이 날에 추가">+</button></span></div><div class="items"></div>`;
+      col.querySelector("button[title=\"이 날에 추가\"]").onclick = () => openForm(null, dIso);
+      if (TS.journal) TS.journal.bind(col);
 
       const list = col.querySelector(".items");
       const items = visible.filter((s) => s.date === dIso);
@@ -250,7 +251,7 @@
       const wd = (d.getDay() + 6) % 7;
       const rc = raceOn[dIso], tp = !rc && taperOn[dIso];
       cells += `<button type="button" class="mc${d.getMonth() !== m ? " out" : ""}${dIso === todayIso ? " today" : ""}${dIso === selDay ? " sel" : ""}${rc ? " race" : tp ? " taper" : ""}" data-day="${dIso}" title="${rc ? escapeHtml("🏁 " + (rc.name || "대회")) : tp ? `${escapeHtml(tp.r.name || "대회")} D-${tp.k}` : ""}">
-        <span class="mn ${wd === 6 ? "sun" : wd === 5 ? "sat" : ""}">${d.getDate()}</span>${rc ? `<span class="rflag">🏁</span><span class="rc">${escapeHtml(rc.name || rc.event || "대회")}</span>` : tp ? `<span class="dd">D-${tp.k}</span>` : ""}
+        <span class="mn ${wd === 6 ? "sun" : wd === 5 ? "sat" : ""}">${d.getDate()}</span>${TS.journal && TS.journal.mark(dIso) ? `<span class="jm">${TS.journal.mark(dIso)}</span>` : ""}${rc ? `<span class="rflag">🏁</span><span class="rc">${escapeHtml(rc.name || rc.event || "대회")}</span>` : tp ? `<span class="dd">D-${tp.k}</span>` : ""}
         ${items.slice(0, 3).map((s) => { const z = zoneOf(s); return `<i class="${s.completed ? "dn" : ""}" data-sp="${SKEY[s.category] || ""}" style="background:${s.completed ? "#cbd5e1" : z ? ZCOL[z - 1] : COLORS[s.category] || COLORS.기타};color:${s.completed ? "#475569" : z === 3 ? "#422006" : "#fff"}"><span class="si">${SICON[s.category] || ""}</span>${z ? `<b>Z${z}</b> ` : ""}${escapeHtml(s.title.replace(/^[^\wㄱ-힣]+/, "").replace(/^(달리기|자전거|수영|브릭)\s*·\s*/, ""))}</i>`; }).join("")}
         ${items.length > 3 ? `<em>+${items.length - 3}</em>` : ""}</button>`;
     }
@@ -263,6 +264,7 @@
     const list = week.querySelector(".mday .items");
     if (!dayItems.length) list.innerHTML = `<div class="empty">일정 없음 — + 를 눌러 추가하세요</div>`;
     dayItems.forEach((s) => list.appendChild(itemEl(s)));
+    if (TS.journal) { const jd = document.createElement("div"); jd.innerHTML = TS.journal.dayCard(selDay); week.querySelector(".mday").appendChild(jd.firstElementChild); TS.journal.bind(week.querySelector(".mday")); }
 
     const inMonth = visible.filter((s) => s.date.slice(0, 7) === `${y}-${String(m + 1).padStart(2, "0")}`);
     $("sCount").textContent = inMonth.length;
@@ -559,8 +561,10 @@
     getWeekStart: () => weekStart,
     setWeek(d) { weekStart = mondayOf(d); monthCursor = new Date(d.getFullYear(), d.getMonth(), 1); selDay = iso(d); load(); },
     reload: load,
+    getSessions: () => sessions,
     setSport(name) { sport = SPORTS[name] ? name : null; render(); },
   };
 
+  window.addEventListener("ts:journal", () => render()); // 일지를 쓰면 달력 표시(📝·컨디션)도 바로
   load();
 })();

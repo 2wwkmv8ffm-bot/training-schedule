@@ -9,7 +9,7 @@
   const SCOPE_KEY = "training.feedScope";
   const BUCKET = "media";
   const MAX_PHOTOS = 6;
-  let scope = (() => { try { return localStorage.getItem(SCOPE_KEY) || "friends"; } catch (e) { return "friends"; } })();
+  let scope = (() => { try { return localStorage.getItem(SCOPE_KEY) || "all"; } catch (e) { return "all"; } })();
   let feed = [], maps = [];
   const fr = { accepted: [], incoming: [], outgoing: [], names: {} };
 
@@ -53,6 +53,41 @@
   TS.uploadImage = uploadImage;
   TS.pubUrl = pubUrl;
 
+  // ---------- 👣 팔로우 + 배지 (팔로워 10명 ⭐ · 100명 🌟 · 1000명 👑) ----------
+  const fol = { ok: true, following: new Set(), count: {} };
+  async function loadFollows(ids) {
+    if (!fol.ok || !me()) return;
+    const { data: mine, error } = await db.from("follows").select("followee").eq("follower", me());
+    if (error) { fol.ok = false; return; } // schema_follow.sql 실행 전
+    fol.following = new Set((mine || []).map((r) => r.followee));
+    const want = [...new Set([me(), ...ids])].filter(Boolean);
+    if (!want.length) return;
+    const { data } = await db.from("follows").select("followee").in("followee", want).limit(10000);
+    want.forEach((u) => { fol.count[u] = 0; });
+    (data || []).forEach((r) => { fol.count[r.followee] = (fol.count[r.followee] || 0) + 1; });
+  }
+  const BADGES = [[1000, "👑", "팔로워 1000명"], [100, "🌟", "팔로워 100명"], [10, "⭐", "팔로워 10명"]];
+  // 🛡️ 운영자(앱 주인) — app_admins 표에 있는 계정만, 다른 사람에게는 없는 배지
+  let owners = new Set();
+  (async () => { try { const { data } = await db.from("app_admins").select("user_id"); owners = new Set((data || []).map((r) => r.user_id)); } catch (e) { /* 표 없음 */ } })();
+  window.addEventListener("ts:auth", async () => { try { const { data } = await db.from("app_admins").select("user_id"); owners = new Set((data || []).map((r) => r.user_id)); } catch (e) { /* 무시 */ } });
+  TS.isOwner = (uid) => owners.has(uid || me());
+  function badge(uid) {
+    const own = owners.has(uid) ? '<span class="obadge" title="ZONE 운영자">✔ ZONE</span>' : "";
+    const n = fol.count[uid] || 0, b = BADGES.find(([k]) => n >= k);
+    return own + (b ? `<span class="fbadge" title="${b[2]} 달성 (지금 ${n}명)">${b[1]}</span>` : "");
+  }
+  async function toggleFollow(uid) {
+    if (!fol.ok) { toast("팔로우 기능은 준비 중이에요 (서버 설정 필요)"); return; }
+    const on = fol.following.has(uid);
+    const { error } = on ? await db.from("follows").delete().eq("follower", me()).eq("followee", uid)
+      : await db.from("follows").insert({ follower: me(), followee: uid });
+    if (error) { toast("팔로우를 저장하지 못했어요"); return; }
+    if (on) fol.following.delete(uid); else fol.following.add(uid);
+    fol.count[uid] = Math.max(0, (fol.count[uid] || 0) + (on ? -1 : 1));
+    toast(on ? "팔로우를 취소했어요" : "👣 팔로우했어요 — 친구 탭에서 이 사람 글이 보여요");
+  }
+
   // ---------- 친구 ----------
   async function loadFriends() {
     const uid = me();
@@ -69,7 +104,15 @@
     return null;
   }
 
-  // ---------- 피드 ----------
+  // ---------- 피드 (인스타그램처럼: 스토리 · 사진 넘기기 · 두 번 탭 좋아요 · 인기 · 저장 · 해시태그 · 프로필) ----------
+  const SEL = "id,user_id,body,media,visibility,created_at,activity_id,members!posts_user_id_fkey(nickname,sport,avatar_url),activities(id,sport,title,distance_m,duration_s,avg_hr,route,started_at,source),post_likes(user_id),post_comments(count)";
+  const SAVE_KEY = "training.savedPosts";
+  const saved = new Set((() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || "[]"); } catch (e) { return []; } })());
+  const keepSaved = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify([...saved])); } catch (e) { /* 무시 */ } };
+  let tag = null, stories = [], board = [];
+  const clean = (rows) => (rows || []).map((p) => ({ ...p, activities: p.activities && p.activities.source !== "strava" ? p.activities : null }));
+  const monday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; };
+
   async function render() {
     const box = $("comBody");
     if (!box) return;
@@ -79,7 +122,7 @@
     if (!A.user) {
       box.innerHTML = `<div class="card" style="text-align:center">
         <div style="font-size:44px">👟</div><h3>친구들의 운동을 같이 봐요</h3>
-        <p class="hint">로그인하면 사진·운동 기록을 올리고, 친구·전체 글에 좋아요·댓글을 남길 수 있어요.</p>
+        <p class="hint">로그인하면 사진·운동 기록을 올리고, 스토리·좋아요·댓글·친구 랭킹을 함께 할 수 있어요.</p>
         <button type="button" class="primary" id="comLogin" style="padding:12px 24px">로그인 · 회원가입</button></div>`;
       $("comLogin").onclick = () => A.open("login");
       return;
@@ -91,40 +134,220 @@
       $("comRetry").onclick = async () => { await A.reloadMember(); render(); };
       return;
     }
-    box.innerHTML = '<p class="hint">불러오는 중…</p>';
+    if (!feed.length) box.innerHTML = '<p class="hint">불러오는 중…</p>';
     await loadFriends();
-    let q = db.from("posts")
-      .select("id,user_id,body,media,visibility,created_at,activity_id,members!posts_user_id_fkey(nickname,sport,avatar_url),activities(id,sport,title,distance_m,duration_s,avg_hr,route,started_at,source),post_likes(user_id),post_comments(count)")
-      .order("created_at", { ascending: false }).limit(30);
-    if (scope === "friends") q = q.in("user_id", [me(), ...fr.accepted]);
+    await loadFollows([]);
+    const circle = [...new Set([me(), ...fr.accepted, ...fol.following])]; // 친구 + 내가 팔로우한 사람
+    let q = db.from("posts").select(SEL).order("created_at", { ascending: false }).limit(scope === "hot" ? 60 : 30);
+    if (scope === "friends") q = q.in("user_id", circle);
+    else if (scope === "saved") q = q.in("id", saved.size ? [...saved] : ["00000000-0000-0000-0000-000000000000"]);
     else q = q.neq("visibility", "private");
-    const { data, error } = await q;
-    feed = (data || []).map((p) => ({ ...p, activities: p.activities && p.activities.source !== "strava" ? p.activities : null }));
+    if (scope === "hot") q = q.gte("created_at", new Date(Date.now() - 7 * 864e5).toISOString());
+    if (tag) q = q.ilike("body", `%#${tag}%`);
+    // 스토리(24시간)와 이번 주 랭킹은 친구 + 나 기준
+    const [main, st, bd] = await Promise.all([
+      q,
+      db.from("posts").select(SEL).in("user_id", circle).gte("created_at", new Date(Date.now() - 864e5).toISOString()).order("created_at", { ascending: true }).limit(60),
+      db.from("posts").select("user_id,members!posts_user_id_fkey(nickname,avatar_url),activities(sport,distance_m,duration_s,started_at,source)").in("user_id", circle).not("activity_id", "is", null).gte("created_at", monday().toISOString()).limit(200),
+    ]);
+    feed = clean(main.data);
+    if (scope === "hot") feed.sort((a, b) => (b.post_likes || []).length - (a.post_likes || []).length);
+    stories = clean(st.data);
+    board = rank(bd.data || []);
+    await loadFollows([...feed, ...stories].map((p) => p.user_id).concat(board.map((o) => o.id)));
+    paint(box, main.error);
+  }
+  // 이번 주 친구 랭킹: 운동 시간 기준 (종목이 달라도 공평하게) + 거리
+  function rank(rows) {
+    const by = {};
+    rows.forEach((r) => {
+      const a = r.activities;
+      if (!a || a.source === "strava") return;
+      const o = by[r.user_id] = by[r.user_id] || { id: r.user_id, m: r.members || {}, sec: 0, km: 0, n: 0 };
+      o.sec += a.duration_s || 0; o.km += (a.distance_m || 0) / 1000; o.n++;
+    });
+    return Object.values(by).sort((a, b) => b.sec - a.sec).slice(0, 10);
+  }
+  // 화면 그리기 (데이터와 분리 — 미리보기·테스트에도 써요)
+  function paint(box, err) {
     const nIn = fr.incoming.length;
+    const byUser = {};
+    stories.forEach((p) => { (byUser[p.user_id] = byUser[p.user_id] || []).push(p); });
+    const ring = Object.keys(byUser).sort((a, b) => (a === me() ? -1 : b === me() ? 1 : 0));
+    const grid = scope === "hot" || scope === "saved";
     box.innerHTML = `
-      <button type="button" class="primary" id="comWrite" style="width:100%;padding:14px;border-radius:14px;margin-bottom:12px">✍️ 사진·글 올리기</button>
-      <div class="spread" style="margin-bottom:12px">
-        <div class="seg" style="margin:0;flex:1"><button type="button" data-scope="friends" class="${scope === "friends" ? "on" : ""}">👥 친구</button>
-          <button type="button" data-scope="all" class="${scope === "all" ? "on" : ""}">🌏 전체</button></div>
-        <button type="button" class="pill" id="comFriends">친구 ${fr.accepted.length}${nIn ? ` <span class="zb z5">${nIn}</span>` : ""}</button></div>
-      ${error ? `<div class="note">글을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.</div>` : ""}
-      ${feed.length ? feed.map(card).join("") : `<div class="card" style="text-align:center"><p class="hint">${scope === "friends"
-        ? (fr.accepted.length ? "친구들의 글이 아직 없어요." : "아직 친구가 없어요. 친구를 추가하거나 🌏 전체를 눌러 보세요.")
-        : "아직 올라온 글이 없어요. 첫 글을 올려 보세요!"}</p></div>`}
+      <div class="story-bar">
+        <button type="button" class="story me" id="comStoryAdd"><span class="ring add">${avatar(TS.auth && TS.auth.member, 58)}<i>＋</i></span><b>내 스토리</b></button>
+        ${ring.map((u) => { const m = byUser[u][0].members || {}; return `<button type="button" class="story" data-story="${esc(u)}"><span class="ring">${avatar(m, 58)}</span><b>${esc(u === me() ? "나" : m.nickname || "?")}</b></button>`; }).join("")}
+      </div>
+      <div class="spread" style="margin:4px 0 10px">
+        <div class="seg com-seg" style="margin:0;flex:1">${[["friends", "👥 친구"], ["all", "🌏 전체"], ["hot", "🔥 인기"], ["saved", "🔖 저장"]].map(([k, l]) => `<button type="button" data-scope="${k}" class="${scope === k ? "on" : ""}">${l}</button>`).join("")}</div>
+        <button type="button" class="pill" id="comFriends" style="margin-left:6px">친구 ${fr.accepted.length}${nIn ? ` <span class="zb z5">${nIn}</span>` : ""}</button></div>
+      ${tag ? `<div class="tag-bar"><b>#${esc(tag)}</b><span class="hint">태그가 달린 글</span><button type="button" class="link" id="comTagX">✕ 태그 해제</button></div>` : ""}
+      ${board.length && scope === "friends" && !tag ? `<details class="card board" open><summary><b>🏆 이번 주 친구 랭킹</b> <span class="hint">운동 시간 기준 · 월요일부터</span></summary>
+        ${board.map((o, i) => `<div class="bd-row${o.id === me() ? " me" : ""}" data-prof="${esc(o.id)}"><span class="bd-n">${["🥇", "🥈", "🥉"][i] || i + 1}</span>${avatar(o.m, 30)}<b>${esc(o.id === me() ? "나" : o.m.nickname || "?")}</b>${badge(o.id)}<span class="hint">${o.n}회 · ${o.km.toFixed(1)}km</span><b class="num" style="margin-left:auto">${fmtDur(o.sec)}</b></div>`).join("")}</details>` : ""}
+      <button type="button" class="primary" id="comWrite" style="width:100%;padding:13px;border-radius:14px;margin-bottom:12px">✍️ 사진·글 올리기</button>
+      ${err ? `<div class="note">글을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.</div>` : ""}
+      ${!feed.length ? `<div class="card" style="text-align:center"><p class="hint">${scope === "saved" ? "저장한 글이 없어요. 글 오른쪽 아래 🔖를 누르면 여기에 모여요." : scope === "hot" ? "이번 주 인기 글이 아직 없어요." : scope === "friends"
+        ? (fr.accepted.length ? "친구들의 글이 아직 없어요." : "아직 친구가 없어요. 친구를 추가하거나 🌏 전체를 눌러 보세요.") : "아직 올라온 글이 없어요. 첫 글을 올려 보세요!"}</p></div>`
+        : grid ? `<div class="ex-grid">${feed.map((p) => gridCell(p)).join("")}</div>` : feed.map(card).join("")}
       <p class="hint">운동 지도에는 출발·도착 근처 200m가 가려진 경로만 보여요 (나 → 공개 설정).</p>`;
+    bindFeed(box);
+  }
+  function gridCell(p) {
+    const ph = Array.isArray(p.media) && p.media[0], a = p.activities, n = (p.post_likes || []).length;
+    return `<button type="button" class="ex-cell" data-open="${esc(p.id)}">${ph ? `<img src="${esc(pubUrl(ph))}" alt="" loading="lazy" />`
+      : `<span class="ex-txt">${a ? `${SP[a.sport] ? SP[a.sport].icon : ""}<b>${dist(a)}</b>` : esc((p.body || "").slice(0, 40))}</span>`}
+      ${Array.isArray(p.media) && p.media.length > 1 ? '<i class="ex-multi">❐</i>' : ""}${n ? `<i class="ex-like">❤️ ${n}</i>` : ""}</button>`;
+  }
+  function bindFeed(box) {
     $("comWrite").onclick = openComposer;
-    box.querySelectorAll("[data-scope]").forEach((b) => { b.onclick = () => { scope = b.dataset.scope; try { localStorage.setItem(SCOPE_KEY, scope); } catch (e) { /* 무시 */ } render(); }; });
+    $("comStoryAdd").onclick = openComposer;
+    box.querySelectorAll("[data-story]").forEach((b) => { b.onclick = () => openStory(b.dataset.story); });
+    box.querySelectorAll("[data-scope]").forEach((b) => { b.onclick = () => { scope = b.dataset.scope; tag = null; try { localStorage.setItem(SCOPE_KEY, scope); } catch (e) { /* 무시 */ } feed = []; render(); }; });
+    if ($("comTagX")) $("comTagX").onclick = () => { tag = null; render(); };
     $("comFriends").onclick = openFriends;
-    box.querySelectorAll("[data-like]").forEach((b) => { b.onclick = () => toggleLike(b.dataset.like, b); });
-    box.querySelectorAll("[data-cmt]").forEach((b) => { b.onclick = () => toggleComments(b.dataset.cmt); });
-    box.querySelectorAll("[data-delpost]").forEach((b) => { b.onclick = () => deletePost(b.dataset.delpost); });
-    box.querySelectorAll("[data-share]").forEach((b) => { b.onclick = () => openShare(feed.find((x) => String(x.id) === b.dataset.share)); });
-    drawMaps();
+    bindPosts(box);
+    box.querySelectorAll("[data-open]").forEach((b) => { b.onclick = () => openPost(b.dataset.open); });
+    drawMaps(box);
     if (deepPost) { // 공유 링크(?post=…)로 들어왔으면 그 글로 이동
       const el = box.querySelector(`[data-share="${CSS.escape(deepPost)}"]`);
       if (el) { const art = el.closest("article"); art.scrollIntoView({ block: "center" }); art.style.boxShadow = "0 0 0 3px var(--accent)"; }
+      else if (feed.some((x) => String(x.id) === deepPost)) openPost(deepPost);
       deepPost = null;
     }
+  }
+  // 글 카드 안의 버튼들 (피드·글 상세·프로필에서 같이 써요)
+  function bindPosts(root) {
+    root.querySelectorAll("[data-like]").forEach((b) => { b.onclick = () => toggleLike(b.dataset.like); });
+    root.querySelectorAll("[data-cmt]").forEach((b) => { b.onclick = () => toggleComments(b.dataset.cmt); });
+    root.querySelectorAll("[data-delpost]").forEach((b) => { b.onclick = () => deletePost(b.dataset.delpost); });
+    root.querySelectorAll("[data-share]").forEach((b) => { b.onclick = () => openShare(findPost(b.dataset.share)); });
+    root.querySelectorAll("[data-save]").forEach((b) => { b.onclick = () => toggleSave(b.dataset.save); });
+    root.querySelectorAll("[data-tag]").forEach((b) => { b.onclick = (e) => { e.preventDefault(); closeOverlays(); tag = b.dataset.tag; if (scope === "saved") scope = "all"; render(); }; });
+    root.querySelectorAll("[data-prof]").forEach((b) => { b.onclick = () => openProfile(b.dataset.prof); });
+    root.querySelectorAll("[data-follow]").forEach((b) => { b.onclick = async () => { b.disabled = true; await toggleFollow(b.dataset.follow); document.querySelectorAll(`[data-follow="${CSS.escape(b.dataset.follow)}"]`).forEach((x) => { x.textContent = fol.following.has(b.dataset.follow) ? "팔로잉" : "팔로우"; x.disabled = false; }); }; });
+    root.querySelectorAll(".car").forEach((c) => { // 사진 넘기기 점 표시
+      const dots = c.parentElement.querySelectorAll(".car-dots i");
+      c.onscroll = () => { const k = Math.round(c.scrollLeft / Math.max(1, c.clientWidth)); dots.forEach((d, i) => d.classList.toggle("on", i === k)); };
+    });
+    root.querySelectorAll("[data-dbl]").forEach((el) => { // 사진을 두 번 탭하면 좋아요 ❤️
+      let last = 0;
+      el.addEventListener("click", (e) => {
+        const now = Date.now();
+        if (now - last < 320) {
+          e.preventDefault();
+          const p = findPost(el.dataset.dbl);
+          if (p && !(p.post_likes || []).some((l) => l.user_id === me())) toggleLike(el.dataset.dbl);
+          const h = document.createElement("span"); h.className = "heart-pop"; h.textContent = "❤️"; el.appendChild(h); setTimeout(() => h.remove(), 800);
+        }
+        last = now;
+      });
+    });
+  }
+  const extra = {}; // 프로필·스토리에서 불러온 글 (피드에 없는 글)
+  const findPost = (id) => feed.find((x) => String(x.id) === String(id)) || stories.find((x) => String(x.id) === String(id)) || extra[id];
+  function closeOverlays() { ["postView", "profDlg", "storyDlg"].forEach((k) => { const d = $(k); if (d && d.open) d.close(); }); }
+  function toggleSave(id) {
+    if (saved.has(id)) saved.delete(id); else saved.add(id);
+    keepSaved();
+    document.querySelectorAll(`[data-save="${CSS.escape(id)}"]`).forEach((b) => { b.textContent = saved.has(id) ? "🔖" : "📑"; b.classList.toggle("on", saved.has(id)); });
+    toast(saved.has(id) ? "🔖 저장했어요 — 저장 탭에서 다시 볼 수 있어요" : "저장을 취소했어요");
+  }
+  // 글 하나 크게 보기
+  function openPost(id) {
+    const p = findPost(id);
+    if (!p) return;
+    let d = $("postView");
+    if (!d) { d = document.createElement("dialog"); d.id = "postView"; d.className = "sheet-dlg"; document.body.appendChild(d); d.onclick = (e) => { if (e.target === d) d.close(); }; }
+    d.innerHTML = `<div style="padding:12px;max-height:90vh;overflow:auto"><div class="spread" style="margin-bottom:6px"><b>게시물</b><button type="button" class="link" style="font-size:20px" id="pvX">✕</button></div>${card(p)}</div>`;
+    $("pvX").onclick = () => d.close();
+    if (!d.open) d.showModal();
+    bindPosts(d); drawMaps(d);
+  }
+  // 👤 프로필: 글 수 · 친구 수 · 이번 달 운동 · 글 모아보기(3칸 격자)
+  async function openProfile(uid) {
+    let d = $("profDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "profDlg"; d.className = "sheet-dlg"; document.body.appendChild(d); d.onclick = (e) => { if (e.target === d) d.close(); }; }
+    d.innerHTML = '<div style="padding:18px"><p class="hint">불러오는 중…</p></div>';
+    if (!d.open) d.showModal();
+    const isMe = uid === me();
+    let q = db.from("posts").select(SEL).eq("user_id", uid).order("created_at", { ascending: false }).limit(60);
+    if (!isMe && !fr.accepted.includes(uid)) q = q.eq("visibility", "public");
+    const [{ data: mm }, { data: ps }] = await Promise.all([db.from("members").select("id,nickname,sport,avatar_url").eq("id", uid).maybeSingle(), q]);
+    const m = mm || fr.names[uid] || {};
+    const posts = clean(ps);
+    posts.forEach((p) => { extra[p.id] = p; });
+    const mon = new Date(); mon.setDate(1); mon.setHours(0, 0, 0, 0);
+    const monthActs = posts.filter((p) => p.activities && new Date(p.activities.started_at || p.created_at) >= mon).map((p) => p.activities);
+    const km = monthActs.reduce((a, x) => a + (x.distance_m || 0) / 1000, 0), sec = monthActs.reduce((a, x) => a + (x.duration_s || 0), 0);
+    const likes = posts.reduce((a, p) => a + (p.post_likes || []).length, 0);
+    const st = isMe ? "me" : fr.accepted.includes(uid) ? "friend" : fr.outgoing.includes(uid) ? "sent" : fr.incoming.includes(uid) ? "got" : "none";
+    await loadFollows([uid]);
+    let nFing = 0;
+    if (fol.ok) { const { count } = await db.from("follows").select("followee", { count: "exact", head: true }).eq("follower", uid); nFing = count || 0; }
+    const nFol = fol.count[uid] || 0, nextB = [10, 100, 1000].find((k) => nFol < k);
+    const isF = fol.following.has(uid);
+    d.innerHTML = `<div style="padding:16px;max-height:90vh;overflow:auto;display:grid;gap:12px">
+      <div class="spread"><b>${esc(m.nickname || "?")} ${badge(uid)}</b><button type="button" class="link" style="font-size:20px" data-pf="x">✕</button></div>
+      <div class="prof-hd">${avatar(m, 76)}<div class="prof-st"><div><b>${posts.length}</b><span>게시물</span></div><div><b>${fol.ok ? nFol : "-"}</b><span>팔로워</span></div><div><b>${fol.ok ? nFing : "-"}</b><span>팔로잉</span></div><div><b>${likes}</b><span>받은 ❤️</span></div></div></div>
+      <div class="hint">${m.sport ? esc(m.sport) + " · " : ""}이번 달 운동 ${monthActs.length}회 · ${km.toFixed(0)}km · ${fmtDur(sec)}${fol.ok && nextB ? ` · 다음 배지까지 팔로워 ${nextB - nFol}명 (${{ 10: "⭐", 100: "🌟", 1000: "👑" }[nextB]})` : ""}</div>
+      <div style="display:flex;gap:8px">
+        ${st === "me" ? "" : `<button type="button" class="${isF ? "pill" : "primary"}" data-pf="follow" style="flex:1">${isF ? "✓ 팔로잉" : "👣 팔로우"}</button>`}
+        ${st === "me" ? "" : st === "friend" ? '<button type="button" class="pill" disabled style="flex:1">✓ 친구</button>' : st === "sent" ? '<button type="button" class="pill" disabled style="flex:1">친구 요청 보냄</button>'
+        : st === "got" ? `<button type="button" class="primary" data-pf="acc" style="flex:1">친구 요청 수락</button>` : `<button type="button" class="pill" data-pf="ask" style="flex:1">＋ 친구 요청</button>`}</div>
+      <p class="hint" style="margin:0">배지: 팔로워 10명 ⭐ · 100명 🌟 · 1000명 👑 — 이름 옆에 작게 붙어요.</p>
+      ${posts.length ? `<div class="ex-grid">${posts.map(gridCell).join("")}</div>` : `<p class="hint" style="text-align:center">${isMe ? "아직 올린 글이 없어요." : "볼 수 있는 글이 없어요 (친구가 되면 친구 공개 글도 보여요)."}</p>`}</div>`;
+    d.querySelector('[data-pf="x"]').onclick = () => d.close();
+    d.querySelectorAll("[data-open]").forEach((b) => { b.onclick = () => openPost(b.dataset.open); });
+    const fb = d.querySelector('[data-pf="follow"]'); if (fb) fb.onclick = async () => { fb.disabled = true; await toggleFollow(uid); openProfile(uid); };
+    const act = d.querySelector('[data-pf="ask"],[data-pf="acc"]');
+    if (act) act.onclick = async () => {
+      act.disabled = true;
+      const { error } = act.dataset.pf === "ask" ? await db.from("friendships").insert({ requester: me(), addressee: uid, status: "pending" })
+        : await db.from("friendships").update({ status: "accepted" }).eq("requester", uid).eq("addressee", me());
+      if (error) { toast("저장하지 못했어요. 잠시 뒤 다시 시도해 주세요"); act.disabled = false; return; }
+      await loadFriends(); openProfile(uid);
+    };
+  }
+  // 📸 스토리: 24시간 안에 올린 글을 한 장씩 (탭: 왼쪽 이전 · 오른쪽 다음, 5초마다 넘어가요)
+  let stTimer = null;
+  function openStory(uid) {
+    const users = [...new Set(stories.map((p) => p.user_id))].sort((a, b) => (a === me() ? -1 : b === me() ? 1 : 0));
+    let ui = users.indexOf(uid), k = 0;
+    if (ui < 0) return;
+    let d = $("storyDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "storyDlg"; document.body.appendChild(d); }
+    const list = () => stories.filter((p) => p.user_id === users[ui]);
+    const close = () => { clearTimeout(stTimer); if (d.open) d.close(); };
+    const step = (dir) => {
+      k += dir;
+      if (k >= list().length) { ui++; k = 0; }
+      if (k < 0) { ui--; k = ui >= 0 ? list().length - 1 : 0; }
+      if (ui < 0 || ui >= users.length) { close(); return; }
+      draw();
+    };
+    function draw() {
+      clearTimeout(stTimer);
+      const ps = list(), p = ps[k], m = p.members || {}, a = p.activities, ph = Array.isArray(p.media) && p.media[0];
+      d.innerHTML = `<div class="story-view">
+        <div class="sv-bars">${ps.map((_, i) => `<i class="${i < k ? "done" : i === k ? "run" : ""}"></i>`).join("")}</div>
+        <div class="sv-hd">${avatar(m, 32)}<b>${esc(m.nickname || "?")}</b><span>${ago(p.created_at)}</span><button type="button" data-sv="x">✕</button></div>
+        <div class="sv-media">${ph ? `<img src="${esc(pubUrl(ph))}" alt="" />` : `<div class="sv-card">${a ? `<div style="font-size:54px">${SP[a.sport] ? SP[a.sport].icon : "🏅"}</div><b>${esc(a.title || "")}</b><div class="sv-stats"><span>${dist(a)}</span><span>${speed(a)}</span><span>${fmtDur(a.duration_s)}</span></div>` : `<div style="font-size:54px">💬</div>`}</div>`}</div>
+        ${p.body ? `<div class="sv-txt">${esc(p.body.slice(0, 160))}</div>` : ""}
+        ${ph && a ? `<div class="sv-chip">${SP[a.sport] ? SP[a.sport].icon : ""} ${dist(a)} · ${speed(a)} · ${fmtDur(a.duration_s)}</div>` : ""}
+        <div class="sv-nav"><button type="button" data-sv="p" aria-label="이전"></button><button type="button" data-sv="n" aria-label="다음"></button></div>
+        <div class="sv-ft"><button type="button" data-sv="like">${(p.post_likes || []).some((l) => l.user_id === me()) ? "❤️" : "🤍"} 좋아요</button><button type="button" data-sv="open">💬 댓글·자세히</button></div></div>`;
+      d.querySelector('[data-sv="x"]').onclick = close;
+      d.querySelector('[data-sv="p"]').onclick = () => step(-1);
+      d.querySelector('[data-sv="n"]').onclick = () => step(1);
+      d.querySelector('[data-sv="like"]').onclick = async () => { clearTimeout(stTimer); await toggleLike(p.id); draw(); };
+      d.querySelector('[data-sv="open"]').onclick = () => { close(); openPost(p.id); };
+      stTimer = setTimeout(() => step(1), 5000);
+    }
+    d.onclose = () => clearTimeout(stTimer);
+    draw();
+    if (!d.open) d.showModal();
   }
 
   // ---------- 📤 공유: 카톡·인스타·페이스북·X·밴드·라인·링크 복사·이미지 저장 ----------
@@ -265,6 +488,8 @@
     });
   }
 
+  // #해시태그는 눌러서 모아보기
+  const withTags = (s) => esc(s).replace(/#([0-9A-Za-zㄱ-ㅎ가-힣_]{1,30})/g, (_, t) => `<a href="#" class="htag" data-tag="${t}">#${t}</a>`);
   function card(p) {
     const m = p.members || {};
     const a = p.activities;
@@ -273,35 +498,44 @@
     const nCmt = (p.post_comments && p.post_comments[0] && p.post_comments[0].count) || 0;
     const mine = p.user_id === me();
     const photos = Array.isArray(p.media) ? p.media : [];
-    return `<article class="card post">
-      <div class="post-hd">${avatar(m)}
-        <div style="flex:1;min-width:0"><b>${esc(m.nickname || "알 수 없음")}${mine ? " <span class=\"hint\">(나)</span>" : ""}</b>
-          <div class="hint">${ago(p.created_at)}${a && SP[a.sport] ? ` · ${SP[a.sport].icon} ${SP[a.sport].name}` : ""} · ${VIS[p.visibility] || ""}</div></div>
-        ${mine ? `<button type="button" class="link" data-delpost="${esc(p.id)}">삭제</button>` : ""}</div>
-      ${p.body ? `<div class="post-body">${esc(p.body)}</div>` : ""}
-      ${photos.length ? `<div class="post-photos n${Math.min(photos.length, 4)}">${photos.slice(0, 4).map((ph, i) =>
-        `<a href="${esc(pubUrl(ph))}" target="_blank" rel="noopener"><img src="${esc(pubUrl(ph))}" alt="운동 사진" loading="lazy" />${i === 3 && photos.length > 4 ? `<span class="more">+${photos.length - 4}</span>` : ""}</a>`).join("")}</div>` : ""}
-      ${a ? `<div class="post-title">${esc(a.title || "")}</div>
+    const id = esc(p.id);
+    const sv = saved.has(String(p.id));
+    return `<article class="card post ig">
+      <div class="post-hd"><button type="button" class="link" data-prof="${esc(p.user_id)}" style="padding:0">${avatar(m, 36)}</button>
+        <div style="flex:1;min-width:0"><button type="button" class="link nm" data-prof="${esc(p.user_id)}">${esc(m.nickname || "알 수 없음")}</button>${badge(p.user_id)}${!mine && fol.ok && !fol.following.has(p.user_id) && !fr.accepted.includes(p.user_id) ? ` <button type="button" class="link fol-btn" data-follow="${esc(p.user_id)}">팔로우</button>` : ""}${mine ? ' <span class="hint">(나)</span>' : ""}
+          <div class="hint">${a && SP[a.sport] ? `${SP[a.sport].icon} ${SP[a.sport].name} · ` : ""}${VIS[p.visibility] || ""}</div></div>
+        ${mine ? `<button type="button" class="link" data-delpost="${id}">삭제</button>` : ""}</div>
+      ${photos.length ? `<div class="car-wrap" data-dbl="${id}"><div class="car">${photos.map((ph) => `<img src="${esc(pubUrl(ph))}" alt="운동 사진" loading="lazy" />`).join("")}</div>
+        ${photos.length > 1 ? `<div class="car-dots">${photos.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div><span class="car-n">${photos.length}장</span>` : ""}</div>` : ""}
+      ${a ? `<div class="post-act-card"${photos.length ? "" : ` data-dbl="${id}"`}><div class="post-title">${SP[a.sport] ? SP[a.sport].icon + " " : ""}${esc(a.title || "")}</div>
         <div class="post-stats">
           <div><span>거리</span><b class="num">${dist(a)}</b></div>
           <div><span>${a.sport === "bike" || a.sport === "tri" ? "속도" : "페이스"}</span><b class="num">${speed(a)}</b></div>
           <div><span>시간</span><b class="num">${fmtDur(a.duration_s)}</b></div>
           ${a.avg_hr ? `<div><span>심박</span><b class="num">${a.avg_hr}</b></div>` : ""}</div>
-        ${a.route && a.route.length > 1 ? `<div class="post-map" data-map="${esc(p.id)}"></div>` : ""}` : ""}
+        ${a.route && a.route.length > 1 ? `<div class="post-map" data-map="${id}"></div>` : ""}</div>` : ""}
+      ${!photos.length && !a && p.body ? `<div class="txt-post" data-dbl="${id}">${withTags(p.body.slice(0, 200))}</div>` : ""}
       <div class="post-act">
-        <button type="button" data-like="${esc(p.id)}" class="${liked ? "on" : ""}">${liked ? "❤️" : "🤍"} <span>${nLikes}</span></button>
-        <button type="button" data-cmt="${esc(p.id)}">💬 <span>${nCmt}</span></button>
-        <button type="button" data-share="${esc(p.id)}" style="margin-left:auto">📤 공유</button></div>
-      <div class="post-cmts" id="cm-${esc(p.id)}" hidden></div>
+        <button type="button" data-like="${id}" class="ic${liked ? " on" : ""}" aria-label="좋아요">${liked ? "❤️" : "🤍"}</button>
+        <button type="button" data-cmt="${id}" class="ic" aria-label="댓글">💬</button>
+        <button type="button" data-share="${id}" class="ic" aria-label="공유">📤</button>
+        <button type="button" data-save="${id}" class="ic${sv ? " on" : ""}" style="margin-left:auto" aria-label="저장">${sv ? "🔖" : "📑"}</button></div>
+      <div class="post-likes" data-likes="${id}">${nLikes ? `좋아요 <b>${nLikes}</b>개` : "가장 먼저 좋아요를 눌러 보세요"}</div>
+      ${p.body && (photos.length || a) ? `<div class="post-body"><button type="button" class="link nm" data-prof="${esc(p.user_id)}">${esc(m.nickname || "")}</button> ${withTags(p.body)}</div>` : ""}
+      ${nCmt ? `<button type="button" class="link cm-more" data-cmt="${id}">댓글 <span>${nCmt}</span>개 모두 보기</button>` : ""}
+      <div class="hint post-time">${ago(p.created_at)}</div>
+      <div class="post-cmts" id="cm-${id}" hidden></div>
     </article>`;
   }
 
-  function drawMaps() {
+  function drawMaps(root) {
     if (!window.L) return;
-    document.querySelectorAll("#comBody [data-map]").forEach((el) => {
-      const p = feed.find((x) => String(x.id) === el.dataset.map);
+    (root || document).querySelectorAll("[data-map]").forEach((el) => {
+      if (el._map) return;
+      const p = findPost(el.dataset.map);
       if (!p || !p.activities) return;
       const map = L.map(el, { zoomControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
+      el._map = map;
       map.attributionControl.setPrefix(false);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "&copy; OpenStreetMap" }).addTo(map);
       const line = L.polyline(p.activities.route.map((r) => [r[0], r[1]]), { color: "#e11d48", weight: 4, opacity: 0.95 }).addTo(map);
@@ -310,40 +544,49 @@
     });
   }
 
-  async function toggleLike(id, btn) {
-    const p = feed.find((x) => String(x.id) === id);
-    if (!p) return;
-    btn.disabled = true;
+  const liking = new Set();
+  async function toggleLike(id) {
+    const p = findPost(id);
+    if (!p || liking.has(id)) return;
+    liking.add(id);
     const liked = (p.post_likes || []).some((l) => l.user_id === me());
+    p.post_likes = liked ? p.post_likes.filter((l) => l.user_id !== me()) : [...(p.post_likes || []), { user_id: me() }];
+    paintLike(id, p); // 먼저 화면부터 바꾸고 (빠르게), 실패하면 되돌려요
     const { error } = liked
       ? await db.from("post_likes").delete().eq("post_id", id).eq("user_id", me())
       : await db.from("post_likes").insert({ post_id: id, user_id: me() });
-    btn.disabled = false;
-    if (error) { alert("좋아요 실패: " + error.message); return; }
-    p.post_likes = liked ? p.post_likes.filter((l) => l.user_id !== me()) : [...(p.post_likes || []), { user_id: me() }];
-    btn.className = liked ? "" : "on";
-    btn.innerHTML = `${liked ? "🤍" : "❤️"} <span>${p.post_likes.length}</span>`;
+    liking.delete(id);
+    if (error) {
+      p.post_likes = liked ? [...p.post_likes, { user_id: me() }] : p.post_likes.filter((l) => l.user_id !== me());
+      paintLike(id, p); toast("좋아요를 저장하지 못했어요");
+    }
+  }
+  function paintLike(id, p) {
+    const on = (p.post_likes || []).some((l) => l.user_id === me()), n = (p.post_likes || []).length;
+    document.querySelectorAll(`[data-like="${CSS.escape(String(id))}"]`).forEach((b) => { b.classList.toggle("on", on); b.textContent = on ? "❤️" : "🤍"; if (on) { b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); } });
+    document.querySelectorAll(`[data-likes="${CSS.escape(String(id))}"]`).forEach((el) => { el.innerHTML = n ? `좋아요 <b>${n}</b>개` : "가장 먼저 좋아요를 눌러 보세요"; });
   }
 
   async function toggleComments(id, keepOpen) {
-    const box = $("cm-" + id);
+    const pv = $("postView"), box = (pv && pv.open && pv.querySelector(`[id="cm-${CSS.escape(String(id))}"]`)) || $("cm-" + id);
     if (!box) return;
     if (!box.hidden && !keepOpen) { box.hidden = true; return; }
     box.hidden = false;
     box.innerHTML = '<p class="hint">불러오는 중…</p>';
     const { data, error } = await db.from("post_comments").select("id,body,created_at,user_id,members!post_comments_user_id_fkey(nickname,avatar_url)").eq("post_id", id).order("created_at");
-    if (error) { box.innerHTML = `<p class="hint">댓글을 불러오지 못했어요: ${esc(error.message)}</p>`; return; }
-    const owner = (feed.find((x) => String(x.id) === id) || {}).user_id === me();
+    if (error) { box.innerHTML = `<p class="hint">댓글을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요</p>`; return; }
+    const owner = (findPost(id) || {}).user_id === me();
     box.innerHTML = (data || []).map((c) => `<div class="cmt">${avatar(c.members, 26)}<div><b>${esc((c.members || {}).nickname || "?")}</b> ${esc(c.body)}
         <span class="hint">${ago(c.created_at)}</span>${c.user_id === me() || owner ? ` <button type="button" class="link" data-delc="${esc(c.id)}">삭제</button>` : ""}</div></div>`).join("") +
-      `<form class="cmt-form"><input maxlength="500" placeholder="댓글 달기…" required /><button type="submit" class="primary pill">등록</button></form>`;
+      `<div class="emo-row">${["🔥", "👏", "💪", "😍", "👍", "🏃"].map((x) => `<button type="button" data-emo="${x}">${x}</button>`).join("")}</div><form class="cmt-form"><input maxlength="500" placeholder="댓글 달기…" required /><button type="submit" class="primary pill">게시</button></form>`;
+    box.querySelectorAll("[data-emo]").forEach((b) => { b.onclick = () => { const i = box.querySelector("form input"); i.value += b.dataset.emo; i.focus(); }; });
     const form = box.querySelector("form");
     form.onsubmit = async (e) => {
       e.preventDefault();
       const body = form.querySelector("input").value.trim();
       if (!body) return;
       const { error: e2 } = await db.from("post_comments").insert({ post_id: id, user_id: me(), body });
-      if (e2) { alert("댓글 실패: " + e2.message); return; }
+      if (e2) { toast("댓글을 올리지 못했어요. 인터넷 연결을 확인해 주세요"); return; }
       bumpCount(id, 1);
       toggleComments(id, true);
     };
@@ -351,21 +594,23 @@
       b.onclick = async () => {
         if (!await TS.ask("이 댓글을 지울까요?", "삭제")) return;
         const { error: e3 } = await db.from("post_comments").delete().eq("id", b.dataset.delc);
-        if (e3) { alert("삭제 실패: " + e3.message); return; }
+        if (e3) { toast("댓글을 지우지 못했어요"); return; }
         bumpCount(id, -1);
         toggleComments(id, true);
       };
     });
   }
   function bumpCount(id, d) {
-    const b = document.querySelector(`#comBody [data-cmt="${CSS.escape(id)}"] span`);
-    if (b) b.textContent = Math.max(0, +b.textContent + d);
+    document.querySelectorAll(`.cm-more[data-cmt="${CSS.escape(String(id))}"] span`).forEach((b) => { b.textContent = Math.max(0, +b.textContent + d); });
+    const p = findPost(id);
+    if (p && p.post_comments && p.post_comments[0]) p.post_comments[0].count = Math.max(0, (p.post_comments[0].count || 0) + d);
   }
   async function deletePost(id) {
-    const p = feed.find((x) => String(x.id) === id);
+    const p = findPost(id);
     if (!p || !await TS.ask("이 글을 지울까요? 사진·댓글·좋아요도 함께 지워져요.", "삭제")) return;
+    closeOverlays();
     const { error } = await db.from("posts").delete().eq("id", id);
-    if (error) { alert("삭제 실패: " + error.message); return; }
+    if (error) { toast("글을 지우지 못했어요. 잠시 뒤 다시 시도해 주세요"); return; }
     if (Array.isArray(p.media) && p.media.length) await db.storage.from(BUCKET).remove(p.media);
     render();
   }
@@ -375,26 +620,43 @@
   async function openComposer() {
     picked = [];
     const acts = (await TS.listActivities()).filter((a) => !a.local && a.source !== "strava").slice(0, 30);
+    const since = TS.iso(TS.addDays(new Date(), -14)), done = (TS.getSessions ? TS.getSessions() : []).filter((s) => s.completed && s.date >= since).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20); // 달력에서 완료한 훈련 (최근 2주)
     $("postBody").innerHTML = `<div class="spread"><h2 style="margin:0">✍️ 사진·글 올리기</h2><button type="button" id="pcClose">닫기</button></div>
-      <textarea id="pcText" rows="4" maxlength="1000" placeholder="오늘 운동 어땠어요?"></textarea>
+      <textarea id="pcText" rows="4" maxlength="1000" placeholder="오늘 운동 어땠어요? #오운완 처럼 태그를 달면 같은 태그 글을 모아 볼 수 있어요"></textarea>
+      <div class="chips">${["#오운완", "#러닝", "#수영", "#자전거", "#철인3종", "#인터벌", "#롱런", "#대회", "#새벽운동"].map((t) => `<button type="button" class="chip" data-addtag="${t}">${t}</button>`).join("")}
+        <button type="button" class="chip" id="pcToday">📋 오늘 훈련 불러오기</button></div>
       <div><div class="spread"><span class="eyebrow" style="margin:0">📷 사진 (최대 ${MAX_PHOTOS}장)</span>
         <button type="button" class="pill" id="pcPick">사진 고르기</button></div>
         <input type="file" id="pcFile" accept="image/*" multiple hidden />
         <div class="media" id="pcPrev" style="margin-top:8px"></div></div>
-      <label>운동 기록 붙이기 (빨간 경로 지도가 같이 보여요)
-        <select id="pcAct"><option value="">붙이지 않기</option>${acts.map((a) => {
-          const d = new Date(a.started_at);
-          return `<option value="${esc(a.id)}">${d.getMonth() + 1}/${d.getDate()} · ${SP[a.sport] ? SP[a.sport].icon : ""} ${esc(a.title || "")} · ${dist(a)}</option>`;
-        }).join("")}</select></label>
-      ${acts.length ? "" : '<p class="hint" style="margin:0">계정에 저장된 운동 기록이 없어서 붙일 기록이 없어요.</p>'}
+      <div class="card" style="margin:0;padding:12px"><div class="eyebrow" style="margin:0 0 6px">🏃 운동 기록 붙이기</div>
+        <select id="pcAct"><option value="">붙이지 않기</option>
+          ${acts.length ? `<optgroup label="⌚ 기록한 운동 (거리·페이스·지도가 같이 보여요)">${acts.map((a) => {
+            const d = new Date(a.started_at);
+            return `<option value="${esc(a.id)}">${d.getMonth() + 1}/${d.getDate()} · ${SP[a.sport] ? SP[a.sport].icon : ""} ${esc(a.title || "")} · ${dist(a)}</option>`;
+          }).join("")}</optgroup>` : ""}
+          ${done.length ? `<optgroup label="📅 달력에서 완료한 훈련">${done.map((s) => `<option value="s:${esc(s.id)}">${esc(s.date.slice(5).replace("-", "/"))} · ${esc(s.title)}${s.duration_min ? ` · ${s.duration_min}분` : ""}</option>`).join("")}</optgroup>` : ""}
+        </select>
+        <p class="hint" style="margin:6px 0 0">${acts.length || done.length ? "기록한 운동은 기록 카드로, 달력 훈련은 글에 요약이 붙어요." : "아직 붙일 기록이 없어요 — 활동 탭에서 운동을 기록하거나, 달력 훈련에 완료(✓) 표시를 하면 여기에 나와요."}</p></div>
       <label>공개 범위
-        <select id="pcVis">${["friends", "public", "private"].map((v) => `<option value="${v}"${TS.privacy().visibility === v ? " selected" : ""}>${VIS[v]}</option>`).join("")}</select></label>
+        <select id="pcVis">${["public", "friends", "private"].map((v) => `<option value="${v}"${v === "public" ? " selected" : ""}>${VIS[v]}</option>`).join("")}</select></label>
+      <p class="hint" style="margin:-6px 0 0">🌏 전체 공개로 올리면 모든 ZONE 사람들이 보고 응원할 수 있어요.</p>
       <p class="hint" style="margin:0">⚠️ 사진에 집 주소·다른 사람 얼굴이나 개인정보가 보이지 않는지 확인하고 올려 주세요.</p>
       <p class="warn" id="pcMsg" style="margin:0"></p>
       <div class="actions"><div class="right"><button type="button" class="primary" id="pcGo" style="padding:12px 22px">올리기</button></div></div>`;
     $("postDlg").showModal();
     $("pcClose").onclick = () => $("postDlg").close();
     $("pcPick").onclick = () => $("pcFile").click();
+    $("postBody").querySelectorAll("[data-addtag]").forEach((b) => { b.onclick = () => { const t = $("pcText"); if (!t.value.includes(b.dataset.addtag)) t.value = (t.value.trim() + " " + b.dataset.addtag).trim(); b.classList.add("on"); }; });
+    $("pcToday").onclick = () => { // 오늘 달력의 훈련·일지로 문구 만들기
+      const today = TS.iso(new Date()), ss = (TS.getSessions ? TS.getSessions() : []).filter((s) => s.date === today);
+      const j = TS.journal && TS.journal.get(today);
+      const lines = ss.map((s) => `${s.completed ? "✅" : "▫️"} ${s.title}${s.duration_min ? ` (${s.duration_min}분)` : ""}`);
+      if (j && j.condition) lines.push(`컨디션 ${["", "😫", "😕", "🙂", "😀", "🤩"][j.condition]}${j.rpe ? ` · 힘든 정도 ${j.rpe}/10` : ""}`);
+      const t = $("pcText"); t.value = (t.value ? t.value + "\n" : "") + (lines.length ? lines.join("\n") + "\n#오운완" : "#오운완");
+    };
+    // 방금 끝낸 운동 기록이 있으면 자동으로 골라 둬요
+    if (acts[0] && Date.now() - new Date(acts[0].started_at) < 12 * 3600e3) $("pcAct").value = acts[0].id;
     $("pcFile").onchange = (e) => {
       picked = picked.concat([...e.target.files].filter((f) => /^image\//.test(f.type))).slice(0, MAX_PHOTOS);
       e.target.value = "";
@@ -407,7 +669,9 @@
     $("pcPrev").querySelectorAll("[data-rmp]").forEach((b) => { b.onclick = () => { picked.splice(+b.dataset.rmp, 1); drawPreview(); }; });
   }
   async function submitPost() {
-    const text = $("pcText").value.trim(), actId = $("pcAct").value || null, vis = $("pcVis").value;
+    const pick = $("pcAct").value || "", vis = $("pcVis").value;
+    let text = $("pcText").value.trim(), actId = pick && !pick.startsWith("s:") ? pick : null;
+    if (pick.startsWith("s:")) { const s = (TS.getSessions ? TS.getSessions() : []).find((x) => String(x.id) === pick.slice(2)); if (s) text = `✅ ${s.title}${s.duration_min ? ` · ${s.duration_min}분` : ""}${s.intensity ? ` · 강도 ${s.intensity}` : ""}${text ? "\n" + text : ""}`; }
     const msg = $("pcMsg"), btn = $("pcGo");
     if (!text && !picked.length && !actId) { msg.textContent = "글, 사진, 운동 기록 중 하나는 있어야 해요."; return; }
     btn.disabled = true; msg.textContent = "";
@@ -458,14 +722,14 @@
     $("friendBody").querySelectorAll("[data-ask]").forEach((b) => {
       b.onclick = async () => {
         const { error } = await db.from("friendships").insert({ requester: me(), addressee: b.dataset.ask, status: "pending" });
-        if (error) { alert("요청 실패: " + error.message); return; }
+        if (error) { toast(/duplicate/i.test(error.message) ? "이미 친구 요청을 보냈어요" : "친구 요청을 보내지 못했어요"); return; }
         await loadFriends(); renderFriends();
       };
     });
     $("friendBody").querySelectorAll("[data-acc]").forEach((b) => {
       b.onclick = async () => {
         const { error } = await db.from("friendships").update({ status: "accepted" }).eq("requester", b.dataset.acc).eq("addressee", me());
-        if (error) { alert("수락 실패: " + error.message); return; }
+        if (error) { toast("수락하지 못했어요. 잠시 뒤 다시 시도해 주세요"); return; }
         await loadFriends(); renderFriends();
       };
     });
@@ -479,7 +743,7 @@
     });
   }
 
-  TS.community = { render };
+  TS.community = { render, _paint: (f, s, b) => { feed = f; stories = s; board = b; paint($("comBody")); } }; // _paint: 화면 미리보기·점검용
   window.addEventListener("ts:auth", () => {
     if (deepPost && TS.showTab && !document.getElementById("tab-community").classList.contains("show")) { TS.showTab("community"); return; }
     if (document.getElementById("tab-community").classList.contains("show")) render();

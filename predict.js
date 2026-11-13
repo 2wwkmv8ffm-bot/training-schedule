@@ -4,7 +4,7 @@
 //  ② 심박-페이스 VDOT: 훈련할 때의 페이스와 심박(최대·안정시 심박 대비 %)으로 VO2max 추정 (%VO2R ≈ %HRR)
 //  ③ 실제로 뛴 가장 빠른 기록: 훈련 중 낸 기록을 레이스처럼 계산 (최소한 이 정도는 가능)
 //  ④ Tanda(2011) 마라톤 공식: 최근 8주 주간 거리(K)와 평균 훈련 페이스(P) → 마라톤 페이스 = 17.1 + 140·e^(−0.0053K) + 0.55P (초/km)
-//  ⑤ 주간 거리 보정 (Vickers & Vertosick 2016): 주간 거리가 적으면 하프·풀코스는 단거리 기록으로 예측한 것보다 느려져요
+//  ⑤ 주간 거리 보정: 주간 거리가 적으면 하프·풀코스는 단거리 기록으로 예측한 것보다 느려져요
 (function () {
   const TS = window.TS;
   const E = TS.E;
@@ -35,7 +35,7 @@
     }
 
     // ① 기록·테스트 VDOT
-    if (ctx && ctx.run) out.methods.push({ key: "rec", name: "최고기록·테스트 (다니엘스 VDOT)", vdot: ctx.run.vdot, w: 3, why: ctx.run.src || "문진표 기록" });
+    if (ctx && ctx.run) out.methods.push({ key: "rec", name: "최고기록·테스트 (VDOT)", vdot: ctx.run.vdot, w: 3, why: ctx.run.src || "문진표 기록" });
 
     // ② 심박-페이스 VDOT
     const H = ctx && ctx.H ? ctx.H : null;
@@ -186,8 +186,8 @@
       const full = o.rows[3], half = o.rows[2];
       const adjNotes = [];
       if (half.adj > 0.002) adjNotes.push(`하프: ${o.Kused} 주간 거리 ${r1(o.K || +o.p.volume.run || 0)}km 기준 지구력 보정 +${Math.round(half.adj * 1000) / 10}% (단거리 기록만으로 계산하면 ${fmt(half.base)})`);
-      if (full.adj > 0.002) adjNotes.push(`풀코스: 지구력 보정 +${Math.round(full.adj * 1000) / 10}% — 주간 거리가 적거나 30km 가까운 롱런이 없으면 후반에 페이스가 떨어지기 쉬워요 (Vickers & Vertosick 2016)`);
-      if (full.tanda) adjNotes.push(`풀코스 Tanda 공식(주 ${r1(o.K)}km · 평균 ${fmt(o.P)}/km): ${fmt(full.tanda)} — VDOT 예측과 반반 섞었어요`);
+      if (full.adj > 0.002) adjNotes.push(`풀코스: 지구력 보정 +${Math.round(full.adj * 1000) / 10}% — 주간 거리가 적거나 30km 가까운 롱런이 없으면 후반에 페이스가 떨어지기 쉬워요`);
+      if (full.tanda) adjNotes.push(`풀코스 공식(주 ${r1(o.K)}km · 평균 ${fmt(o.P)}/km): ${fmt(full.tanda)} — VDOT 예측과 반반 섞었어요`);
       if (adjNotes.length) html += `<ul class="pred-ul">${adjNotes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
 
       if (o.race) {
@@ -201,7 +201,7 @@
           <div class="hint">대회 전략: 처음 ${k > 20 ? "5km" : "1~2km"}는 ${fmt(pace * 1.015)}/km로 참고 출발 → 중반 ${fmt(pace)} → 마지막 ${k > 20 ? "10km" : "2km"}에 ${fmt(pace * 0.985)}로 올리기</div>
           <table class="pred-t"><tr><th>구간</th><th>통과 시간</th></tr>${splits.map((x) => `<tr><td>${Number.isInteger(x) ? x : r1(x)}km</td><td>${fmt(sp(x))}</td></tr>`).join("")}</table></div>`;
       }
-      if (o.whatIf) html += H("📈 주간 거리를 늘리면? (풀코스, Tanda 기준)") + `<ul class="pred-ul">${o.whatIf.map((w) => `<li>주 ${Math.round(w.k)}km로 늘리면 약 <b>${Math.max(0, Math.round(w.gain / 60))}분</b> 단축 (같은 평균 페이스 기준)</li>`).join("")}</ul><p class="hint" style="margin:0">양은 주당 10% 안팎으로 천천히 늘려야 부상 없이 효과가 나요.</p>`;
+      if (o.whatIf) html += H("📈 주간 거리를 늘리면? (풀코스)") + `<ul class="pred-ul">${o.whatIf.map((w) => `<li>주 ${Math.round(w.k)}km로 늘리면 약 <b>${Math.max(0, Math.round(w.gain / 60))}분</b> 단축 (같은 평균 페이스 기준)</li>`).join("")}</ul><p class="hint" style="margin:0">양은 주당 10% 안팎으로 천천히 늘려야 부상 없이 효과가 나요.</p>`;
       html += H("🔍 어떻게 계산했나요") + `<table class="pred-t"><tr><th>방법</th><th>VDOT</th><th>반영</th></tr>${o.methods.map((m) => `<tr><td><b>${esc(m.name)}</b><br><span class="hint">${esc(m.why)}</span></td><td>${r1(m.vdot)}</td><td>${Math.round((m.w / o.methods.reduce((s, x) => s + x.w, 0)) * 100)}%</td></tr>`).join("")}</table>`;
       const tips = [...o.notes];
       if (!o.methods.some((m) => m.key === "hr")) tips.push("심박이 들어간 기록(시계 FIT 파일)과 최대·안정시 심박을 넣으면 훈련 페이스로도 예측해서 더 정확해져요.");
@@ -212,7 +212,7 @@
     if (o.swim) html += H("🏊 수영 (CSS " + fmt(o.ctx.swim.css) + "/100m 기준)") + `<table class="pred-t">${o.swim.map(([n, t]) => `<tr><td>${n}</td><td><b>${fmt(t)}</b></td></tr>`).join("")}</table>`;
     if (o.bike) html += H(`🚴 자전거 (FTP ${o.ctx.bike.ftp}W · 체중 ${+o.p.weight || 70}kg · 평지·무풍 기준)`) + `<table class="pred-t"><tr><th>거리</th><th>예상 기록</th><th>평균 속도 · 강도</th></tr>${o.bike.map((b) => `<tr><td>${b.n}</td><td><b>${fmt(b.t)}</b></td><td>${r1(b.kmh)}km/h · FTP ${Math.round(b.f * 100)}%</td></tr>`).join("")}</table><p class="hint" style="margin:4px 0 0">언덕·바람·자세(공기저항)에 따라 크게 달라져요.</p>`;
     if (o.tri) html += H("🏊🚴🏃 철인3종 (바꿈터 포함)") + `<table class="pred-t"><tr><th>코스</th><th>수영</th><th>자전거</th><th>달리기</th><th>합계</th></tr>${o.tri.map((t) => `<tr><td>${t.n}</td><td>${fmt(t.s)}</td><td>${fmt(t.b)}</td><td>${fmt(t.r)}</td><td><b>${fmt(t.t)}</b></td></tr>`).join("")}</table><p class="hint" style="margin:4px 0 0">달리기는 자전거 뒤라 단독 기록보다 4~16% 느리게 잡았어요.</p>`;
-    html += `<p class="hint" style="margin:14px 0 0">예측은 날씨·코스·컨디션·페이스 조절에 따라 달라져요. 참고: 다니엘스 러닝 포뮬러(VDOT), Tanda 2011(J Hum Sport Exerc), Vickers & Vertosick 2016(BMC Sports Sci Med Rehabil).</p>`;
+    html += `<p class="hint" style="margin:14px 0 0">예측은 날씨·코스·컨디션·페이스 조절에 따라 달라져요.</p>`;
     d.innerHTML = `<div style="padding:18px;max-height:88vh;overflow:auto">${html}</div>`;
     d.querySelector('[data-p="x"]').onclick = () => d.close();
   }

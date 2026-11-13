@@ -48,6 +48,7 @@
         ${mode === "signup" ? `<label>닉네임 (커뮤니티에 보여요)<input name="nick" maxlength="20" required placeholder="예: 찬욱" /></label>` : ""}
         <label>이메일<input name="email" type="email" autocomplete="email" required /></label>
         <label>비밀번호 ${mode === "signup" ? "(6자 이상)" : ""}<input name="pw" type="password" minlength="6" autocomplete="${mode === "signup" ? "new-password" : "current-password"}" required /></label>
+        ${mode === "signup" ? `<label class="check" style="font-size:13px;line-height:1.5"><input type="checkbox" name="agree" required /> 만 14세 이상이며, <a href="terms.html" target="_blank" rel="noopener">이용약관</a>과 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 동의해요 (필수)</label>` : ""}
         <button type="submit" class="primary" style="padding:13px">${mode === "login" ? "로그인" : "가입하기"}</button>
         <p class="warn" id="auMsg" style="margin:0"></p>
       </form>

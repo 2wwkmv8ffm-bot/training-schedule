@@ -119,6 +119,7 @@
   window.addEventListener("ts:auth", () => { if (current === "me") renderMe(); });
   window.addEventListener("ts:strava", () => { if (current === "me") renderMe(); });
   window.addEventListener("ts:sessions", () => { if (current === "home") renderHome(); });
+  window.addEventListener("ts:journal", () => { if (current === "home") renderHome(); });
 
   // ---------- 계산 도구 ----------
   const km = (a) => (+a.distance_m || 0) / 1000;
@@ -291,6 +292,7 @@
       ${window.ZONE ? (n.hiText ? window.ZONE.mixBar(n.hiText) : n.dist && n.z && n.z <= 2 ? window.ZONE.mixBar(`고강도 0% 0km · 저강도 100% ${n.dist}`) : n.dist && n.z ? `<p class="hint" style="margin:8px 0 0">⚖️ 계획에서 '달력에 넣기'를 다시 누르면 고강도·저강도 km가 보여요.</p>` : "") : ""}
       ${window.ZONE && n.z ? window.ZONE.guideLine(n.z) : ""}
       ${n.steps.length && TS.stepTable ? `<div style="margin-top:8px">${TS.stepTable(n.steps)}</div>` : ""}
+      ${n.steps.some((t) => /드릴/.test(t)) ? `<button type="button" class="pill drill-btn" data-drills="${({ 수영: "swim", 사이클: "bike", 브릭: "bike" })[s.category] || "run"}" data-focus="${esc(((n.steps.find((t) => /이번 주는/.test(t)) || "").match(/'([^']+)'/) || [])[1] || "")}">📖 드릴 가이드</button>` : ""}
       ${n.alt && TS.stepTable ? `<div class="alt-box"><div class="alt-h">✅ 추천: <b>${esc(s.title.replace(/^.*?· /, ""))}</b> <span class="hint">— 이번 시기 목적에 가장 잘 맞아요</span></div><details><summary>🔁 대안: <b>${esc(n.alt.name)}</b> <span class="hint">— ${esc(n.alt.why)}</span></summary>${TS.stepTable(n.alt.steps)}</details></div>` : ""}
       ${n.point && !s.completed ? `<p class="hint" style="margin:8px 0 0">💡 ${esc(n.point)}</p>` : ""}
       </details>` : ""}
@@ -398,6 +400,7 @@
 
       <div class="card"><div class="spread"><div class="eyebrow" style="margin:0">${dayTitle}</div>
         <button type="button" class="link" id="hToPlan">전체 계획 ›</button></div>${todayHtml}</div>
+      ${TS.journal ? TS.journal.dayCard(homeDay, true) : ""}
 
       ${(() => { // 🏁 내 대회 + 대회 추가
         const all = ((p && p.races) || []).map((r, i) => [r, i]).filter(([r]) => r.date && new Date(r.date + "T00:00:00") >= today0).sort((a, b) => a[0].date.localeCompare(b[0].date));
@@ -431,6 +434,7 @@
     if ($("hGo")) $("hGo").onclick = () => TS.openTracker();
     if ($("hMakePlan")) $("hMakePlan").onclick = () => TS.openPlan();
     $("hToPlan").onclick = () => showTab("plan");
+    if (TS.journal) TS.journal.bind($("homeBody"));
     $("homeBody").querySelectorAll("[data-raceadd]").forEach((b) => { b.onclick = () => TS.openRaceAdd(); });
     $("homeBody").querySelectorAll("[data-racerm]").forEach((b) => { b.onclick = () => TS.removeRace(+b.dataset.racerm); });
     $("homeBody").querySelectorAll("[data-coach]").forEach((b) => {
@@ -602,7 +606,7 @@
       const tot = Object.values(zt).reduce((x, y) => x + y, 0) || 1;
       const T = a.sport === "bike" ? TS.E.FRIEL_BIKE : TS.E.FRIEL_RUN;
       const col = ["#94a3b8", "#16a34a", "#ca8a04", "#ea580c", "#dc2626", "#b91c1c", "#7f1d1d"];
-      zoneHtml = `<div class="lbl" style="font-size:12px;color:var(--muted);font-weight:700;margin-top:12px">존별 시간 (프릴 LTHR 기준)</div>` +
+      zoneHtml = `<div class="lbl" style="font-size:12px;color:var(--muted);font-weight:700;margin-top:12px">존별 시간 (LTHR 기준)</div>` +
         T.map((r, i) => zt[r[0]] ? `<div class="split" style="grid-template-columns:70px 52px 1fr"><span>${r[0]} ${r[1]}</span><b>${fmtDur(zt[r[0]])}</b><i style="width:${Math.max(4, (zt[r[0]] / tot) * 100)}%;background:${col[i]}"></i></div>` : "").join("");
     }
     let chart = "";
@@ -641,7 +645,7 @@
       b.onclick = async () => {
         if (!await TS.ask("이 파일을 지울까요? 되돌릴 수 없어요.")) return;
         const { error: e2 } = await db.storage.from(BUCKET).remove([b.dataset.rm]);
-        if (e2) alert("삭제 실패: " + e2.message);
+        if (e2) alert("지우지 못했어요. 잠시 뒤 다시 시도해 주세요");
         loadMedia(a);
       };
     });
@@ -702,7 +706,7 @@
         <button type="button" class="avatar avatar-btn" id="meAvatar" style="margin:0 auto 6px" aria-label="프로필 사진 바꾸기">${avatarSrc() ? `<img src="${esc(avatarSrc())}" alt="프로필 사진" />` : (p && p.sport ? TS.SPORTS[p.sport].icon : "🏁")}<span class="cam">📷</span></button>
         <input type="file" id="meAvatarFile" accept="image/*" hidden />
         <div><button type="button" class="link" id="meAvatarEdit">${avatarSrc() ? "사진 바꾸기" : "프로필 사진 등록"}</button>${avatarSrc() ? ` <button type="button" class="link" id="meAvatarDel">삭제</button>` : ""}</div>
-        <b style="font-size:20px">${esc((p && p.nickname) || "나")}</b>
+        <b style="font-size:20px">${esc((p && p.nickname) || "나")}${TS.isOwner && TS.auth && TS.auth.user && TS.isOwner(TS.auth.user.id) ? '<span class="obadge" title="ZONE 운영자">✔ ZONE</span>' : ""}</b>
         <div class="hint">${p && p.sport ? `${p.sport} 선수` : "종목을 골라주세요"}</div>
         <div class="mt"><span class="lvl">Lv.${lv.n} ${lv.name}</span></div>
         <div class="progress mt"><i style="width:${lv.pct}%"></i></div>
@@ -738,14 +742,24 @@
         <div class="set-row"><span>❤️ 심박 존 가이드 (최대심박 계산기)</span><button type="button" class="pill" data-zguide="0">열기</button></div>
         <div class="set-row"><span>🔮 대회 기록 예측</span><button type="button" class="pill" data-predict="1">보기</button></div>
         <div class="set-row"><span>🎯 목표 대회·기록</span><button type="button" class="pill" id="meGoal">바꾸기</button></div>
+        ${p && TS.discsOf && TS.discsOf(p.sport).includes("bike") ? `<div class="set-row"><span>🚴 자전거 타는 곳</span><span class="chips" style="display:inline-flex">${[["indoor", "🏠 실내"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="chip${((p.env || {}).bike || "outdoor") === k ? " on" : ""}" data-mebenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
+        ${p && TS.discsOf && TS.discsOf(p.sport).includes("run") ? `<div class="set-row"><span>🏃 달리는 곳</span><span class="chips" style="display:inline-flex">${[["indoor", "🏠 트레드밀"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="chip${((p.env || {}).run || "outdoor") === k ? " on" : ""}" data-merenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
+        <div class="set-row"><span>📖 드릴 가이드 (수영·자전거·달리기)</span><button type="button" class="pill" data-drills="swim">보기</button></div>
+        <div class="set-row"><span>📝 훈련 일지 (컨디션·운동 기록·일기)</span><button type="button" class="pill" id="meJournal">모아보기</button></div>
         <div class="set-row"><span>기록 중 음성 안내</span><button type="button" class="pill" id="meVoice">${voiceOn() ? "켜짐 🔊" : "꺼짐 🔇"}</button></div>
         <div class="set-row"><span>데이터 저장</span><span class="hint">${TS.store.cloud && TS.isProfileCloud() ? "계정에 저장 중 ✓" : "일부는 이 기기에만 저장돼요 (로그인하면 계정에 저장)"}</span></div>
-      </div>`;
+      </div>
+      <div id="fbBox"></div>
+      <p class="hint" style="text-align:center;margin:16px 0 4px"><a href="terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="privacy.html" target="_blank" rel="noopener"><b>개인정보처리방침</b></a><br>ZONE의 훈련 안내는 일반적인 운동 정보예요. 몸에 이상이 있으면 운동을 멈추고 의사와 상의하세요.</p>`;
     bindAccount();
     bindAvatar();
+    if (TS.feedback) TS.feedback.mount($("fbBox"));
+    if ($("meJournal")) $("meJournal").onclick = () => TS.journal && TS.journal.openList();
     $("meEdit").onclick = () => TS.openWizard(1);
     $("mePlan").onclick = () => TS.openPlan();
     if ($("meGoal")) $("meGoal").onclick = () => TS.openGoal(() => TS.openPlan(true));
+    document.querySelectorAll("[data-mebenv]").forEach((b) => { b.onclick = async () => { await TS.setBikeEnv(b.dataset.mebenv); renderMe(); }; });
+    document.querySelectorAll("[data-merenv]").forEach((b) => { b.onclick = async () => { await TS.setBikeEnv(b.dataset.merenv, "run"); renderMe(); }; });
     $("meVoice").onclick = () => {
       try { localStorage.setItem("training.voice", voiceOn() ? "off" : "on"); } catch (e) { /* 무시 */ }
       renderMe();
@@ -816,7 +830,8 @@
       ? `<div class="set-row"><span>로그인하면 기록이 계정에 저장되고 커뮤니티를 쓸 수 있어요</span><button type="button" class="primary pill" id="acLogin">로그인</button></div>`
       : `<div class="set-row"><span>👤 <b>${esc((A.member && A.member.nickname) || "")}</b> <span class="hint">${esc(A.user.email || "")}</span></span><button type="button" class="pill" id="acNick">닉네임 변경</button></div>
          ${nLocal ? `<div class="set-row"><span>이 기기에만 있는 기록 ${nLocal}개</span><button type="button" class="pill" id="acUp">계정에 올리기</button></div>` : ""}
-         <div class="set-row"><span>로그아웃</span><button type="button" class="pill" id="acOut">로그아웃</button></div>`;
+         <div class="set-row"><span>로그아웃</span><button type="button" class="pill" id="acOut">로그아웃</button></div>
+         <div class="set-row"><span class="hint">회원 탈퇴 — 계정과 모든 기록·글·일지가 지워져요</span><button type="button" class="link" id="acDel" style="color:#dc2626">회원 탈퇴</button></div>`;
     return `<div class="card"><h3>👤 계정 · 공개 설정</h3>${acct}
       ${""/* 스트라바는 한국에서 서비스가 제한돼서 숨겨요 (strava.js는 그대로 남겨 둬요) */}
       <div class="set-row"><span>새 기록 기본 공개 범위</span>
@@ -829,6 +844,16 @@
     const A = TS.auth || {};
     if ($("acLogin")) $("acLogin").onclick = () => A.open("login");
     if ($("acOut")) $("acOut").onclick = () => A.signOut();
+    if ($("acDel")) $("acDel").onclick = async () => { // 회원 탈퇴 (앱스토어·개인정보보호법 필수)
+      if (!await TS.ask("정말 탈퇴할까요? 계정과 모든 훈련 기록·글·사진·일지가 지워지고 되돌릴 수 없어요.", "탈퇴", "취소")) return;
+      if (!await TS.ask("마지막 확인이에요. 탈퇴하면 같은 계정으로 다시 볼 수 없어요. 탈퇴할까요?", "탈퇴", "취소")) return;
+      const { error } = await db.rpc("delete_my_account");
+      if (error) { alert("지금은 탈퇴를 처리하지 못했어요. 잠시 뒤 다시 시도하거나 건의사항으로 알려 주세요."); return; }
+      try { Object.keys(localStorage).filter((k) => /^training\./.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* 무시 */ }
+      try { await db.auth.signOut(); } catch (e) { /* 이미 지워진 계정 */ }
+      alert("탈퇴가 완료됐어요. 그동안 ZONE을 써 주셔서 고마워요.");
+      location.reload();
+    };
     if ($("acNick")) $("acNick").onclick = () => { const n = prompt("새 닉네임 (20자 이내)", (A.member && A.member.nickname) || ""); if (n && n.trim()) A.updateNickname(n.trim()); };
     if ($("acUp")) $("acUp").onclick = async (e) => {
       e.target.disabled = true; e.target.textContent = "올리는 중…";
