@@ -60,6 +60,7 @@
     return (data && data.data) || local;
   }
   async function saveProfile(p) {
+    if (p && TS.auth && TS.auth.user) p.owner = TS.auth.user.id; // 이 프로필의 주인 (계정이 바뀌면 섞이지 않게)
     try { localStorage.setItem(LS_KEY, JSON.stringify(p)); localStorage.setItem(OWNER_KEY, TS.auth && TS.auth.user ? TS.auth.user.id : ""); } catch (e) { /* 무시 */ }
     const { error } = await db.from(PROFILE_TABLE).upsert({ id: pid(), data: p, updated_at: new Date().toISOString() });
     cloudOk = !error;
@@ -214,7 +215,7 @@
 
   // ---------- 설정 화면 ----------
   // 종목마다 따로 저장하는 문진표 항목 (이름·몸무게·나이·심박 같은 신체 정보는 공통)
-  const SPORT_FIELDS = ["tests", "daysPerWeek", "days", "dayOpts", "weeklyHours", "sessionMin", "volume", "env", "records", "goal", "philosophy", "lowPct", "mafAdj", "races", "goalSetAt"];
+  const SPORT_FIELDS = ["tests", "daysPerWeek", "days", "dayOpts", "weeklyHours", "sessionMin", "volume", "env", "records", "goal", "philosophy", "lowPct", "mafAdj", "races", "goalSetAt", "allowHi"];
   const pickSport = (p) => { const o = {}; SPORT_FIELDS.forEach((k) => { if (p[k] !== undefined) o[k] = clone(p[k]); }); return o; };
   // 지금 종목 설정은 보관하고, 바꿀 종목의 저장된 설정을 불러와요 (없으면 지금 설정을 그대로 시작점으로)
   function withSport(p, sport) {
@@ -230,6 +231,7 @@
 
   function openWizard(startStep = 0, sport) {
     draft = Object.assign(emptyProfile(), profile ? clone(sport && sport !== profile.sport ? withSport(profile, sport) : profile) : {});
+    if (!draft.nickname && TS.auth && TS.auth.member) draft.nickname = TS.auth.member.nickname; // 새 문진표: 계정 닉네임으로 시작
     if (sport && !profile) draft.sport = sport;
     draft.env = Object.assign({ swim: "indoor", bike: "outdoor", run: "outdoor" }, draft.env);
     draft.tests = draft.tests || {};
@@ -377,7 +379,7 @@
         <p class="hint" style="margin:0 0 8px">쉬다가 다시 시작하면 처음 몇 주는 양을 줄이고 쉬운 강도로 몸을 깨운 뒤, 천천히 원래 훈련으로 돌아가요. 쉰 기간만큼 페이스·파워도 낮춰 잡아요.</p>
         <div class="chips">${CB_OPTS.map(([k, l]) => `<button type="button" class="chip${(draft.comeback || "") === k ? " on" : ""}" data-cb="${k}">${l}</button>`).join("")}</div>
         ${draft.comeback && E.COMEBACK[draft.comeback] ? `<p class="hint" style="margin:8px 0 0">→ 복귀 ${E.COMEBACK[draft.comeback].weeks}주: 평소 양의 ${E.COMEBACK[draft.comeback].ramp.map((x) => Math.round(x * 100) + "%").join(" → ")}. 앞 ${Math.ceil(E.COMEBACK[draft.comeback].weeks / 2)}주는 쉬운 강도만, 그 뒤 가벼운 질 훈련 1회.</p>` : ""}</div>
-      <div class="card" id="lvPreview">${levelCard(E.levelOf(draft))}</div>`;
+      <div class="card" id="lvPreview">${levelCard(E.levelOf(draft))}${hiAsk(draft, E.levelOf(draft))}</div>`;
   }
 
   // rows: [키, 이름, 예시] — 키가 "#"이면 종목 제목 줄. FTP·W/kg 말고는 모두 시간 칸(자동 콜론)
@@ -570,7 +572,7 @@
     } else if (t.dataset.race !== undefined && t.dataset.k) draft.races[+t.dataset.race][t.dataset.k] = t.value;
     if ($("goalAn")) $("goalAn").innerHTML = goalAnalysis(draft); // 대회·목표 단계: 입력하면 바로 다시 분석
   }
-  $("wzBody").addEventListener("input", (e) => { onWzInput(e); const lp = $("lvPreview"); if (lp) lp.innerHTML = levelCard(E.levelOf(draft)); });
+  $("wzBody").addEventListener("input", (e) => { onWzInput(e); const lp = $("lvPreview"); if (lp) { const L = E.levelOf(draft); lp.innerHTML = levelCard(L) + hiAsk(draft, L); } });
   $("wzBody").addEventListener("change", (e) => {
     onWzInput(e);
     if (step === 6 && e.target.dataset.f === "goal.time") renderStep();
@@ -580,6 +582,7 @@
     if (!b) return;
     const d = b.dataset;
     if (d.lvtable) { openLevel(draft); return; }
+    if (d.hi !== undefined) { draft.allowHi = d.hi === "1"; const lp = $("lvPreview"); if (lp) { const L = E.levelOf(draft); lp.innerHTML = levelCard(L) + hiAsk(draft, L); } return; }
     if (d.sex || d.cb !== undefined) {
       if (d.sex) draft.sex = d.sex;
       else { draft.comeback = d.cb; draft.comebackAt = d.cb ? iso(new Date()) : ""; }
@@ -680,6 +683,16 @@
   const DIST_M = { "5K": 5000, "10K": 10000, half: 21097, full: 42195 };
   // ---------- 🏅 레벨 1~10 카드·기준표 ----------
   const CB_OPTS = [["", "쉬지 않고 하고 있어요"], ["w2", "2~4주 쉬었어요"], ["m1", "1~3개월 쉬었어요"], ["m3", "3~6개월 쉬었어요"], ["m6", "6개월 이상 쉬었어요"]];
+  // 🌱 레벨 1~3이면 Z4·Z5를 넣을지 물어봐요 (Z3까지만을 적극 추천)
+  function hiAsk(p, L) {
+    if (!L || L.lv > 3) return "";
+    const on = !!p.allowHi;
+    return `<div class="card" style="margin:10px 0 0;padding:12px;display:grid;gap:8px">
+      <b>🌱 레벨 ${L.lv}이에요 — 강한 훈련(Z4·Z5)도 넣을까요?</b>
+      <div class="chips"><button type="button" class="chip${on ? "" : " on"}" data-hi="0">✅ Z3까지만 (추천)</button><button type="button" class="chip${on ? " on" : ""}" data-hi="1">Z4·Z5도 넣기</button></div>
+      <p class="hint" style="margin:0;line-height:1.6"><b>Z3까지만을 적극 추천해요.</b> 지금 단계에서는 쉬운 강도로 쌓는 시간이 실력을 가장 많이 올려요. 심폐는 몇 주면 좋아지지만 힘줄·인대·뼈는 몇 달이 걸려서, 강한 훈련을 일찍 넣으면 다치기 쉽고 회복에 2~3일이 걸려 꾸준함이 무너져요. 레벨 4가 되면 강한 훈련이 자동으로 들어가요.</p>
+      ${on ? '<p class="warn" style="margin:0">⚠️ Z4·Z5를 넣으면 부상·과로 위험이 커져요. 통증이 있거나 다음 날까지 피곤하면 바로 \'Z3까지만\'으로 바꿔 주세요.</p>' : ""}</div>`;
+  }
   function levelCard(L, compact) {
     if (!L) return `<div class="note">기록이나 주간 거리를 넣으면 레벨(1~10)을 계산해요.</div>`;
     const seg = Array.from({ length: 10 }, (_, k) => `<i style="background:${k < L.lv ? `hsl(${210 - k * 21},80%,${55 - k}%)` : "var(--line)"}"></i>`).join("");
@@ -687,18 +700,17 @@
     return `<div class="lv-card"><div class="spread"><b style="font-size:16px">레벨 ${L.lv}<span class="hint">/10</span> · ${esc(L.name)}</b>${compact ? "" : '<button type="button" class="pill" data-lvtable="1">레벨 기준표</button>'}</div>
       <div class="lv-bar">${seg}</div>
       ${L.comeback ? `<p class="hint" style="margin:4px 0;color:#ea580c">🔄 ${esc(L.comeback.name)} — 복귀 기간이라 ${L.before ? `레벨 ${L.before} → ${L.lv}로 낮춰서 ` : ""}${L.comeback.weeks - L.comeback.since}주 동안 천천히 올려요</p>` : ""}
-      <p style="margin:4px 0;font-size:13.5px;line-height:1.6">질 훈련 <b>${esc(L.q)}</b> · 고강도 최대 <b>${E.LEVEL_HI_MAX[L.lv]}%</b> — ${esc(L.desc)}</p>
+      <p style="margin:4px 0;font-size:13.5px;line-height:1.6">질 훈련 <b>${esc(L.q)}</b> · ${L.lv <= 3 ? "<b>Z3까지만</b> (Z4·Z5 없음)" : `고강도 최대 <b>${E.LEVEL_HI_MAX[L.lv]}%</b>`} — ${esc(L.desc)}</p>
       ${rows ? `<div class="ratio-box">${rows}</div>` : ""}
       <p class="hint" style="margin:6px 0 0">레벨 = 기록 60% + 주간 거리 40%${Object.keys(L.per).length > 1 ? " · 철인3종은 자전거 45 · 달리기 35 · 수영 20 비중" : ""}. ${esc(L.next)}</p></div>`;
   }
   function openLevel(p0) {
-    const p = p0 || profile;
-    if (!p) return;
+    const p = p0 || profile || {}; // 문진표 전이어도 기준표는 볼 수 있어요
     let d = $("lvDlg");
     if (!d) { d = document.createElement("dialog"); d.id = "lvDlg"; document.body.appendChild(d); }
-    const ds = discsOf(p.sport);
+    const mine = p.sport ? discsOf(p.sport) : [], ds = [...mine, ...["run", "bike", "swim"].filter((x) => !mine.includes(x))]; // 내 종목 먼저, 다른 종목 기준표도 볼 수 있게
     let cur = ds[0], fem = p.sex === "f";
-    const L = E.levelOf(p);
+    const L = p.sport ? E.levelOf(p) : null;
     function draw() {
       const t = E.levelTable(cur, fem), my = L && L.per[cur] ? L.per[cur].lv : null;
       d.innerHTML = `<div style="padding:18px;display:grid;gap:12px;max-height:88vh;overflow:auto">
@@ -707,8 +719,8 @@
         ${levelCard(L, true)}
         <div class="chips">${ds.map((x) => `<button type="button" class="chip${cur === x ? " on" : ""}" data-lvd="${x}">${E.DISC[x].icon} ${E.DISC[x].name}</button>`).join("")}
           <span style="flex:1"></span><button type="button" class="chip${!fem ? " on" : ""}" data-lvs="m">남자 기준</button><button type="button" class="chip${fem ? " on" : ""}" data-lvs="f">여자 기준</button></div>
-        <div class="lv-table">${t.map((r) => `<div class="lv-row${my === r.lv ? " me" : ""}"><b>${r.lv}</b><span><b>${esc(r.name)}</b>${my === r.lv ? " 👈 나" : ""}<br><span class="hint">${esc(r.rec)}<br>${esc(r.vol)} · 질 훈련 ${esc(r.q)} · 고강도 최대 ${r.hiMax}%</span></span></div>`).join("")}</div>
-        ${ds.length > 1 ? '<p class="hint" style="margin:0">철인3종 레벨은 세 종목 레벨을 자전거 45% · 달리기 35% · 수영 20%로 합쳐요 (완주 기록에 미치는 영향 순서).</p>' : ""}
+        <div class="lv-table">${t.map((r) => `<div class="lv-row${my === r.lv ? " me" : ""}"><b>${r.lv}</b><span><b>${esc(r.name)}</b>${my === r.lv ? " 👈 나" : ""}<br><span class="hint">${esc(r.rec)}<br>${esc(r.vol)} · 질 훈련 ${esc(r.q)} · ${r.lv <= 3 ? "<b>Z3까지만</b> (Z4·Z5 없음)" : `고강도 최대 ${r.hiMax}%`}</span></span></div>`).join("")}</div>
+        ${mine.length > 1 ? '<p class="hint" style="margin:0">철인3종 레벨은 세 종목 레벨을 자전거 45% · 달리기 35% · 수영 20%로 합쳐요 (완주 기록에 미치는 영향 순서).</p>' : ""}
       </div>`;
     }
     d.onclick = (e) => {
@@ -854,6 +866,7 @@
     }).join("")}</div>`;
   }
   TS.stepTable = stepTable;
+  TS.openLevel = () => openLevel();
   function sessionCard(s, start) {
     const date = addDays(start, s.day);
     const zoneTxt = { 1: "회복", 2: "쉬움", 3: "보통", 4: "강함", 5: "아주 강함" }[s.lvl] || "";
@@ -1301,7 +1314,23 @@
     const uid = TS.auth && TS.auth.user ? TS.auth.user.id : null;
     if (uid === lastUid) return;
     lastUid = uid;
-    const p = await loadProfile();
+    let p = await loadProfile();
+    if (p && uid) {
+      // 다른 계정 것인지 확인: 주인 표시가 다르거나, (예전 데이터) 문진표 이름이 계정 닉네임과 다르면 남의 프로필이에요
+      const nick = TS.auth.member && TS.auth.member.nickname;
+      const foreign = p.owner ? p.owner !== uid : !!(p.nickname && nick && p.nickname.trim() !== nick.trim());
+      if (foreign) {
+        p = null;
+        // 잘못 복사된 프로필을 빈 프로필(주인 표시만)로 덮어써요 → 문진표를 처음부터
+        await db.from(PROFILE_TABLE).upsert({ id: uid, data: { owner: uid }, updated_at: new Date().toISOString() });
+        const today = iso(new Date()); // 그 프로필로 넣은 앞으로의 자동 계획도 지우기 (완료한 기록은 그대로)
+        await TS.mine(db.from(TS.TABLE).delete()).gte("date", today).eq("completed", false).like("notes", "[자동 계획]%");
+        // 이 기기에 남은 이전 사람의 일지·활동·사진도 비우고 새로 열어요
+        try { ["training.profile", "training.journal", "training.activities", "training.savedPosts", "training.avatar", "training.stravaState"].forEach((k) => localStorage.removeItem(k)); } catch (e) { /* 무시 */ }
+        let again = false; try { again = sessionStorage.getItem("zone.reset." + uid) === "1"; sessionStorage.setItem("zone.reset." + uid, "1"); } catch (e) { /* 무시 */ }
+        if (!again) { location.reload(); return; } // 한 번만 (계속 새로고침되지 않게)
+      }
+    }
     if (p && p.sport && SPORTS[p.sport]) {
       setProfile(p);
       if (uid) saveProfile(p); // 이 기기 프로필을 내 계정에도 저장 (이때 이 기기 프로필의 주인도 이 계정으로 표시돼요)

@@ -44,9 +44,31 @@
     const { data: made } = await db.from("members").insert({ id: A.user.id, nickname: nick.slice(0, 20), sport: p && p.sport }).select().single();
     A.member = made || null;
   }
+  // 🔐 로그인 상태 유지: 켜 두면 다음에 앱을 열 때 바로 들어와요. 끄면 앱(브라우저)을 닫을 때 로그아웃돼요
+  const KEEP_KEY = "training.keepLogin", OPEN_KEY = "zone.openNow";
+  const keepOn = () => { try { return localStorage.getItem(KEEP_KEY) !== "0"; } catch (e) { return true; } };
+  function rememberChoice(f) {
+    try {
+      localStorage.setItem(KEEP_KEY, f.keep && !f.keep.checked ? "0" : "1");
+      sessionStorage.setItem(OPEN_KEY, "1");
+    } catch (e) { /* 무시 */ }
+  }
+  // 다른 계정으로 로그인하면 이 기기에 남은 이전 사람의 기록(프로필·대회·일지·활동·사진)을 지우고 처음부터 시작해요
+  const LAST_KEY = "training.lastUser";
+  const PERSONAL = ["training.profile", "training.profileOwner", "training.activities", "training.journal", "training.savedPosts", "training.avatar", "training.stravaState", "training.stravaAuto"];
+  function wipeIfOtherAccount(uid) {
+    try {
+      const last = localStorage.getItem(LAST_KEY) || localStorage.getItem("training.profileOwner") || "";
+      const other = last && last !== uid;
+      if (other) PERSONAL.forEach((k) => localStorage.removeItem(k));
+      localStorage.setItem(LAST_KEY, uid);
+      if (other) { location.reload(); return true; } // 메모리에 남은 이전 사람 기록까지 비우려고 새로 열어요
+    } catch (e) { /* 무시 */ }
+  }
   async function setUser(u) {
     const changed = (A.user && A.user.id) !== (u && u.id);
     A.user = u || null;
+    if (changed && u && wipeIfOtherAccount(u.id)) return;
     await loadMember();
     A.ready = true;
     if (changed) await TS.setUser(A.user);
@@ -75,6 +97,7 @@
         ${mode === "signup" ? `<label>닉네임 (커뮤니티에 보여요)<input name="nick" maxlength="20" required placeholder="예: 찬욱" /></label>` : ""}
         <label>이메일<input name="email" type="email" autocomplete="email" required /></label>
         <label>비밀번호 ${mode === "signup" ? "(6자 이상)" : ""}<input name="pw" type="password" minlength="6" autocomplete="${mode === "signup" ? "new-password" : "current-password"}" required /></label>
+        <label class="check" style="font-size:14px"><input type="checkbox" name="keep" ${keepOn() ? "checked" : ""} /> 로그인 상태 유지 <span class="hint">(다음에 앱을 켜면 바로 들어와요)</span></label>
         ${mode === "signup" ? `<label class="check" style="font-size:13px;line-height:1.5"><input type="checkbox" name="agree" required /> 만 14세 이상이며, <a href="terms.html" target="_blank" rel="noopener">이용약관</a>과 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 동의해요 (필수)</label>` : ""}
         <button type="submit" class="primary" style="padding:13px">${mode === "login" ? "로그인" : "가입하기"}</button>
         <p class="warn" id="auMsg" style="margin:0"></p>
@@ -163,6 +186,7 @@
         const { error } = await db.auth.signInWithPassword({ email: f.email.value.trim(), password: f.pw.value });
         if (error) throw error;
       }
+      rememberChoice(f);
       close();
     } catch (err) {
       const m = err.message || String(err);
@@ -186,7 +210,15 @@
     setTimeout(() => setUser(s ? s.user : null), 0);
     if (ev === "PASSWORD_RECOVERY") setTimeout(() => open("newpw"), 300); // 비밀번호 찾기 메일 링크로 들어왔어요
   });
-  db.auth.getSession().then(({ data }) => setUser(data.session ? data.session.user : null));
+  db.auth.getSession().then(async ({ data }) => {
+    let s = data.session;
+    let fresh = false; // 이번에 앱을 새로 열었는지 (새로고침이 아니라)
+    try { fresh = !sessionStorage.getItem(OPEN_KEY); sessionStorage.setItem(OPEN_KEY, "1"); } catch (e) { /* 무시 */ }
+    if (s && fresh && !keepOn()) { await db.auth.signOut({ scope: "local" }); s = null; } // 유지 안 함 → 다시 로그인
+    await setUser(s ? s.user : null);
+    // 로그인 안 했으면 앱을 열자마자 로그인 · 회원가입 화면
+    if (!s && !/error_description=|type=recovery/.test(location.hash + location.search)) open("login");
+  });
   // 메일 링크가 만료됐거나 잘못된 경우 (주소 뒤에 error=… 가 붙어 와요)
   const linkErr = /error_description=([^&]+)/.exec(location.hash + "&" + location.search);
   if (linkErr) {

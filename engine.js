@@ -432,13 +432,14 @@
         steps: [`${min}분 아주 천천히 (걷기 섞어도 OK)`, "끝나고 가벼운 스트레칭 5분"],
         targets: [R ? `E 페이스(${fmt(R.E[1])}/km)보다 느리게` : "RPE 1–2", hrText("run", 1, H, ctx.phil)].filter(Boolean), effect: "혈류를 늘려 회복을 앞당겨요." };
       case "E": {
+        const ek = o.z3 ? (o.v || 0) % 3 : (o.v || 0) % 4; // Z3까지만인 레벨은 언덕 전력 스프린트를 빼요
         const V = [
           [`E 페이스 ${Math.max(15, min - 5)}분`, "마지막에 스트라이드 20초 × 6 (가볍고 빠르게, 사이 40초 걷기)"],
           [`E 페이스 ${min}분`, "끝나고 러닝 드릴 10분 — A스킵 · B스킵 · 하이니 · 버트킥 각 30m × 2"],
           [`E 페이스 ${Math.max(15, min - 10)}분`, "마지막 10분은 E 페이스 빠른 쪽으로 조금씩 올리기 (빌드업, 숨차지 않게)"],
           [`흙길·공원 같은 부드러운 길에서 E 페이스 ${Math.max(15, min - 5)}분`, "언덕 스프린트 8~10초 × 6 (오르막 전력, 사이 2분 걷기로 완전 회복)"],
-        ][(o.v || 0) % 4];
-        return { lvl: 2, tag: "E", name: ["이지 런 + 스트라이드", "이지 런 + 드릴", "이지 빌드업 런", "이지 런 + 언덕 스프린트"][(o.v || 0) % 4],
+        ][ek];
+        return { lvl: 2, tag: "E", name: ["이지 런 + 스트라이드", "이지 런 + 드릴", "이지 빌드업 런", "이지 런 + 언덕 스프린트"][ek],
           point: "대화가 되는 강도. 주간 거리의 대부분이 이 페이스예요. 빨리 뛰고 싶어도 참는 게 핵심!", steps: V, targets: t("E", 2), effect: RUN_PACES[0][4] };
       }
       case "Fartlek": {
@@ -1119,9 +1120,9 @@
   };
   const LEVEL_CUT = { run: LV_VOL.run, bike: LV_VOL.bike, swim: LV_VOL.swim };
   const LEVELS = [null,
-    { lv: 1, name: "🌱 출발", band: 0, q: "주 0~1회", ratio: 95, desc: "운동 습관 만들기. 강한 훈련은 거의 없이 쉬운 강도(Z1~Z2)로 시간을 늘려요. 질 훈련은 가벼운 지속주·파틀렉 정도만." },
-    { lv: 2, name: "🚶 리듬 찾기", band: 0, q: "주 1회", ratio: 92, desc: "주 1회 가벼운 질 훈련(템포·언덕·파틀렉). 인터벌·VO2max는 아직 넣지 않아요." },
-    { lv: 3, name: "🏃 꾸준함", band: 1, q: "주 1~2회", ratio: 90, desc: "질 훈련 주 1~2회, 한 번에 짧게. 역치(T) 훈련을 처음 시작해요." },
+    { lv: 1, name: "🌱 출발", band: 0, q: "주 0~1회", ratio: 95, desc: "운동 습관 만들기. 쉬운 강도(Z1~Z2)로 시간을 늘려요. 질 훈련은 Z3 지속주만 — Z4·Z5는 넣지 않아요." },
+    { lv: 2, name: "🚶 리듬 찾기", band: 0, q: "주 1회", ratio: 92, desc: "주 1회 가벼운 질 훈련(Z3 지속주·템포). 역치(Z4)·인터벌(Z5)은 아직 넣지 않아요." },
+    { lv: 3, name: "🏃 꾸준함", band: 1, q: "주 1~2회", ratio: 90, desc: "질 훈련 주 1~2회, Z3(템포·지속주)로 길이를 늘려요. 역치(Z4)·인터벌(Z5)은 레벨 4부터." },
     { lv: 4, name: "🔥 탄력", band: 1, q: "주 1~2회", ratio: 88, desc: "역치와 짧은 인터벌을 번갈아. 한 번의 고강도 양은 아직 적게." },
     { lv: 5, name: "💪 파워업", band: 2, q: "주 2회", ratio: 85, desc: "질 훈련 주 2회(역치 + 인터벌). 롱 세션으로 지구력을 키워요." },
     { lv: 6, name: "⚡ 스피드", band: 2, q: "주 2회", ratio: 82, desc: "질 훈련 주 2회, 세트 길이를 늘려요. 레이스 페이스 연습 시작." },
@@ -1249,13 +1250,13 @@
     };
     const swimMain = (h, ty) => {
       const css = S ? ` (${fmt(S.css)}/100m)` : "";
-      const L0 = ({ CSS: [100, 200, 150, 50], CSS_long: [400, 500, 300], VO2: [100, 50, 75], Speed: [50, 25], OW: [0], Nor: [300, 200, 400] }[ty] || [200, 100])[Math.abs(V) % ({ CSS: 4, CSS_long: 3, VO2: 3, Speed: 2, OW: 1, Nor: 3 }[ty] || 2)];
+      const L0 = ({ EN: [200, 300, 100], CSS: [100, 200, 150, 50], CSS_long: [400, 500, 300], VO2: [100, 50, 75], Speed: [50, 25], OW: [0], Nor: [300, 200, 400] }[ty] || [200, 100])[Math.abs(V) % ({ EN: 3, CSS: 4, CSS_long: 3, VO2: 3, Speed: 2, OW: 1, Nor: 3 }[ty] || 2)];
       if (!L0) return `${mm(h)} 연속 (CSS +2~4초) — 사이팅 연습`;
       const n = Math.max(2, Math.round(h / L0)), len = Math.round(h / n / 25) * 25;
       const rv = Math.floor(Math.abs(V) / 4) % 3; // 휴식 시간도 블록마다 바꿔요
-      const how = { CSS: `CSS 페이스${css}, 휴식 ${["15초", "10초", "20초"][rv]}`, CSS_long: `CSS +1~3초, 휴식 ${["20초", "30초", "15초"][rv]}`, VO2: `CSS −3~6초, 휴식 ${["30초", "40초", "20초"][rv]}`, Speed: `전력, 휴식 ${["40초", "60초", "30초"][rv]}`, Nor: `CSS +1~2초, 휴식 ${["20초", "15초", "10초"][rv]}` }[ty] || `CSS 페이스${css}, 휴식 ${["15초", "10초", "20초"][rv]}`;
+      const how = { EN: `CSS +3~6초 (Z3 — 숨이 조금 차는 정도), 휴식 ${["15초", "20초", "10초"][rv]}`, CSS: `CSS 페이스${css}, 휴식 ${["15초", "10초", "20초"][rv]}`, CSS_long: `CSS +1~3초, 휴식 ${["20초", "30초", "15초"][rv]}`, VO2: `CSS −3~6초, 휴식 ${["30초", "40초", "20초"][rv]}`, Speed: `전력, 휴식 ${["40초", "60초", "30초"][rv]}`, Nor: `CSS +1~2초, 휴식 ${["20초", "15초", "10초"][rv]}` }[ty] || `CSS 페이스${css}, 휴식 ${["15초", "10초", "20초"][rv]}`;
       const fmtV = ["", " — 2개마다 1개는 2초 더 빠르게", " — 4개씩 묶어 점점 빠르게 (디센딩)", " — 패들 끼고 (팔 위주)", " — 마지막 2개는 전력"][Math.floor(Math.abs(V) / 12) % 5];
-      return `${len}m × ${n}회 ${how}${fmtV}`;
+      return `${len}m × ${n}회 ${how}${ty === "EN" ? "" : fmtV}`;
     };
     let hiSum = 0, tot = 0;
     if (disc === "brick") {
@@ -1363,7 +1364,12 @@
       0: { run: { I: "Fartlek", R: "Hills", T_cruise: "Steady", T_tempo: "Steady", Nor: "Fartlek", Double: "Fartlek" }, bike: { VO2: "Tempo", Ana: "Tempo", Thr: "Tempo", Nor: "Tempo", Double: "Tempo" }, swim: { VO2: "CSS_long", Speed: "CSS_long", Nor: "CSS_long" } },
       3: { run: { I: "T_cruise" }, bike: { VO2: "SS", Ana: "Thr" }, swim: { VO2: "CSS", Speed: "CSS" } },
     };
-    const lmap = (opt.level && opt.level.band === 0) || cbw ? LMAP[0] : opt.level && opt.level.lv === 3 ? LMAP[3] : null; // 입문(1~2레벨)·복귀 주 / 3레벨
+    // 🌱 레벨 1~3(출발·리듬 찾기·꾸준함)은 Z3까지만: Z4(역치)·Z5(VO2max) 훈련을 Z3 이하 훈련으로 바꿔요
+    const Z3MAP = { run: { T_tempo: "Steady", T_cruise: "Steady", I: "Steady", R: "Steady", Hills: "Steady", Fartlek: "Steady", Nor: "Steady", Double: "Steady", Test: "Steady" },
+      bike: { Thr: "Tempo", OU: "Tempo", VO2: "Tempo", Ana: "Tempo", SS: "Tempo", Nor: "Tempo", Double: "Tempo", Race: "Tempo", Test: "Tempo" },
+      swim: { CSS: "EN", CSS_long: "EN", VO2: "EN", Speed: "EN", Nor: "EN", Test: "EN" } };
+    const z3only = !!(opt.level && opt.level.lv <= 3 && !p.allowHi); // 본인이 원해서 켠 경우(allowHi)만 Z4·Z5를 넣어요
+    const lmap = z3only ? Z3MAP : (opt.level && opt.level.band === 0) || cbw ? LMAP[0] : opt.level && opt.level.lv === 3 ? LMAP[3] : null; // 입문(1~2레벨)·복귀 주 / 3레벨
     if (lmap) Object.keys(plan).forEach((d) => { const [x, t] = plan[d], m = lmap[x]; if (m && m[t]) plan[d] = [x, m[t]]; });
     if (opt.level && opt.level.band <= 1) Object.keys(plan).forEach((d) => { if (plan[d][1] === "Double") plan[d] = [plan[d][0], "Nor"]; });
     { // 한 주 안에서 같은 질 훈련이 두 번 나오지 않게
@@ -1741,10 +1747,15 @@
       const [disc, type] = u.p;
       const minutes = minsU[u.k];
       // v: 주차·요일마다 다른 변형을 고르는 번호 → 매주·매일 다른 세션
-      const x = workout(disc, type, { min: minutes, prog, ctx, goal, phase, weekKm, dist: sessDist[u.k] || null, v: vOf(u.d, u.s), noFinish: ratioWeek });
+      let ty = type; // 실제로 쓰는 훈련 종류 (Z3 안전장치로 바뀔 수 있어요)
+      let x = workout(disc, type, { min: minutes, prog, ctx, goal, phase, weekKm, dist: sessDist[u.k] || null, v: vOf(u.d, u.s), noFinish: ratioWeek, z3: z3only });
+      if (z3only && x.lvl >= 4 && disc !== "brick") { // 안전장치: 그래도 Z4 이상이 나오면 Z3 훈련으로
+        const safe = { run: "Steady", bike: "Tempo", swim: "EN" }[disc];
+        if (safe) { ty = safe; } if (safe) x = workout(disc, safe, { min: minutes, prog, ctx, goal, phase, weekKm, dist: sessDist[u.k] || null, v: vOf(u.d, u.s), noFinish: ratioWeek, z3: z3only });
+      }
       const hp = hiPlan[u.k];
       if (hp) { // 비율로 정한 고강도 거리에 맞춰 메인 세트를 다시 짜요
-        const q = ratioSteps(disc, type, sessDist[u.k], hp, ctx, x, vOf(u.d, u.s));
+        const q = ratioSteps(disc, ty, sessDist[u.k], hp, ctx, x, vOf(u.d, u.s));
         if (q) { x.steps = q.steps; x.hiFrac = q.frac; x.hiText = q.text; }
       } else if (ratioWeek && EASY.concat("Long").includes(type)) x.hiFrac = 0;
       const rdu = !u.s && RD[u.d];
@@ -1752,7 +1763,7 @@
       if (x.lvl >= 4 && disc !== "brick" && !["Test", "Opener", "Double"].includes(type) && !(rdu && rdu.kind === "rest")) {
         const at = (ALT2[disc] || {})[type];
         if (at) {
-          const y = workout(disc, at, { min: minutes, prog, ctx, goal, phase, weekKm, dist: sessDist[u.k] || null, v: vOf(u.d, u.s, 1), noFinish: ratioWeek });
+          const y = workout(disc, at, { min: minutes, prog, ctx, goal, phase, weekKm, dist: sessDist[u.k] || null, v: vOf(u.d, u.s, 1), noFinish: ratioWeek, z3: z3only });
           if (hp) { const q2 = ratioSteps(disc, at, sessDist[u.k], hp, ctx, y, vOf(u.d, u.s, 1)); if (q2) { y.steps = q2.steps; y.hiText = q2.text; } }
           x.alt = { name: y.name, tag: y.tag, lvl: y.lvl, steps: y.steps, point: y.point, why: ALT_WHY[at] || "같은 고강도 양을 다른 방식으로" };
           x.recWhy = `${PHASES[phase] ? PHASES[phase].name + " — " : ""}${PHASES[phase] ? PHASES[phase].focus : ""}에 가장 잘 맞아요`;
@@ -1958,6 +1969,8 @@
       if (cw.bike && progB && cw.bike.ftp !== ctx.bike.ftp) r.notes.unshift(`🎯 이번 주 자전거 파워는 FTP ${cw.bike.ftp}W 기준이에요 — 지금 ${Math.round(progB.now)}W에서 목표 ${Math.round(progB.need)}W까지 4주마다 약 ${Math.round(progB.step)}W씩 올려요.`);
       if (progT && i === 0) r.notes.unshift(`🎯 목표 ${fmt(Math.round(gT))} — 지금 실력 예상 ${fmt(Math.round(progT.T0))}보다 ${Math.round((1 - progT.f) * 100)}% 빨라야 해서 수영·자전거·달리기 페이스를 같이 단계적으로 올려요.`);
       if (wk.comeback) r.notes.unshift(`🔄 복귀 ${wk.comeback.k}/${wk.comeback.n}주차 (${wk.comeback.name}) — 평소 양의 약 ${wk.comeback.pct}%. ${wk.comeback.easy ? "이번 주는 강한 훈련 없이 쉬운 강도(Z1~Z2)로만 몸을 다시 깨워요." : "가벼운 질 훈련(템포·언덕·파틀렉) 1회만 넣어요. 인터벌은 복귀가 끝나고 시작해요."} 페이스·파워는 쉰 기간만큼 낮춰 잡았고, 4주마다 다시 올라가요.`);
+      if (level && level.lv <= 3 && p.allowHi && i === 0) r.notes.push(`⚠️ 레벨 ${level.lv}이지만 본인 선택으로 Z4·Z5 훈련을 넣었어요. 몸이 아직 강한 훈련에 익숙하지 않은 단계라 Z3까지만 하는 걸 적극 추천해요 — 통증·피로가 쌓이면 문진표에서 다시 'Z3까지만'으로 바꿔 주세요.`);
+      if (level && level.lv <= 3 && !p.allowHi && i === 0) r.notes.push(`🌱 레벨 ${level.lv}(${level.name})은 Z3까지만 훈련해요 — Z4(역치)·Z5(최대 산소) 훈련은 레벨 4부터 넣어요. 이유: ① 지금 단계에서 실력이 가장 많이 느는 건 쉬운 강도(Z1~Z2)로 쌓는 시간이에요 — 심장·혈관·근육 속 에너지 공장(미토콘드리아)이 이 강도에서 가장 많이 자라요. ② 심폐는 몇 주 만에 좋아지지만 힘줄·인대·뼈는 몇 달이 걸려서, 강한 훈련을 일찍 넣으면 숨은 버텨도 몸이 다치기 쉬워요(정강이·무릎·아킬레스건). ③ Z4·Z5는 회복에 2~3일이 걸려 다음 운동을 망치고, 꾸준함이 무너지기 쉬워요. ④ Z3(말은 짧게 할 수 있는 정도)만으로도 처음 몇 달은 기록이 충분히 좋아져요. 주간 거리를 늘리거나 기록이 좋아져 레벨 4가 되면 강한 훈련이 자동으로 들어가요.`);
       if (level && lowTarget > lowTarget1 && i === 0) r.notes.push(`🏅 레벨 ${level.lv}(${level.name})이라 고강도 비중을 최대 ${LEVEL_HI_MAX[level.lv]}%까지만 넣어요 — 레벨이 오르면 강도도 같이 올라가요.`);
       if (prog && prog.pace && ["r4", "taper", "race", "peak", "build2"].includes(wk.key)) r.notes.push(`🏁 목표 레이스 페이스 ${fmt(prog.pace)}/km — 레이스 특화 시기라 M·T 세션 일부와 오프너를 이 페이스로 연습해요.`);
       return { ...wk, ...r, sig, hardSigs, total: m.tot, lowPct: m.low, lowTarget: wkLow, userLow: lowTarget1, levelCap: lowTarget > lowTarget1, byDist: m.byDist, vdotWeek: cw.run ? cw.run.vdot : null, tss: r.sessions.reduce((a, s) => a + (s.tss || 0), 0) };

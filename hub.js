@@ -116,7 +116,7 @@
   async function refresh() { acts = await TS.listActivities(); renderCurrent(); }
   window.addEventListener("ts:activities", refresh);
   window.addEventListener("ts:profile", renderCurrent);
-  window.addEventListener("ts:auth", () => { if (current === "me") renderMe(); });
+  window.addEventListener("ts:auth", () => { if (current === "me") renderMe(); else if (current === "home") renderHome(); });
   window.addEventListener("ts:strava", () => { if (current === "me") renderMe(); });
   window.addEventListener("ts:sessions", () => { if (current === "home") renderHome(); });
   window.addEventListener("ts:journal", () => { if (current === "home") renderHome(); });
@@ -337,7 +337,8 @@
     const now = new Date();
     const h = now.getHours();
     const greet = h < 5 ? "늦은 밤이에요" : h < 11 ? "좋은 아침이에요" : h < 17 ? "좋은 오후예요" : "좋은 저녁이에요";
-    const name = p && p.nickname ? `${esc(p.nickname)}님, ` : "";
+    const nick = (TS.auth && TS.auth.member && TS.auth.member.nickname) || (p && p.nickname) || ""; // 로그인했으면 계정 닉네임
+    const name = nick ? `${esc(nick)}님, ` : "";
     const mon = mondayOf(now);
     const { data: weekSess } = await TS.mine(db.from(TS.TABLE).select("*")).gte("date", iso(mon)).lte("date", iso(addDays(mon, 6)))
       .order("date").order("start_time", { nullsFirst: true });
@@ -711,6 +712,7 @@
         <div class="hint">${p && p.sport ? `${p.sport} 선수` : "종목을 골라주세요"}</div>
         <div class="mt"><span class="lvl">Lv.${lv.n} ${lv.name}</span></div>
         <div class="progress mt"><i style="width:${lv.pct}%"></i></div>
+        <button type="button" class="pill mt" id="meLvTable">🏅 레벨 기준표 보기</button>
         <div class="hint" style="margin-top:6px">${lv.next ? `다음 레벨(${lv.next[1]})까지 ${(lv.next[0] - s.total).toFixed(1)}km` : "최고 레벨이에요!"}</div>
         <div class="trio">
           <div><b class="num">${s.total.toFixed(1)}</b><span>총 km</span></div>
@@ -817,6 +819,7 @@
   function bindAvatar() {
     const pick = () => { const b = $("meAvPick"); b.hidden = !b.hidden; }; // 카메라 · 앨범 · 파일 중 고르기
     $("meAvatar").onclick = pick;
+    if ($("meLvTable")) $("meLvTable").onclick = () => TS.openLevel && TS.openLevel();
     $("meBody").querySelectorAll("[data-avp]").forEach((b) => { b.onclick = () => $(b.dataset.avp).click(); });
     ["meAvCam", "meAvAlb"].forEach((id) => { $(id).onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; $("meAvPick").hidden = true; setAvatar(f); }; });
     if ($("meAvatarDel")) $("meAvatarDel").onclick = removeAvatar;
