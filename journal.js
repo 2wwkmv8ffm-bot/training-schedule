@@ -93,9 +93,9 @@
     function draw() {
       const R = readiness(e);
       d.innerHTML = `<div class="jn" style="padding:16px;max-height:90vh;overflow:auto;display:grid;gap:12px">
-        <div class="spread"><button type="button" class="link" data-nav="-1" style="font-size:20px">‹</button>
-          <b style="font-size:17px">📝 ${dt.getMonth() + 1}월 ${dt.getDate()}일 (${"일월화수목금토"[dt.getDay()]}) 일지</b>
-          <span><button type="button" class="link" data-nav="1" style="font-size:20px">›</button> <button type="button" class="link" data-x="1" style="font-size:20px">✕</button></span></div>
+        <div class="spread"><button type="button" class="jn-btn" data-nav="-1" aria-label="이전 날">‹</button>
+          <b style="font-size:16px;flex:1;text-align:center;min-width:0">📝 ${dt.getMonth() + 1}월 ${dt.getDate()}일 (${"일월화수목금토"[dt.getDay()]}) 일지</b>
+          <span style="display:flex;gap:6px;flex:none"><button type="button" class="jn-btn" data-nav="1" aria-label="다음 날">›</button> <button type="button" class="jn-btn" data-x="1" aria-label="닫기">✕</button></span></div>
         <section><div class="eyebrow">💪 오늘 몸 상태</div>
           <div class="jn-cond">${[1, 2, 3, 4, 5].map((v) => `<button type="button" class="${e.condition === v ? "on" : ""}" data-set="condition" data-v="${v}"><span>${COND[v]}</span><small>${COND_T[v]}</small></button>`).join("")}</div>
           <div class="jn-row"><span>😴 잠</span><div class="chips">${chips("sleep", [5, 6, 7, 8, 9], ["5시간↓", "6시간", "7시간", "8시간", "9시간↑"])}</div></div>
