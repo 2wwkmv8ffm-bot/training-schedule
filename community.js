@@ -103,6 +103,100 @@
     toast(on ? "팔로우를 취소했어요" : "👣 팔로우했어요 — 친구 탭에서 이 사람 글이 보여요");
   }
 
+  // ---------- 🚩 신고 · 🚫 차단 (schema_report.sql 실행 후) ----------
+  const blocked = new Set();
+  let blockOk = true;
+  const notBlocked = (x) => !blocked.has(x.user_id);
+  async function loadBlocks() {
+    if (!blockOk || !me()) return;
+    const { data, error } = await db.from("user_blocks").select("blocked").eq("blocker", me());
+    if (error) { blockOk = false; return; }
+    blocked.clear(); (data || []).forEach((r) => blocked.add(r.blocked));
+  }
+  const REASONS = ["스팸·광고", "욕설·괴롭힘", "음란·부적절한 사진", "개인정보 노출", "거짓 정보", "기타"];
+  function openMore(postId, uid) {
+    let d = $("moreDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "moreDlg"; document.body.appendChild(d); d.onclick = (e) => { if (e.target === d) d.close(); }; }
+    const owner = TS.isOwner && TS.isOwner(me());
+    d.innerHTML = `<div style="padding:18px;display:grid;gap:12px;max-width:360px">
+      <div class="spread"><b>이 글에 대해</b><button type="button" class="link" data-m="x" style="font-size:20px">✕</button></div>
+      <div class="eyebrow" style="margin:0">🚩 신고하기 — 이유를 골라 주세요</div>
+      <div class="chips">${REASONS.map((r) => `<button type="button" class="chip" data-rep="${esc(r)}">${esc(r)}</button>`).join("")}</div>
+      <button type="button" class="pill" data-m="block" style="color:#dc2626">🚫 이 사람 차단 — 서로의 글이 안 보여요</button>
+      ${owner ? '<button type="button" class="pill" data-m="adel" style="color:#dc2626">🛡️ (운영자) 이 글 지우기</button>' : ""}
+      <p class="hint" style="margin:0">신고는 운영자에게만 전달되고, 신고한 사람은 알려지지 않아요. 24시간 안에 확인해요.</p>
+      <p class="warn" id="moreMsg" style="margin:0"></p></div>`;
+    const msg = (t) => { d.querySelector("#moreMsg").textContent = t; };
+    d.querySelector('[data-m="x"]').onclick = () => d.close();
+    d.querySelectorAll("[data-rep]").forEach((b) => { b.onclick = async () => {
+      const { error } = await db.from("post_reports").insert({ post_id: postId, reporter: me(), reason: b.dataset.rep });
+      if (error) { msg(/relation|schema cache/i.test(error.message) ? "신고 기능은 서버 설정 후에 쓸 수 있어요." : "신고하지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
+      d.close(); toast("🚩 신고했어요. 운영자가 확인할게요");
+    }; });
+    d.querySelector('[data-m="block"]').onclick = async () => {
+      if (!await TS.ask("이 사람을 차단할까요? 이 사람의 글과 댓글이 더 이상 보이지 않아요. (나 탭 → 차단 목록에서 풀 수 있어요)", "차단")) return;
+      const { error } = await db.from("user_blocks").insert({ blocker: me(), blocked: uid });
+      if (error && !/duplicate/i.test(error.message)) { msg(/relation|schema cache/i.test(error.message) ? "차단 기능은 서버 설정 후에 쓸 수 있어요." : "차단하지 못했어요."); return; }
+      blocked.add(uid); d.close(); toast("🚫 차단했어요"); render();
+    };
+    const ad = d.querySelector('[data-m="adel"]');
+    if (ad) ad.onclick = async () => {
+      if (!await TS.ask("운영자 권한으로 이 글을 지울까요?", "삭제")) return;
+      const { error } = await db.from("posts").delete().eq("id", postId);
+      if (error) { msg("지우지 못했어요 (서버 설정 확인)"); return; }
+      d.close(); toast("🛡️ 글을 지웠어요"); render();
+    };
+    if (!d.open) d.showModal();
+  }
+  TS.blocks = { list: async () => { const { data } = await db.from("user_blocks").select("blocked").eq("blocker", me()); const ids = (data || []).map((r) => r.blocked); if (!ids.length) return []; const { data: ms } = await db.from("members").select("id,nickname").in("id", ids); return ids.map((id) => ({ id, nickname: ((ms || []).find((m) => m.id === id) || {}).nickname || "?" })); },
+    unblock: async (uid) => { await db.from("user_blocks").delete().eq("blocker", me()).eq("blocked", uid); blocked.delete(uid); } };
+
+  // ---------- 🔔 알림: 내 글에 좋아요·댓글이 달리면 (schema_notify.sql 실행 후) ----------
+  const notif = { ok: true, unread: 0, rows: [] };
+  async function loadNotifs() {
+    if (!notif.ok || !me()) { notif.unread = 0; navDot(); return; }
+    const { data, error } = await db.from("notifications").select("id,actor_id,kind,post_id,body,read,created_at").eq("user_id", me()).order("created_at", { ascending: false }).limit(50);
+    if (error) { notif.ok = false; notif.unread = 0; navDot(); return; } // 표가 아직 없어요
+    notif.rows = data || [];
+    notif.unread = notif.rows.filter((r) => !r.read).length;
+    const ids = [...new Set(notif.rows.map((r) => r.actor_id).filter((x) => x && !fr.names[x]))];
+    if (ids.length) { const { data: ms } = await db.from("members").select("id,nickname,sport,avatar_url").in("id", ids); (ms || []).forEach((m) => { fr.names[m.id] = m; }); }
+    navDot();
+  }
+  function navDot() { // 아래 '커뮤니티' 탭에 빨간 점
+    const t = document.querySelector('[data-tab="community"]');
+    if (!t) return;
+    let dot = t.querySelector(".nav-dot");
+    if (notif.unread && !dot) { dot = document.createElement("i"); dot.className = "nav-dot"; t.style.position = "relative"; t.appendChild(dot); }
+    if (dot) { dot.hidden = !notif.unread; dot.textContent = notif.unread > 9 ? "9+" : String(notif.unread); }
+  }
+  async function openNotifs() {
+    let d = $("notifDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "notifDlg"; d.className = "sheet-dlg"; document.body.appendChild(d); d.onclick = (e) => { if (e.target === d) d.close(); }; }
+    await loadNotifs();
+    const off = TS.auth && TS.auth.member && TS.auth.member.notify_on === false;
+    d.innerHTML = `<div style="padding:16px;max-height:85vh;overflow:auto;display:grid;gap:10px">
+      <div class="spread"><b style="font-size:17px">🔔 알림</b><button type="button" class="link" data-nx="x" style="font-size:20px">✕</button></div>
+      ${!notif.ok ? '<p class="hint" style="margin:0">알림 기능은 서버 설정(SQL 실행) 후에 켜져요.</p>'
+        : off ? '<p class="hint" style="margin:0">🔕 알림을 꺼 두었어요. 나 탭 → 계정에서 다시 켤 수 있어요.</p>' : ""}
+      ${notif.rows.length ? notif.rows.map((r) => { const m = fr.names[r.actor_id] || {};
+        return `<button type="button" class="pr-row" data-npost="${esc(r.post_id || "")}" style="text-align:left;width:100%;background:${r.read ? "transparent" : "var(--soft, #eff6ff)"};border:0;border-radius:10px;padding:8px">
+          <span>${avatar(m, 30)} <b>${nameTag(m.nickname, r.actor_id)}</b>님이 ${r.kind === "like" ? "내 글을 좋아해요 ❤️" : `댓글을 남겼어요 💬 <span class="hint">${esc(r.body || "")}</span>`}</span>
+          <span class="hint">${ago(r.created_at)}</span></button>`; }).join("")
+        : notif.ok ? '<p class="hint" style="margin:0;text-align:center">아직 알림이 없어요.</p>' : ""}</div>`;
+    d.querySelector('[data-nx="x"]').onclick = () => d.close();
+    d.querySelectorAll("[data-npost]").forEach((b) => { b.onclick = async () => {
+      const id = b.dataset.npost; if (!id) return;
+      if (!findPost(id)) { const { data } = await db.from("posts").select(SEL).eq("id", id).maybeSingle(); if (data) clean([data]).forEach((p) => { extra[p.id] = p; }); }
+      d.close(); openPost(id);
+    }; });
+    if (!d.open) d.showModal();
+    const unread = notif.rows.filter((r) => !r.read).map((r) => r.id);
+    if (unread.length) { await db.from("notifications").update({ read: true }).in("id", unread); notif.rows.forEach((r) => { r.read = true; }); notif.unread = 0; navDot(); const bb = $("comBell"); if (bb) bb.innerHTML = "🔔 알림"; }
+  }
+  window.addEventListener("ts:auth", () => { notif.ok = true; loadNotifs(); });
+  setInterval(() => { if (document.visibilityState === "visible") loadNotifs(); }, 120000); // 2분마다 새 알림 확인
+
   // ---------- 친구 ----------
   async function loadFriends() {
     const uid = me();
@@ -151,6 +245,7 @@
     }
     if (!feed.length) box.innerHTML = '<p class="hint">불러오는 중…</p>';
     await loadFriends();
+    await loadNotifs();
     await loadFollows([]);
     const circle = [...new Set([me(), ...fr.accepted, ...fol.following])]; // 친구 + 내가 팔로우한 사람
     let q = db.from("posts").select(SEL).order("created_at", { ascending: false }).limit(scope === "hot" ? 60 : 30);
@@ -170,6 +265,8 @@
     stories = clean(st.data);
     board = rank(bd.data || []);
     await loadFollows([...feed, ...stories].map((p) => p.user_id).concat(board.map((o) => o.id)));
+    await loadBlocks(); // 🚫 내가 차단한 사람 글은 빼요
+    feed = feed.filter(notBlocked); stories = stories.filter(notBlocked); board = board.filter((o) => !blocked.has(o.id));
     paint(box, main.error);
   }
   // 이번 주 친구 랭킹: 운동 시간 기준 (종목이 달라도 공평하게) + 거리
@@ -191,6 +288,7 @@
     const ring = Object.keys(byUser).sort((a, b) => (a === me() ? -1 : b === me() ? 1 : 0));
     const grid = scope === "hot" || scope === "saved";
     box.innerHTML = `
+      <div class="spread" style="margin:0 0 6px"><span></span><button type="button" class="pill" id="comBell">🔔 알림${notif.unread ? ` <span class="zb z5">${notif.unread}</span>` : ""}</button></div>
       <div class="story-bar">
         <button type="button" class="story me" id="comStoryAdd"><span class="ring add">${avatar(TS.auth && TS.auth.member, 58)}<i>＋</i></span><b>내 스토리</b></button>
         ${ring.map((u) => { const m = byUser[u][0].members || {}; return `<button type="button" class="story" data-story="${esc(u)}"><span class="ring">${avatar(m, 58)}</span><b>${esc(u === me() ? "나" : m.nickname || "?")}</b></button>`; }).join("")}
@@ -224,6 +322,7 @@
     if ($("comTagX")) $("comTagX").onclick = () => { tag = null; render(); };
     $("comFriends").onclick = openFriends;
     $("comMe").onclick = () => openProfile(me());
+    $("comBell").onclick = openNotifs;
     bindPosts(box);
     box.querySelectorAll("[data-open]").forEach((b) => { b.onclick = () => openPost(b.dataset.open); });
     drawMaps(box);
@@ -240,6 +339,7 @@
     root.querySelectorAll("[data-cmt]").forEach((b) => { b.onclick = () => toggleComments(b.dataset.cmt); });
     root.querySelectorAll("[data-delpost]").forEach((b) => { b.onclick = () => deletePost(b.dataset.delpost); });
     root.querySelectorAll("[data-pin]").forEach((b) => { b.onclick = () => togglePin(b.dataset.pin); });
+    root.querySelectorAll("[data-more]").forEach((b) => { b.onclick = () => openMore(b.dataset.more, b.dataset.uid); });
     root.querySelectorAll("[data-share]").forEach((b) => { b.onclick = () => openShare(findPost(b.dataset.share)); });
     root.querySelectorAll("[data-save]").forEach((b) => { b.onclick = () => toggleSave(b.dataset.save); });
     root.querySelectorAll("[data-tag]").forEach((b) => { b.onclick = (e) => { e.preventDefault(); closeOverlays(); tag = b.dataset.tag; if (scope === "saved") scope = "all"; render(); }; });
@@ -535,7 +635,7 @@
       <div class="post-hd"><button type="button" class="link" data-prof="${esc(p.user_id)}" style="padding:0">${avatar(m, 36)}</button>
         <div style="flex:1;min-width:0"><button type="button" class="link nm" data-prof="${esc(p.user_id)}">${nameTag(m.nickname || "알 수 없음", p.user_id)}</button>${badge(p.user_id)}${!mine && fol.ok && !fol.following.has(p.user_id) && !fr.accepted.includes(p.user_id) ? ` <button type="button" class="link fol-btn" data-follow="${esc(p.user_id)}">팔로우</button>` : ""}${mine ? ' <span class="hint">(나)</span>' : ""}
           <div class="hint">${a && SP[a.sport] ? `${SP[a.sport].icon} ${SP[a.sport].name} · ` : ""}${VIS[p.visibility] || ""}</div></div>
-        ${mine ?`<button type="button" class="link" data-pin="${id}">${pins.has(String(p.id)) ? "고정 해제" : "📌 고정"}</button> <button type="button" class="link" data-delpost="${id}">삭제</button>` : ""}</div>
+        ${mine ?`<button type="button" class="link" data-pin="${id}">${pins.has(String(p.id)) ? "고정 해제" : "📌 고정"}</button> <button type="button" class="link" data-delpost="${id}">삭제</button>` : `<button type="button" class="link" data-more="${id}" data-uid="${esc(p.user_id)}" aria-label="신고·차단" style="font-size:18px;padding:0 6px">⋯</button>`}</div>
       ${photos.length ? `<div class="car-wrap" data-dbl="${id}"><div class="car">${photos.map((ph) => `<img src="${esc(pubUrl(ph))}" alt="운동 사진" loading="lazy" />`).join("")}</div>
         ${photos.length > 1 ? `<div class="car-dots">${photos.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div><span class="car-n">${photos.length}장</span>` : ""}</div>` : ""}
       ${a ? `<div class="post-act-card"${photos.length ? "" : ` data-dbl="${id}"`}><div class="post-title">${SP[a.sport] ? SP[a.sport].icon + " " : ""}${esc(a.title || "")}</div>
@@ -607,7 +707,7 @@
     const { data, error } = await db.from("post_comments").select("id,body,created_at,user_id,members!post_comments_user_id_fkey(nickname,avatar_url)").eq("post_id", id).order("created_at");
     if (error) { box.innerHTML = `<p class="hint">댓글을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요</p>`; return; }
     const owner = (findPost(id) || {}).user_id === me();
-    box.innerHTML = (data || []).map((c) => `<div class="cmt">${avatar(c.members, 26)}<div><b>${esc((c.members || {}).nickname || "?")}</b> ${esc(c.body)}
+    box.innerHTML = (data || []).filter(notBlocked).map((c) => `<div class="cmt">${avatar(c.members, 26)}<div><b>${esc((c.members || {}).nickname || "?")}</b> ${esc(c.body)}
         <span class="hint">${ago(c.created_at)}</span>${c.user_id === me() || owner ? ` <button type="button" class="link" data-delc="${esc(c.id)}">삭제</button>` : ""}</div></div>`).join("") +
       `<div class="emo-row">${["🔥", "👏", "💪", "😍", "👍", "🏃"].map((x) => `<button type="button" data-emo="${x}">${x}</button>`).join("")}</div><form class="cmt-form"><input maxlength="500" placeholder="댓글 달기…" required /><button type="submit" class="primary pill">게시</button></form>`;
     box.querySelectorAll("[data-emo]").forEach((b) => { b.onclick = () => { const i = box.querySelector("form input"); i.value += b.dataset.emo; i.focus(); }; });

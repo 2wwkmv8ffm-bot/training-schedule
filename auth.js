@@ -44,6 +44,34 @@
     const { data: made } = await db.from("members").insert({ id: A.user.id, nickname: nick.slice(0, 20), sport: p && p.sport }).select().single();
     A.member = made || null;
   }
+  // 💎 요금제 (유료 서비스 준비) — PAID_ON 을 true 로 바꾸면 프로 기능에 잠금이 걸려요. 지금은 false = 모두 무료
+  const PAID_ON = false;
+  const PRO_FEATURES = { // 나중에 유료로 돌릴 수 있는 기능 (이름: 화면에 보일 설명)
+    yearPlan: "연간 계획 · 3개월 계획",
+    coachHarder: "코치 맞춤 강도 조절",
+    racePredict: "대회 기록 예측",
+    planVariants: "계획 B안(다른 훈련 방식)",
+  };
+  const plan = { tier: "free", until: null };
+  async function loadPlan() {
+    plan.tier = "free"; plan.until = null;
+    if (!A.user) return;
+    const { data, error } = await db.from("subscriptions").select("plan,until").eq("user_id", A.user.id).maybeSingle();
+    if (error || !data) return; // 표가 없거나 기록이 없으면 무료
+    if (data.plan === "pro" && (!data.until || new Date(data.until) > new Date())) { plan.tier = "pro"; plan.until = data.until; }
+  }
+  TS.plan = {
+    get tier() { return plan.tier; }, get until() { return plan.until; },
+    paidOn: PAID_ON, features: PRO_FEATURES,
+    isPro: () => plan.tier === "pro" || (A.member && TS.isOwner && TS.isOwner(A.user && A.user.id)),
+    // 프로 기능을 쓰기 전에 부르면 돼요: 쓸 수 있으면 true, 아니면 안내창을 띄우고 false
+    can(feature) {
+      if (!PAID_ON || !PRO_FEATURES[feature] || this.isPro()) return true;
+      TS.ask(`💎 '${PRO_FEATURES[feature]}'는 ZONE 프로 기능이에요.\n\n프로 요금제는 곧 열릴 예정이에요.`, "확인", "닫기");
+      return false;
+    },
+    reload: loadPlan,
+  };
   // 🔐 로그인 상태 유지: 켜 두면 다음에 앱을 열 때 바로 들어와요. 끄면 앱(브라우저)을 닫을 때 로그아웃돼요
   const KEEP_KEY = "training.keepLogin", OPEN_KEY = "zone.openNow";
   const keepOn = () => { try { return localStorage.getItem(KEEP_KEY) !== "0"; } catch (e) { return true; } };
@@ -70,9 +98,11 @@
     A.user = u || null;
     if (changed && u && wipeIfOtherAccount(u.id)) return;
     await loadMember();
+    await loadPlan().catch(() => {});
     A.ready = true;
     if (changed) await TS.setUser(A.user);
     window.dispatchEvent(new Event("ts:auth"));
+    if (A.user && $("authOv").classList.contains("show") && !/newpw/.test(mode)) close(); // 로그인되면 로그인 화면 닫기
   }
 
   // ---------- 화면 ----------
@@ -83,13 +113,21 @@
     $("authOv").classList.add("show");
     document.body.style.overflow = "hidden";
   }
-  function close() { $("authOv").classList.remove("show"); document.body.style.overflow = ""; }
+  // 🔒 ZONE은 로그인해야 쓸 수 있어요 — 로그인 전에는 로그인 화면을 닫을 수 없어요
+  function close() { if (!A.user) return; $("authOv").classList.remove("show"); document.body.style.overflow = ""; }
+  new MutationObserver(() => { // 다른 곳(홈 버튼·뒤로 가기)에서 로그인 화면을 닫아도 로그인 전이면 다시 열어요
+    const ov = $("authOv");
+    if (A.ready && !A.user && ov && !ov.classList.contains("show")) { if (!$("authBody").innerHTML.trim()) render(); ov.classList.add("show"); document.body.style.overflow = "hidden"; }
+  }).observe(document.getElementById("authOv"), { attributes: true, attributeFilter: ["class"] });
   const backUrl = () => location.origin + location.pathname; // 메일 링크를 누르면 이 앱으로 돌아와요
   function render(why = "") {
     if (mode === "reset" || mode === "find" || mode === "newpw") { renderHelp(why); return; }
     $("authBody").innerHTML = `
+      ${!A.user ? `<div style="text-align:center;margin:8px 0 14px"><img src="icon-192.png?v=3" width="64" height="64" alt="ZONE" style="border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.12)" />
+        <div style="font-size:15px;font-weight:700;margin-top:8px">내 기록에 맞춘 수영·자전거·러닝·철인3종 훈련</div>
+        <div class="hint" style="margin-top:4px">⏱️ 가입하는 데 5분도 안 걸려요</div></div>` : ""}
       <div class="wz-top"><h2 style="margin:0;flex:1">${mode === "login" ? "로그인" : "회원가입"}</h2>
-        <button type="button" class="pill" data-home="1">🏠 홈</button><button type="button" id="auClose">닫기</button></div>
+        ${A.user ? '<button type="button" class="pill" data-home="1">🏠 홈</button><button type="button" id="auClose">닫기</button>' : ""}</div>
       ${why ? `<div class="note" style="margin:0 0 12px">${esc(why)}</div>` : ""}
       <div class="seg"><button type="button" data-mode="login" class="${mode === "login" ? "on" : ""}">로그인</button>
         <button type="button" data-mode="signup" class="${mode === "signup" ? "on" : ""}">회원가입</button></div>
@@ -104,7 +142,7 @@
         ${mode === "login" ? `<div style="text-align:center;font-size:13px"><button type="button" class="link" data-mode="reset">비밀번호 찾기</button> · <button type="button" class="link" data-mode="find">이메일 찾기</button></div>` : ""}
       </form>
       <p class="hint">로그인하면 내 활동이 계정에 저장되고, 커뮤니티에서 친구 기록을 보고 좋아요·댓글을 남길 수 있어요. 기록의 공개 범위(전체·친구만·나만)는 직접 정해요.</p>`;
-    $("auClose").onclick = close;
+    if ($("auClose")) $("auClose").onclick = close;
     $("authBody").querySelectorAll("[data-mode]").forEach((b) => { b.onclick = () => { mode = b.dataset.mode; render(why); }; });
     $("auForm").onsubmit = submit;
   }
@@ -125,11 +163,11 @@
          <label>한 번 더<input name="pw2" type="password" minlength="6" autocomplete="new-password" required /></label>
          <button type="submit" class="primary" style="padding:13px">바꾸기</button>`;
     $("authBody").innerHTML = `
-      <div class="wz-top"><h2 style="margin:0;flex:1">${title}</h2><button type="button" id="auClose">닫기</button></div>
+      <div class="wz-top"><h2 style="margin:0;flex:1">${title}</h2>${A.user ? '<button type="button" id="auClose">닫기</button>' : ""}</div>
       ${why ? `<div class="note" style="margin:0 0 12px">${esc(why)}</div>` : ""}
       <form id="auForm" class="card" style="display:grid;gap:12px">${body}<p class="warn" id="auMsg" style="margin:0"></p>
         ${mode !== "newpw" ? `<div style="text-align:center;font-size:13px"><button type="button" class="link" data-mode="login">‹ 로그인으로</button></div>` : ""}</form>`;
-    $("auClose").onclick = close;
+    if ($("auClose")) $("auClose").onclick = close;
     $("authBody").querySelectorAll("[data-mode]").forEach((b) => { b.onclick = () => { mode = b.dataset.mode; render(); }; });
     $("auForm").onsubmit = async (e) => {
       e.preventDefault();
@@ -200,13 +238,16 @@
     await db.auth.signOut();
   }
   async function updateNickname(nick) {
-    if (!A.user || !nick) return;
+    if (!A.user || !nick) return "로그인이 필요해요.";
     const { data, error } = await db.from("members").update({ nickname: nick.slice(0, 20) }).eq("id", A.user.id).select().single();
-    if (!error) { A.member = data; window.dispatchEvent(new Event("ts:auth")); }
+    if (error) return "닉네임을 바꾸지 못했어요. 잠시 뒤 다시 시도해 주세요.";
+    A.member = data; window.dispatchEvent(new Event("ts:auth"));
+    return null;
   }
   Object.assign(A, { open, close, signOut, updateNickname, reloadMember: async () => { await loadMember(); window.dispatchEvent(new Event("ts:auth")); } });
 
   db.auth.onAuthStateChange((ev, s) => {
+    if (ev === "INITIAL_SESSION") return; // 처음 열 때는 아래 getSession에서 (탈퇴·유지 설정을 확인한 뒤) 처리해요
     setTimeout(() => setUser(s ? s.user : null), 0);
     if (ev === "PASSWORD_RECOVERY") setTimeout(() => open("newpw"), 300); // 비밀번호 찾기 메일 링크로 들어왔어요
   });
@@ -215,6 +256,10 @@
     let fresh = false; // 이번에 앱을 새로 열었는지 (새로고침이 아니라)
     try { fresh = !sessionStorage.getItem(OPEN_KEY); sessionStorage.setItem(OPEN_KEY, "1"); } catch (e) { /* 무시 */ }
     if (s && fresh && !keepOn()) { await db.auth.signOut({ scope: "local" }); s = null; } // 유지 안 함 → 다시 로그인
+    if (s) { // 탈퇴했거나 지워진 계정이면 남아 있는 로그인 정보를 지우고 로그인 화면으로
+      const { data: gu, error: ge } = await db.auth.getUser();
+      if ((ge && /not.*found|does not exist|invalid|jwt|403|401/i.test((ge.message || "") + (ge.status || ""))) || (!ge && !(gu && gu.user))) { await db.auth.signOut({ scope: "local" }); s = null; }
+    }
     await setUser(s ? s.user : null);
     // 로그인 안 했으면 앱을 열자마자 로그인 · 회원가입 화면
     if (!s && !/error_description=|type=recovery/.test(location.hash + location.search)) open("login");

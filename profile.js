@@ -215,7 +215,7 @@
 
   // ---------- 설정 화면 ----------
   // 종목마다 따로 저장하는 문진표 항목 (이름·몸무게·나이·심박 같은 신체 정보는 공통)
-  const SPORT_FIELDS = ["tests", "daysPerWeek", "days", "dayOpts", "weeklyHours", "sessionMin", "volume", "env", "records", "goal", "philosophy", "lowPct", "mafAdj", "races", "goalSetAt", "allowHi"];
+  const SPORT_FIELDS = ["tests", "daysPerWeek", "days", "dayOpts", "weeklyHours", "sessionMin", "volume", "env", "records", "goal", "philosophy", "lowPct", "mafAdj", "races", "goalSetAt", "allowHi", "stroke"];
   const pickSport = (p) => { const o = {}; SPORT_FIELDS.forEach((k) => { if (p[k] !== undefined) o[k] = clone(p[k]); }); return o; };
   // 지금 종목 설정은 보관하고, 바꿀 종목의 저장된 설정을 불러와요 (없으면 지금 설정을 그대로 시작점으로)
   function withSport(p, sport) {
@@ -366,7 +366,9 @@
       ${dayOptsCard()}
       <div class="card"><h3>주로 어디서 훈련하나요?</h3>
         ${discsOf(draft.sport).map((d) => `<div style="margin-bottom:12px"><div class="hint" style="margin-bottom:6px">${DISC[d].icon} ${DISC[d].name}</div>
-          <div class="chips">${ENV[d].map(([v, l]) => `<button type="button" class="chip${draft.env[d] === v ? " on" : ""}" data-env="${d}:${v}">${l}</button>`).join("")}</div></div>`).join("")}</div>`;
+          <div class="chips">${ENV[d].map(([v, l]) => `<button type="button" class="chip${draft.env[d] === v ? " on" : ""}" data-env="${d}:${v}">${l}</button>`).join("")}</div></div>`).join("")}</div>
+      ${discsOf(draft.sport).includes("swim") ? `<div class="card"><h3>🏊 주 종목(영법)은 무엇인가요?</h3><p class="hint" style="margin-top:0">고른 영법에 맞는 드릴 6가지를 매번 넣어 드려요.</p>
+        <div class="chips">${[["free", "자유형"], ["back", "배영"], ["breast", "평영"], ["fly", "접영"], ["im", "개인혼영(IM)"]].map(([v, l]) => `<button type="button" class="chip${(draft.stroke || "free") === v ? " on" : ""}" data-stroke="${v}">${l}</button>`).join("")}</div></div>` : ""}`;
   }
 
   function stepVolume() {
@@ -424,9 +426,9 @@
         <div style="display:grid;gap:8px">${Object.entries(E.PHIL).map(([k, v]) => `<button type="button" class="sport-card${draft.philosophy === k ? " selected" : ""}" data-phil="${k}" style="justify-items:start;text-align:left;padding:14px">
           <span class="nm" style="font-size:16px">${v.name}${k === "polarized" ? " <span class=\"lvl\">추천</span>" : ""}</span><span class="ds" style="line-height:1.6">${v.desc}</span></button>`).join("")}</div>
       </div>
-      <div class="card"><h3>⚖️ 강도 비율 (저강도 : 고강도)</h3>
+      <div class="card"><h3>⚖️ 강도 비율 (저강도 : 고강도)</h3>${(() => { if (!draft.lowPctTouched && recLow(draft) === 90 && (num(draft.lowPct) || 80) === 80) draft.lowPct = "90"; return recLow(draft) === 90 ? '<div class="note" style="margin:0 0 8px">🌱 지금 레벨 1~3이라 <b>90 : 10</b>을 추천해요 (기본으로 골라 뒀어요). 몸이 강한 훈련에 익숙해지기 전에는 쉬운 강도를 더 많이 쌓는 게 가장 빨리 늘고, 부상도 적어요. 레벨 4가 되면 80 : 20을 추천해요.</div>' : ""; })()}
         <p class="hint" style="margin-top:0">한 주 훈련 시간 중 쉬운 강도(Z1–Z2)와 힘든 강도(Z3 이상)의 비율이에요. 계획이 이 비율에 가장 가깝게 질 훈련 횟수를 맞춰요.</p>
-        <div class="chips">${[90, 85, 80, 75, 70].map((v) => `<button type="button" class="chip${(num(draft.lowPct) || 80) === v ? " on" : ""}" data-low="${v}">${v} : ${100 - v}${v === 80 ? " 추천" : ""}</button>`).join("")}</div>
+        <div class="chips">${[90, 85, 80, 75, 70].map((v) => `<button type="button" class="chip${(num(draft.lowPct) || 80) === v ? " on" : ""}" data-low="${v}">${v} : ${100 - v}${v === recLow(draft) ? " 추천" : ""}</button>`).join("")}</div>
         <div class="fields mt">${field("직접 입력 — 저강도", "lowPct", "%", "80")}</div>
         <p class="hint">${(() => { const l = num(draft.lowPct) || 80; return `지금: 저강도 <b>${l}%</b> · 고강도 <b>${100 - l}%</b> — ${l > 85 ? "부상 위험이 적고 기초 체력 위주예요. 초보·복귀 시즌에 좋아요." : l >= 78 ? "가장 많이 검증된 비율이에요 (80/20)." : l >= 70 ? "고강도가 많아 회복 관리가 중요해요. 경험 많은 선수용이에요." : "고강도가 너무 많아요. 피로·부상 위험이 커서 권하지 않아요."}`; })()}
           ${draft.philosophy === "maf" ? "<br>MAF 방식은 기초기 동안 고강도를 하지 않아서 이 비율보다 저강도가 더 많아요." : ""}
@@ -548,6 +550,7 @@
   }
 
   function onWzInput(e) {
+    if (e.target.dataset && e.target.dataset.f === "lowPct") draft.lowPctTouched = true;
     const t = e.target;
     if (t.dataset.time && e.type === "input") { // 3100 → 31:00
       const f = E.autoTime(t.value);
@@ -616,9 +619,10 @@
       Object.values(draft.dayOpts || {}).forEach((o) => { if (+o.min === old) delete o.min; });
     }
     else if (d.env) { const [k, v] = d.env.split(":"); draft.env[k] = v; }
+    else if (d.stroke) draft.stroke = d.stroke;
     else if (d.goal) draft.goal.event = d.goal;
     else if (d.phil) draft.philosophy = d.phil;
-    else if (d.low) draft.lowPct = d.low;
+    else if (d.low) { draft.lowPct = d.low; draft.lowPctTouched = true; }
     else if (d.maf !== undefined) draft.mafAdj = d.maf;
     else if (d.addrace) draft.races.push({ name: "", date: "", event: "", priority: draft.races.length ? "B" : "A" });
     else if (d.rmrace !== undefined) draft.races.splice(+d.rmrace, 1);
@@ -683,6 +687,8 @@
   const DIST_M = { "5K": 5000, "10K": 10000, half: 21097, full: 42195 };
   // ---------- 🏅 레벨 1~10 카드·기준표 ----------
   const CB_OPTS = [["", "쉬지 않고 하고 있어요"], ["w2", "2~4주 쉬었어요"], ["m1", "1~3개월 쉬었어요"], ["m3", "3~6개월 쉬었어요"], ["m6", "6개월 이상 쉬었어요"]];
+  // 추천 강도 비율: 레벨 1~3은 90:10 (몸이 강한 훈련에 익숙해지기 전), 그 외 80:20
+  function recLow(p) { const L = p && p.sport ? E.levelOf(p) : null; return L && L.lv <= 3 ? 90 : 80; }
   // 🌱 레벨 1~3이면 Z4·Z5를 넣을지 물어봐요 (Z3까지만을 적극 추천)
   function hiAsk(p, L) {
     if (!L || L.lv > 3) return "";
@@ -867,6 +873,7 @@
   }
   TS.stepTable = stepTable;
   TS.openLevel = () => openLevel();
+  TS.saveProfile = (p) => { setProfile(p); return saveProfile(p); };
   function sessionCard(s, start) {
     const date = addDays(start, s.day);
     const zoneTxt = { 1: "회복", 2: "쉬움", 3: "보통", 4: "강함", 5: "아주 강함" }[s.lvl] || "";
@@ -882,6 +889,7 @@
       ${s.hiText && window.ZONE ? window.ZONE.mixBar(s.hiText, "이 훈련 강도 구성") : ""}
       <div class="lbl">구성</div>${stepTable(s.steps)}
       ${s.steps.some((t) => /드릴/.test(t)) ? `<button type="button" class="pill drill-btn" data-drills="${s.disc === "brick" ? "bike" : s.disc}" data-focus="${esc(s.drill || "")}">📖 드릴 가이드${s.drill ? ` · 이번 주 '${esc(s.drill)}'` : ""}</button>` : ""}
+      ${s.steps.some((t) => /보강 가이드/.test(t)) ? `<button type="button" class="pill drill-btn" data-drills="str">💪 보강 가이드</button>` : ""}
       ${s.alt ? `<div class="alt-box"><div class="alt-h">✅ 추천: <b>${esc(s.name)}</b> <span class="hint">— ${esc(s.recWhy || "이번 시기 목적에 가장 잘 맞아요")}</span></div><details><summary>🔁 대안: <b>${esc(s.alt.name)}</b> <span class="hint">— ${esc(s.alt.why)}</span></summary>${stepTable(s.alt.steps)}<div class="txt" style="margin-top:6px">${esc(s.alt.point || "")}</div></details></div>` : ""}
       ${s.targets.length ? `<div class="lbl">강도 목표</div><ul class="tg">${s.targets.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
       <details class="why"><summary>설명 보기 — 포인트 · 효과</summary>
@@ -899,7 +907,7 @@
     return `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
       <div class="spread"><b style="font-size:14px">⚖️ 강도 비율 조절</b><span id="ratioVal" style="font-size:14px">저강도 <b>${v}</b> : 고강도 <b>${100 - v}</b></span></div>
       <input type="range" id="ratioRange" min="50" max="95" step="5" value="${v}" style="width:100%;margin:10px 0 6px;accent-color:var(--accent)" />
-      <div class="chips">${[90, 85, 80, 75, 70].map((x) => `<button type="button" class="chip${x === v ? " on" : ""}" data-ratio="${x}">${x}:${100 - x}${x === 80 ? " 추천" : ""}</button>`).join("")}</div>
+      <div class="chips">${[90, 85, 80, 75, 70].map((x) => `<button type="button" class="chip${x === v ? " on" : ""}" data-ratio="${x}">${x}:${100 - x}${x === recLow(profile) ? " 추천" : ""}</button>`).join("")}</div>
       <button type="button" class="primary" data-ratioapply="1" style="width:100%;padding:12px;border-radius:12px;margin-top:10px" ${v === cur ? "disabled" : ""}>${v === cur ? `지금 비율 ${cur}:${100 - cur}` : `✓ ${v}:${100 - v}로 적용하고 스케줄 바꾸기`}</button>
     </div>`;
   }
@@ -947,6 +955,44 @@
       <p class="hint" style="margin:6px 0 0">${msg}</p>${why.map((w) => `<p class="note" style="margin:6px 0 0;font-size:13px">${esc(w)}</p>`).join("")}${plan && plan.ctx && plan.ctx.phil === "maf" ? `<button type="button" class="primary pill" data-setphil="polarized" style="margin-top:6px">80/20으로 바꾸기</button>` : ""}`;
   }
 
+  // ❓ 수영 용어 쉬운 설명 (CSS · z1~z5 · @간격 · 드릴·킥·풀 등)
+  function swimGuide() {
+    if (!profile || !discsOf(profile.sport).includes("swim")) return "";
+    const S = E.swimInfo ? E.swimInfo(profile) : null;
+    const css = S && S.css ? `${Math.floor(S.css / 60)}:${String(Math.round(S.css % 60)).padStart(2, "0")}/100m` : "";
+    const rows = [
+      ["CSS", `'지치지 않고 오래 유지할 수 있는 가장 빠른 페이스'예요 (100m당 시간). 400m·200m 기록으로 계산해요.${css ? ` 내 CSS: <b>${css}</b>` : " 문진표에 400m·200m 기록을 적으면 계산돼요."}`],
+      ["z1 · z2", "아주 편하게 ~ 편하게. 숨이 차지 않아요 (CSS보다 100m당 10초 이상 느리게)."],
+      ["z3", "조금 힘들게. 길게 이어 갈 수 있는 정도 (CSS보다 100m당 3~6초 느리게)."],
+      ["z4", "CSS 페이스 근처. 숨이 차지만 일정하게 버틸 수 있어요."],
+      ["z5", "CSS보다 빠르게. 짧게만 할 수 있는 힘든 속도."],
+      ["@2'15\"", "출발 간격. 2분 15초마다 다음 반복을 출발해요 (빨리 끝나면 남은 시간이 휴식)."],
+      ["R 20\"", "반복 사이 휴식 20초."],
+      ["○100m × 8", "100m를 8번 반복."],
+      ["Drill(드릴)", "자세를 다듬는 연습 (캐치업·스컬링 등). 속도보다 바른 동작."],
+      ["Kick · Pull", "킥 = 킥판 잡고 다리만 · 풀 = 풀부이 끼우고 팔만."],
+      ["W-up · CD", "W-up = 몸풀기 · CD = 쿨다운(정리 수영)."],
+    ];
+    return `<details class="card" style="padding:12px"><summary><b>❓ 수영 CSS · z · @ 가 뭐예요?</b> <span class="hint">눌러서 보기</span></summary>
+      <div style="display:grid;gap:8px;margin-top:10px">${rows.map(([k, d]) => `<div><b>${k}</b><br><span class="hint">${d}</span></div>`).join("")}</div></details>`;
+  }
+  // ❓ 달리기 페이스 이름(E·M·T·I·R) 쉬운 설명 — 내 기록으로 계산한 페이스도 같이
+  function paceGuide() {
+    if (!profile || !discsOf(profile.sport).includes("run")) return "";
+    const R = E.runInfo ? E.runInfo(profile) : null;
+    const P = (k) => (R ? ` <b>${esc(E.runPaceText(R, k))}</b>` : "");
+    const rows = [
+      ["E", "이지 (편하게)", "옆 사람과 대화하며 달릴 수 있는 속도. 숨이 차지 않아요. 훈련의 대부분이 이 속도예요."],
+      ["M", "마라톤 페이스", "풀코스 마라톤을 달리는 속도. '조금 빠르지만 오래 갈 수 있다' 정도."],
+      ["T", "역치 (템포)", "'편하게 힘든' 속도. 말은 몇 마디만 할 수 있고, 약 1시간을 버틸 수 있는 정도."],
+      ["I", "인터벌", "숨이 많이 차는 빠른 속도. 3~5분 달리고 같은 시간 쉬어요."],
+      ["R", "반복 (스피드)", "짧고 아주 빠르게(200~400m). 완전히 숨을 고른 뒤 다음 번."],
+      ["RPE", "힘든 정도 (1~10)", "1 = 아주 편함, 5 = 보통, 7 = 힘들지만 버틸 만함, 10 = 더는 못 함."],
+    ];
+    return `<details class="card" style="padding:12px"><summary><b>❓ 달리기 E · M · T · I · R 이 뭐예요?</b> <span class="hint">눌러서 보기</span></summary>
+      <div style="display:grid;gap:8px;margin-top:10px">${rows.map(([k, n, d]) => `<div><b>${k} = ${n}</b>${k !== "RPE" ? P(k) : ""}<br><span class="hint">${d}</span></div>`).join("")}
+      ${R ? "" : '<p class="hint" style="margin:0">문진표에 5K·10K 기록을 적으면 내 페이스(분/km)도 같이 보여요.</p>'}</div></details>`;
+  }
   function renderWeekTab() {
     const W = plan.week(weekIdx);
     const end = addDays(W.start, 6);
@@ -960,6 +1006,8 @@
           <b>${minLabel(W.total)}</b></div>
         <p class="hint">${esc(W.phase.desc)} · 이번 주 집중: <b>${esc(W.phase.focus)}</b></p>
         ${distBar(W.lowPct, W)}
+        ${paceGuide()}
+        ${swimGuide()}
         ${profile.holdSync ? `<div class="note" style="margin:10px 0 0">🏁 새 대회 일정이 아직 달력에 반영되지 않았어요. <button type="button" class="pill" data-syncnow="1">지금 반영</button></div>` : ""}
         ${ratioCtl(W)}
         ${W.tss && plan.pmc ? (() => { const pw = plan.pmc(weekIdx + 1).weeks[weekIdx]; return `<p class="hint" style="margin:10px 0 0">📈 이번 주 훈련 부하 약 <b>${W.tss} TSS</b> · 주말 예상 체력 CTL <b>${Math.round(pw.ctl)}</b> (${pw.ramp >= 0 ? "+" : ""}${pw.ramp.toFixed(1)}) · 컨디션 TSB <b>${pw.tsb >= 0 ? "+" : ""}${Math.round(pw.tsb)}</b> <span>— 연간 탭에 그래프가 있어요</span></p>`; })() : ""}
@@ -1203,7 +1251,7 @@
     if (d.renv) { setBikeEnv(d.renv, "run").then(() => { variants = makeVariants(profile); plan = variants[Math.min(vSel, variants.length - 1)].plan; renderPlan(); }); return; }
     if (d.syncnow) { el.disabled = true; applyPlanToCalendar().then(async (n) => { const p = clone(profile); delete p.holdSync; await saveProfile(p); profile = p; toastP(`📅 대회에 맞춰 스케줄을 바꿨어요 (${n}개)`); TS.reload(); renderPlan(); }); return; }
     if (d.v !== undefined) { vSel = +d.v; plan = variants[vSel].plan; renderPlan(); return; }
-    if (d.tab) planTab = d.tab;
+    if (d.tab) { if ((d.tab === "year" || d.tab === "quarter") && TS.plan && !TS.plan.can("yearPlan")) return; planTab = d.tab; } // 💎 유료 전환 시 잠금 (지금은 무료)
     else if (d.wk) weekIdx = Math.max(0, Math.min(51, weekIdx + +d.wk));
     else if (d.q) qIdx = Math.max(0, Math.min(3, qIdx + +d.q));
     else if (d.mo) monthIdx = Math.max(0, Math.min(48, monthIdx + +d.mo));

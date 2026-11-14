@@ -293,6 +293,7 @@
       ${window.ZONE && n.z ? window.ZONE.guideLine(n.z) : ""}
       ${n.steps.length && TS.stepTable ? `<div style="margin-top:8px">${TS.stepTable(n.steps)}</div>` : ""}
       ${n.steps.some((t) => /드릴/.test(t)) ? `<button type="button" class="pill drill-btn" data-drills="${({ 수영: "swim", 사이클: "bike", 브릭: "bike" })[s.category] || "run"}" data-focus="${esc(((n.steps.find((t) => /이번 주는/.test(t)) || "").match(/'([^']+)'/) || [])[1] || "")}">📖 드릴 가이드</button>` : ""}
+      ${n.steps.some((t) => /보강 가이드/.test(t)) ? `<button type="button" class="pill drill-btn" data-drills="str">💪 보강 가이드</button>` : ""}
       ${n.alt && TS.stepTable ? `<div class="alt-box"><div class="alt-h">✅ 추천: <b>${esc(s.title.replace(/^.*?· /, ""))}</b> <span class="hint">— 이번 시기 목적에 가장 잘 맞아요</span></div><details><summary>🔁 대안: <b>${esc(n.alt.name)}</b> <span class="hint">— ${esc(n.alt.why)}</span></summary>${TS.stepTable(n.alt.steps)}</details></div>` : ""}
       ${n.point && !s.completed ? `<p class="hint" style="margin:8px 0 0">💡 ${esc(n.point)}</p>` : ""}
       </details>` : ""}
@@ -743,11 +744,15 @@
         <div class="set-row"><span>프로필 · 종목 · 기록 · 대회</span><button type="button" class="pill" id="meEdit">수정</button></div>
         <div class="set-row"><span>자동 훈련 계획</span><button type="button" class="pill" id="mePlan">보기</button></div>
         <div class="set-row"><span>❤️ 심박 존 가이드 (최대심박 계산기)</span><button type="button" class="pill" data-zguide="0">열기</button></div>
+        <div class="set-row"><span>💎 내 요금제</span><b>${TS.plan && TS.plan.tier === "pro" ? "프로" : TS.plan && TS.plan.paidOn ? "무료" : "무료 — 지금은 모든 기능을 무료로 쓸 수 있어요"}</b></div>
         <div class="set-row"><span>🔮 대회 기록 예측</span><button type="button" class="pill" data-predict="1">보기</button></div>
         <div class="set-row"><span>🎯 목표 대회·기록</span><button type="button" class="pill" id="meGoal">바꾸기</button></div>
         ${p && TS.discsOf && TS.discsOf(p.sport).includes("bike") ? `<div class="set-row"><span>🚴 자전거 타는 곳</span><span class="chips" style="display:inline-flex">${[["indoor", "🏠 실내"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="chip${((p.env || {}).bike || "outdoor") === k ? " on" : ""}" data-mebenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
         ${p && TS.discsOf && TS.discsOf(p.sport).includes("run") ? `<div class="set-row"><span>🏃 달리는 곳</span><span class="chips" style="display:inline-flex">${[["indoor", "🏠 트레드밀"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="chip${((p.env || {}).run || "outdoor") === k ? " on" : ""}" data-merenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
         <div class="set-row"><span>📖 드릴 가이드 (수영·자전거·달리기)</span><button type="button" class="pill" data-drills="swim">보기</button></div>
+        <div class="set-row"><span>💪 보강 가이드 (맨몸 10가지)</span><button type="button" class="pill" data-drills="str">보기</button></div>
+        <div class="set-row"><span>🚫 차단한 사람</span><button type="button" class="pill" id="meBlocks">보기</button></div>
+        <div class="set-row"><span>🔍 두 손가락으로 화면 확대·축소</span><button type="button" class="pill" id="meZoom">${window.ZONE_ZOOM && window.ZONE_ZOOM.get() ? "켜짐 — 끄기" : "꺼짐 — 켜기"}</button></div>
         <div class="set-row"><span>📝 훈련 일지 (컨디션·운동 기록·일기)</span><button type="button" class="pill" id="meJournal">모아보기</button></div>
         <div class="set-row"><span>기록 중 음성 안내</span><button type="button" class="pill" id="meVoice">${voiceOn() ? "켜짐 🔊" : "꺼짐 🔇"}</button></div>
         <div class="set-row"><span>데이터 저장</span><span class="hint">${TS.store.cloud && TS.isProfileCloud() ? "계정에 저장 중 ✓" : "일부는 이 기기에만 저장돼요 (로그인하면 계정에 저장)"}</span></div>
@@ -820,6 +825,13 @@
     const pick = () => { const b = $("meAvPick"); b.hidden = !b.hidden; }; // 카메라 · 앨범 · 파일 중 고르기
     $("meAvatar").onclick = pick;
     if ($("meLvTable")) $("meLvTable").onclick = () => TS.openLevel && TS.openLevel();
+    if ($("meZoom")) $("meZoom").onclick = () => { const z = window.ZONE_ZOOM; if (!z) return; z.set(!z.get()); renderMe(); }; // 확대 켜기·끄기 (꺼 두면 앱처럼 고정)
+    if ($("meBlocks")) $("meBlocks").onclick = async () => { // 🚫 차단 목록 · 풀기
+      if (!TS.blocks) return;
+      const list = await TS.blocks.list();
+      if (!list.length) { alert("차단한 사람이 없어요."); return; }
+      for (const b of list) { if (await TS.ask(`${b.nickname} 님 차단을 풀까요?`, "차단 풀기", "그대로")) await TS.blocks.unblock(b.id); }
+    };
     $("meBody").querySelectorAll("[data-avp]").forEach((b) => { b.onclick = () => $(b.dataset.avp).click(); });
     ["meAvCam", "meAvAlb"].forEach((id) => { $(id).onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; $("meAvPick").hidden = true; setAvatar(f); }; });
     if ($("meAvatarDel")) $("meAvatarDel").onclick = removeAvatar;
@@ -833,9 +845,11 @@
     const acct = !A.user
       ? `<div class="set-row"><span>로그인하면 기록이 계정에 저장되고 커뮤니티를 쓸 수 있어요</span><button type="button" class="primary pill" id="acLogin">로그인</button></div>`
       : `<div class="set-row"><span>👤 <b>${esc((A.member && A.member.nickname) || "")}</b> <span class="hint">${esc(A.user.email || "")}</span></span><button type="button" class="pill" id="acNick">닉네임 변경</button></div>
+         <form class="set-row" id="acNickForm" hidden style="gap:6px"><input id="acNickIn" maxlength="20" placeholder="새 닉네임 (20자 이내)" value="${esc((A.member && A.member.nickname) || "")}" style="flex:1" /><button type="submit" class="primary pill">저장</button><button type="button" class="pill" id="acNickX">취소</button></form>
          ${nLocal ? `<div class="set-row"><span>이 기기에만 있는 기록 ${nLocal}개</span><button type="button" class="pill" id="acUp">계정에 올리기</button></div>` : ""}
          <div class="set-row"><span>로그아웃</span><button type="button" class="pill" id="acOut">로그아웃</button></div>
-         <div class="set-row"><span class="hint">회원 탈퇴 — 계정과 모든 기록·글·일지가 지워져요</span><button type="button" class="link" id="acDel" style="color:#dc2626">회원 탈퇴</button></div>`;
+         <div class="set-row"><span class="hint">회원 탈퇴 — 계정과 모든 기록·글·일지가 지워져요</span><button type="button" class="link" id="acDel" style="color:#dc2626">회원 탈퇴</button></div>
+         <div class="set-row"><span>🔔 좋아요·댓글 알림</span><button type="button" class="pill" id="acNotify">${A.member && A.member.notify_on === false ? "🔕 꺼짐 — 켜기" : "🔔 켜짐 — 끄기"}</button></div>`;
     return `<div class="card"><h3>👤 계정 · 공개 설정</h3>${acct}
       ${""/* 스트라바는 한국에서 서비스가 제한돼서 숨겨요 (strava.js는 그대로 남겨 둬요) */}
       <div class="set-row"><span>새 기록 기본 공개 범위</span>
@@ -848,17 +862,34 @@
     const A = TS.auth || {};
     if ($("acLogin")) $("acLogin").onclick = () => A.open("login");
     if ($("acOut")) $("acOut").onclick = () => A.signOut();
+    if ($("acNotify")) $("acNotify").onclick = async () => { // 🔔 알림 켜기·끄기 (서버에 저장 → 꺼 두면 알림이 아예 안 만들어져요)
+      const next = !(A.member && A.member.notify_on !== false);
+      const { data, error } = await db.from("members").update({ notify_on: next }).eq("id", A.user.id).select().single();
+      if (error) { alert(/notify_on|column/i.test(error.message) ? "알림 기능은 서버 설정(SQL 실행) 후에 쓸 수 있어요." : "저장하지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
+      A.member = data; renderMe();
+    };
     if ($("acDel")) $("acDel").onclick = async () => { // 회원 탈퇴 (앱스토어·개인정보보호법 필수)
       if (!await TS.ask("정말 탈퇴할까요? 계정과 모든 훈련 기록·글·사진·일지가 지워지고 되돌릴 수 없어요.", "탈퇴", "취소")) return;
       if (!await TS.ask("마지막 확인이에요. 탈퇴하면 같은 계정으로 다시 볼 수 없어요. 탈퇴할까요?", "탈퇴", "취소")) return;
       const { error } = await db.rpc("delete_my_account");
       if (error) { alert("지금은 탈퇴를 처리하지 못했어요. 잠시 뒤 다시 시도하거나 건의사항으로 알려 주세요."); return; }
       try { Object.keys(localStorage).filter((k) => /^training\./.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* 무시 */ }
-      try { await db.auth.signOut(); } catch (e) { /* 이미 지워진 계정 */ }
+      try { await db.auth.signOut({ scope: "local" }); } catch (e) { /* 이미 지워진 계정 */ }
+      try { Object.keys(localStorage).filter((k) => /^sb-.*-auth-token/.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* 무시 */ } // 로그인 정보까지 확실히 지우기
       alert("탈퇴가 완료됐어요. 그동안 ZONE을 써 주셔서 고마워요.");
       location.reload();
     };
-    if ($("acNick")) $("acNick").onclick = () => { const n = prompt("새 닉네임 (20자 이내)", (A.member && A.member.nickname) || ""); if (n && n.trim()) A.updateNickname(n.trim()); };
+    if ($("acNick")) $("acNick").onclick = () => { $("acNickForm").hidden = false; $("acNick").hidden = true; $("acNickIn").focus(); }; // 팝업(prompt)은 휴대폰에서 막힐 때가 있어서 화면 안에서 바꿔요
+    if ($("acNickX")) $("acNickX").onclick = () => { $("acNickForm").hidden = true; $("acNick").hidden = false; };
+    if ($("acNickForm")) $("acNickForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const n = $("acNickIn").value.trim();
+      if (!n) { alert("닉네임을 적어 주세요."); return; }
+      const err = await A.updateNickname(n);
+      if (err) { alert(err); return; }
+      const p = TS.getProfile && TS.getProfile(); if (p && TS.saveProfile) { p.nickname = n; TS.saveProfile(p); } // 문진표 이름도 같이
+      renderMe();
+    };
     if ($("acUp")) $("acUp").onclick = async (e) => {
       e.target.disabled = true; e.target.textContent = "올리는 중…";
       const r = await TS.uploadLocal();

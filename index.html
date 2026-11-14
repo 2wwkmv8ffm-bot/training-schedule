@@ -3,8 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <script>
+    // 🔍 화면 확대: 두 번 탭 확대는 항상 끄고, 두 손가락 확대(핀치)는 나 탭에서 켜고 끌 수 있어요 (기본: 끔)
+    (function () {
+      var on = false;
+      try { on = localStorage.getItem("training.zoom") === "1"; } catch (e) {}
+      function apply() {
+        var m = document.querySelector('meta[name="viewport"]');
+        if (m) m.setAttribute("content", on ? "width=device-width, initial-scale=1, viewport-fit=cover" : "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");
+      }
+      apply();
+      // 아이폰은 user-scalable=no를 무시할 때가 있어서, 끈 상태면 두 손가락 동작도 막아요
+      document.addEventListener("gesturestart", function (e) { if (!on) e.preventDefault(); }, { passive: false });
+      document.addEventListener("touchmove", function (e) { if (!on && e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+      window.ZONE_ZOOM = { get: function () { return on; }, set: function (v) { on = !!v; try { localStorage.setItem("training.zoom", on ? "1" : "0"); } catch (e) {} apply(); } };
+    })();
+  </script>
   <meta name="theme-color" content="#ffffff" />
-  <title>ZONE 훈련</title>
+  <title>ZONE</title>
   <meta name="description" content="목표 대회·기록에 맞춰 짜 주는 수영·자전거·러닝·철인3종 맞춤 훈련 스케줄. 심박 존, 기록 예측, 훈련 일지, 운동 커뮤니티까지." />
   <meta property="og:title" content="ZONE — 나만의 전문 코치 훈련 스케줄" />
   <meta property="og:description" content="목표 대회와 기록에 맞춰 1년 훈련을 짜 드려요. 수영·자전거·러닝·철인3종." />
@@ -12,7 +28,7 @@
   <meta property="og:type" content="website" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon-192.png" />
-  <link rel="apple-touch-icon" href="icon-180.png" />
+  <link rel="apple-touch-icon" href="icon-180.png?v=3" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="ZONE" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -39,6 +55,8 @@
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; background: var(--bg); color: var(--text); }
+    html { touch-action: manipulation; -webkit-text-size-adjust: 100%; } /* 두 번 탭해도 화면이 커지지 않게 */
+    button, a, input, select, textarea, label { touch-action: manipulation; }
     body { font-family: "Noto Sans KR", system-ui, sans-serif; font-size: 15px; -webkit-tap-highlight-color: transparent; }
     .num { font-family: "Barlow Condensed", "Noto Sans KR", sans-serif; font-weight: 800; letter-spacing: -.5px; line-height: 1; }
     .app { max-width: 640px; margin: 0 auto; padding: 0 16px calc(100px + env(safe-area-inset-bottom)); }
@@ -51,7 +69,7 @@
     h2 { font-size: 22px; margin: 0 0 6px; }
 
     button {
-      font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+      font: inherit; font-size: 16px; color: var(--text); background: var(--panel2); /* 16px 미만이면 아이폰이 입력할 때 화면을 확대해요 */ border: 1px solid var(--line);
       border-radius: 12px; padding: 9px 14px; cursor: pointer;
     }
     button:hover { border-color: var(--hover); }
@@ -69,7 +87,7 @@
     .coach-card { background: linear-gradient(135deg, rgba(29,107,243,.07), rgba(56,189,248,.07)); }
     .icon { width: 40px; height: 40px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; }
     input, select, textarea {
-      font: inherit; color: var(--text); background: var(--panel2);
+      font: inherit; font-size: 16px; color: var(--text); background: var(--panel2); /* 16px 미만이면 아이폰이 입력할 때 화면을 확대해요 */
       border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; width: 100%;
     }
     input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
@@ -212,6 +230,8 @@
     .zguide { margin-top: 8px; padding: 8px 10px; border-left: 4px solid; border-radius: 8px; background: var(--panel2, #f8fafc); font-size: 13px; line-height: 1.6; }
     .zguide .link { padding: 0; margin-left: 4px; }
     .zone-btn { background: #fff1f2; border: 1px solid #fda4af; color: #e11d48; font-size: 13px; font-weight: 800; padding: 6px 14px; }
+    .lv-btn { background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; font-size: 13px; font-weight: 800; padding: 6px 14px; }
+    .nav-dot { position: absolute; top: 2px; right: 18%; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: #ef4444; color: #fff; font-size: 10px; font-style: normal; font-weight: 800; line-height: 16px; text-align: center; }
 
     .mc i[data-sp] { position: relative; padding-left: 2px; border-left: 3px solid transparent; }
     .mc i[data-sp="swim"] { border-left-color: #0284c7; } .mc i[data-sp="bike"] { border-left-color: #7c3aed; } .mc i[data-sp="run"] { border-left-color: #0f172a; } .mc i[data-sp="brick"] { border-left-color: #db2777; }
@@ -594,6 +614,7 @@
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
           <button class="pill" id="sportBtn">종목 선택</button>
           <button type="button" class="pill zone-btn" data-zguide="0">❤️ 심박 존</button>
+          <button type="button" class="pill lv-btn" onclick="window.TS && TS.openLevel && TS.openLevel()">🏅 레벨 기준표</button>
         </div>
       </header>
       <div id="homeBody"></div>
@@ -783,22 +804,22 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="config.js?v=202611141800"></script>
-  <script src="zones.js?v=202611141800"></script>
-  <script src="app.js?v=202611141800"></script>
-  <script src="engine.js?v=202611141800"></script>
-  <script src="profile.js?v=202611141800"></script>
-  <script src="garmin.js?v=202611141800"></script>
-  <script src="tracker.js?v=202611141800"></script>
-  <script src="hub.js?v=202611141800"></script>
-  <script src="auth.js?v=202611141800"></script>
-  <script src="community.js?v=202611141800"></script>
-  <script src="strava.js?v=202611141800"></script>
-  <script src="coach.js?v=202611141800"></script>
-  <script src="predict.js?v=202611141800"></script>
-  <script src="feedback.js?v=202611141800"></script>
-  <script src="drills.js?v=202611141800"></script>
-  <script src="journal.js?v=202611141800"></script>
-  <script src="nav.js?v=202611141800"></script>
+  <script src="config.js?v=202611143000"></script>
+  <script src="zones.js?v=202611143000"></script>
+  <script src="app.js?v=202611143000"></script>
+  <script src="engine.js?v=202611143000"></script>
+  <script src="profile.js?v=202611143000"></script>
+  <script src="garmin.js?v=202611143000"></script>
+  <script src="tracker.js?v=202611143000"></script>
+  <script src="hub.js?v=202611143000"></script>
+  <script src="auth.js?v=202611143000"></script>
+  <script src="community.js?v=202611143000"></script>
+  <script src="strava.js?v=202611143000"></script>
+  <script src="coach.js?v=202611143000"></script>
+  <script src="predict.js?v=202611143000"></script>
+  <script src="feedback.js?v=202611143000"></script>
+  <script src="drills.js?v=202611143000"></script>
+  <script src="journal.js?v=202611143000"></script>
+  <script src="nav.js?v=202611143000"></script>
 </body>
 </html>
