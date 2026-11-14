@@ -853,6 +853,7 @@
          <div class="set-row"><span>🔔 좋아요·댓글 알림</span><button type="button" class="pill" id="acNotify">${A.member && A.member.notify_on === false ? "🔕 꺼짐 — 켜기" : "🔔 켜짐 — 끄기"}</button></div>`;
     return `<div class="card"><h3>👤 계정 · 공개 설정</h3>${acct}
       ${""/* 스트라바는 한국에서 서비스가 제한돼서 숨겨요 (strava.js는 그대로 남겨 둬요) */}
+      <div class="set-row"><span>📤 ZONE 앱 친구에게 공유하기 <span class="hint">(카톡·문자)</span></span><button type="button" class="primary pill" id="acShareApp">공유</button></div>
       <div class="set-row"><span>새 기록 기본 공개 범위</span>
         <select id="acVis" style="width:auto">${[["friends", "👥 친구만"], ["public", "🌏 전체 공개"], ["private", "🔒 나만"]].map(([v, l]) => `<option value="${v}"${pv.visibility === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
       <div class="set-row"><span>지도에서 출발·도착 200m 가리기 <span class="hint">(집 위치 보호)</span></span>
@@ -863,6 +864,13 @@
     const A = TS.auth || {};
     if ($("acLogin")) $("acLogin").onclick = () => A.open("login");
     if ($("acOut")) $("acOut").onclick = () => A.signOut();
+    if ($("acShareApp")) $("acShareApp").onclick = async () => { // 📤 앱 공유: 휴대폰 공유창(카톡·문자 등) → 받은 사람은 링크로 ZONE에 들어와요
+      const url = "https://2wwkmv8ffm-bot.github.io/training-schedule/";
+      const text = "🏊🚴🏃 ZONE(존) — 내 기록에 맞춘 수영·자전거·러닝·철인3종 훈련 스케줄을 자동으로 짜 줘요. 같이 해요!";
+      if (navigator.share) { try { await navigator.share({ title: "ZONE", text, url }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+      try { await navigator.clipboard.writeText(`${text}\n${url}`); alert("링크를 복사했어요! 카톡·문자 창에 붙여넣기 해서 보내 주세요."); }
+      catch (e) { prompt("아래 링크를 복사해서 보내 주세요", url); }
+    };
     if ($("acNotify")) $("acNotify").onclick = async () => { // 🔔 알림 켜기·끄기 (서버에 저장 → 꺼 두면 알림이 아예 안 만들어져요)
       const next = !(A.member && A.member.notify_on !== false);
       const { data, error } = await db.from("members").update({ notify_on: next }).eq("id", A.user.id).select().single();

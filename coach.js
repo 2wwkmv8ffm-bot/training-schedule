@@ -389,7 +389,7 @@
     <div style="display:grid;gap:8px;padding:8px 2px;line-height:1.7;font-size:14px">${ABOUT.map((t, i) => `<p style="margin:0${i === 4 ? ";font-weight:700" : ""}">${esc(t)}</p>`).join("")}</div></details>`;
   let showAbout = false;
   function openChat() {
-    showAbout = !hist.length; // 처음 열면 코치 소개부터
+    showAbout = false; // 코치 소개는 '👤 코치 소개'를 눌렀을 때만
     const d = dlg();
     const draw = () => {
       d.innerHTML = `<div style="display:flex;flex-direction:column;height:min(80vh,640px)">

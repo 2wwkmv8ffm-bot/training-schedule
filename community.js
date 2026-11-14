@@ -914,7 +914,7 @@
 
   TS.community = { render, _paint: (f, s, b) => { feed = f; stories = s; board = b; paint($("comBody")); } }; // _paint: 화면 미리보기·점검용
   window.addEventListener("ts:auth", () => {
-    if (deepPost && TS.showTab && !document.getElementById("tab-community").classList.contains("show")) { TS.showTab("community"); return; }
+    // (공유 링크로 들어와도 앱은 항상 홈에서 시작해요. 커뮤니티 탭을 열면 그 글로 이동해요)
     if (document.getElementById("tab-community").classList.contains("show")) render();
   });
 })();

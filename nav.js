@@ -8,7 +8,12 @@
   const stack = [];
   let ignore = 0;
 
-  try { history.replaceState({ tab: "home" }, ""); } catch (e) { /* 무시 */ }
+  // 🏠 앱은 항상 홈에서 시작하고, 홈에서 뒤로 가기를 눌러도 앱이 꺼지지 않게 맨 아래에 '받침' 기록을 하나 깔아 둬요
+  try {
+    if (/[?&]post=/.test(location.search)) history.replaceState(null, "", location.pathname); // 공유 링크 흔적 지우기
+    history.replaceState({ tab: "home", root: true }, "");
+    history.pushState({ tab: "home" }, "");
+  } catch (e) { /* 무시 */ }
 
   function plainClose(id) { $(id).classList.remove("show"); document.body.style.overflow = ""; }
   function closeOv(id) {
@@ -50,6 +55,11 @@
       return;
     }
     if (stack.length) { closeOv(stack.pop()); updateFab(); return; }
+    if (e.state && e.state.root) { // 홈에서 뒤로 → 앱을 끄지 않고 홈에 그대로
+      try { history.pushState({ tab: "home" }, ""); } catch (x) { /* 무시 */ }
+      if (TS.showTab) TS.showTab("home", { fromPop: true });
+      updateFab(); return;
+    }
     const t = (e.state && e.state.tab) || "home";
     if (TS.showTab) TS.showTab(t, { fromPop: true });
     updateFab();
