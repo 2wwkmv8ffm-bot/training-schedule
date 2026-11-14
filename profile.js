@@ -54,6 +54,7 @@
     const uid = TS.auth && TS.auth.user ? TS.auth.user.id : "";
     const own = localOwner();
     if (uid && own && own !== uid) local = null; // 다른 계정의 프로필 → 쓰지 않아요
+    if (!uid) return local; // 로그인 전에는 서버의 공용(손님) 프로필을 쓰지 않아요
     const { data, error } = await db.from(PROFILE_TABLE).select("data").eq("id", pid()).maybeSingle();
     if (error) { cloudOk = false; return local; }
     cloudOk = true;
@@ -62,6 +63,7 @@
   async function saveProfile(p) {
     if (p && TS.auth && TS.auth.user) p.owner = TS.auth.user.id; // 이 프로필의 주인 (계정이 바뀌면 섞이지 않게)
     try { localStorage.setItem(LS_KEY, JSON.stringify(p)); localStorage.setItem(OWNER_KEY, TS.auth && TS.auth.user ? TS.auth.user.id : ""); } catch (e) { /* 무시 */ }
+    if (!(TS.auth && TS.auth.user)) return; // 로그인 전에는 서버에 저장하지 않아요
     const { error } = await db.from(PROFILE_TABLE).upsert({ id: pid(), data: p, updated_at: new Date().toISOString() });
     cloudOk = !error;
   }

@@ -72,7 +72,7 @@
     button, a, input, select, textarea, label { touch-action: manipulation; }
     body { font-family: "Noto Sans KR", system-ui, sans-serif; font-size: 15px; -webkit-tap-highlight-color: transparent; }
     .num { font-family: "Barlow Condensed", "Noto Sans KR", sans-serif; font-weight: 800; letter-spacing: -.5px; line-height: 1; }
-    .app { max-width: 640px; margin: 0 auto; padding: 0 16px calc(100px + env(safe-area-inset-bottom)); }
+    .app { max-width: 640px; margin: 0 auto; padding: env(safe-area-inset-top) 16px calc(100px + env(safe-area-inset-bottom)); } /* 📱 위쪽 카메라·시계 영역 피하기 */
     .tab { display: none; }
     .tab.show { display: block; }
     .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 0 14px; }
@@ -185,6 +185,7 @@
 
     /* ---- 대화상자 ---- */
     dialog { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--text); padding: 0; width: min(460px, calc(100vw - 24px)); }
+    dialog[open] { max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); overflow-y: auto; } /* 📱 작은 창도 카메라 영역 아래로 */
     dialog::backdrop { background: rgba(15, 23, 42, .4); }
     dialog form { padding: 18px; display: grid; gap: 12px; }
     dialog h2 { margin: 0; font-size: 18px; }
@@ -198,7 +199,7 @@
     .ov { position: fixed; inset: 0; z-index: 40; background: var(--bg); overflow-y: auto; display: none; }
     .ov.show { display: block; }
     #trackerOv { z-index: 45; }
-    .ov-inner { max-width: 680px; margin: 0 auto; padding: 16px 16px 110px; }
+    .ov-inner { max-width: 680px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top)) 16px 110px; } /* 📱 위쪽 카메라·시계 영역 피하기 */
     .wz-top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
     .wz-prog { flex: 1; height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
     .wz-prog span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
@@ -820,22 +821,22 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="config.js?v=202611143200"></script>
-  <script src="zones.js?v=202611143200"></script>
-  <script src="app.js?v=202611143200"></script>
-  <script src="engine.js?v=202611143200"></script>
-  <script src="profile.js?v=202611143200"></script>
-  <script src="garmin.js?v=202611143200"></script>
-  <script src="tracker.js?v=202611143200"></script>
-  <script src="hub.js?v=202611143200"></script>
-  <script src="auth.js?v=202611143200"></script>
-  <script src="community.js?v=202611143200"></script>
-  <script src="strava.js?v=202611143200"></script>
-  <script src="coach.js?v=202611143200"></script>
-  <script src="predict.js?v=202611143200"></script>
-  <script src="feedback.js?v=202611143200"></script>
-  <script src="drills.js?v=202611143200"></script>
-  <script src="journal.js?v=202611143200"></script>
-  <script src="nav.js?v=202611143200"></script>
+  <script src="config.js?v=202611143400"></script>
+  <script src="zones.js?v=202611143400"></script>
+  <script src="app.js?v=202611143400"></script>
+  <script src="engine.js?v=202611143400"></script>
+  <script src="profile.js?v=202611143400"></script>
+  <script src="garmin.js?v=202611143400"></script>
+  <script src="tracker.js?v=202611143400"></script>
+  <script src="hub.js?v=202611143400"></script>
+  <script src="auth.js?v=202611143400"></script>
+  <script src="community.js?v=202611143400"></script>
+  <script src="strava.js?v=202611143400"></script>
+  <script src="coach.js?v=202611143400"></script>
+  <script src="predict.js?v=202611143400"></script>
+  <script src="feedback.js?v=202611143400"></script>
+  <script src="drills.js?v=202611143400"></script>
+  <script src="journal.js?v=202611143400"></script>
+  <script src="nav.js?v=202611143400"></script>
 </body>
 </html>

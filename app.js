@@ -26,8 +26,9 @@
     session.scoped = !error;
   }
   function mine(q) {
+    if (!session.user) return q.eq("user_id", "00000000-0000-0000-0000-000000000000"); // 로그인 전에는 아무 일정도 안 보여요
     if (!session.scoped) return q;
-    return session.user ? q.eq("user_id", session.user.id) : q.is("user_id", null);
+    return session.user ? q.eq("user_id", session.user.id) : q.eq("user_id", "00000000-0000-0000-0000-000000000000"); // 로그인 전에는 아무 일정도 안 보여요 (손님 일정 공유 방지)
   }
 
   let weekStart = mondayOf(new Date());
@@ -109,6 +110,7 @@
     const g = view === "month" ? monthGrid() : null;
     const from = iso(g ? g.start : weekStart);
     const to = iso(g ? g.end : addDays(weekStart, 6));
+    if (!session.user) { sessions = []; render(); return; } // 로그인 전에는 서버의 손님 일정을 불러오지 않아요
     await probeScope();
     const { data, error } = await mine(db
       .from(TABLE)
