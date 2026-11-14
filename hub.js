@@ -750,6 +750,7 @@
         ${p && TS.discsOf && TS.discsOf(p.sport).includes("bike") ? `<div class="set-row"><span>🚴 자전거 타는 곳</span><span class="chips" style="display:inline-flex">${[["indoor", "🏠 실내"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="chip${((p.env || {}).bike || "outdoor") === k ? " on" : ""}" data-mebenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
         ${p && TS.discsOf && TS.discsOf(p.sport).includes("run") ? `<div class="set-row"><span>🏃 달리는 곳</span><span class="chips" style="display:inline-flex">${[["indoor", "🏠 트레드밀"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="chip${((p.env || {}).run || "outdoor") === k ? " on" : ""}" data-merenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
         <div class="set-row"><span>📖 드릴 가이드 (수영·자전거·달리기)</span><button type="button" class="pill" data-drills="swim">보기</button></div>
+        <div class="set-row"><span>📲 휴대폰에 앱으로 설치 (아이폰·갤럭시)</span><button type="button" class="pill" onclick="window.ZONE_INSTALL && window.ZONE_INSTALL()">설치하기</button></div>
         <div class="set-row"><span>💪 보강 가이드 (맨몸 10가지)</span><button type="button" class="pill" data-drills="str">보기</button></div>
         <div class="set-row"><span>🚫 차단한 사람</span><button type="button" class="pill" id="meBlocks">보기</button></div>
         <div class="set-row"><span>🔍 두 손가락으로 화면 확대·축소</span><button type="button" class="pill" id="meZoom">${window.ZONE_ZOOM && window.ZONE_ZOOM.get() ? "켜짐 — 끄기" : "꺼짐 — 켜기"}</button></div>

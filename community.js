@@ -635,7 +635,7 @@
       <div class="post-hd"><button type="button" class="link" data-prof="${esc(p.user_id)}" style="padding:0">${avatar(m, 36)}</button>
         <div style="flex:1;min-width:0"><button type="button" class="link nm" data-prof="${esc(p.user_id)}">${nameTag(m.nickname || "알 수 없음", p.user_id)}</button>${badge(p.user_id)}${!mine && fol.ok && !fol.following.has(p.user_id) && !fr.accepted.includes(p.user_id) ? ` <button type="button" class="link fol-btn" data-follow="${esc(p.user_id)}">팔로우</button>` : ""}${mine ? ' <span class="hint">(나)</span>' : ""}
           <div class="hint">${a && SP[a.sport] ? `${SP[a.sport].icon} ${SP[a.sport].name} · ` : ""}${VIS[p.visibility] || ""}</div></div>
-        ${mine ?`<button type="button" class="link" data-pin="${id}">${pins.has(String(p.id)) ? "고정 해제" : "📌 고정"}</button> <button type="button" class="link" data-delpost="${id}">삭제</button>` : `<button type="button" class="link" data-more="${id}" data-uid="${esc(p.user_id)}" aria-label="신고·차단" style="font-size:18px;padding:0 6px">⋯</button>`}</div>
+        ${mine ?`<button type="button" class="link" data-pin="${id}">${pins.has(String(p.id)) ? "고정 해제" : "📌 고정"}</button> <button type="button" class="link" data-delpost="${id}">삭제</button>` : `${TS.isOwner && TS.isOwner(me()) ? `<button type="button" class="link" data-delpost="${id}" style="color:#dc2626">🛡️ 삭제</button>` : ""}<button type="button" class="link" data-more="${id}" data-uid="${esc(p.user_id)}" aria-label="신고·차단" style="font-size:18px;padding:0 6px">⋯</button>`}</div>
       ${photos.length ? `<div class="car-wrap" data-dbl="${id}"><div class="car">${photos.map((ph) => `<img src="${esc(pubUrl(ph))}" alt="운동 사진" loading="lazy" />`).join("")}</div>
         ${photos.length > 1 ? `<div class="car-dots">${photos.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div><span class="car-n">${photos.length}장</span>` : ""}</div>` : ""}
       ${a ? `<div class="post-act-card"${photos.length ? "" : ` data-dbl="${id}"`}><div class="post-title">${SP[a.sport] ? SP[a.sport].icon + " " : ""}${esc(a.title || "")}</div>
@@ -706,7 +706,7 @@
     box.innerHTML = '<p class="hint">불러오는 중…</p>';
     const { data, error } = await db.from("post_comments").select("id,body,created_at,user_id,members!post_comments_user_id_fkey(nickname,avatar_url)").eq("post_id", id).order("created_at");
     if (error) { box.innerHTML = `<p class="hint">댓글을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요</p>`; return; }
-    const owner = (findPost(id) || {}).user_id === me();
+    const owner = (findPost(id) || {}).user_id === me() || (TS.isOwner && TS.isOwner(me())); // 글 주인 또는 앱 운영자는 댓글을 지울 수 있어요
     box.innerHTML = (data || []).filter(notBlocked).map((c) => `<div class="cmt">${avatar(c.members, 26)}<div><b>${esc((c.members || {}).nickname || "?")}</b> ${esc(c.body)}
         <span class="hint">${ago(c.created_at)}</span>${c.user_id === me() || owner ? ` <button type="button" class="link" data-delc="${esc(c.id)}">삭제</button>` : ""}</div></div>`).join("") +
       `<div class="emo-row">${["🔥", "👏", "💪", "😍", "👍", "🏃"].map((x) => `<button type="button" data-emo="${x}">${x}</button>`).join("")}</div><form class="cmt-form"><input maxlength="500" placeholder="댓글 달기…" required /><button type="submit" class="primary pill">게시</button></form>`;

@@ -119,13 +119,26 @@
     const ov = $("authOv");
     if (A.ready && !A.user && ov && !ov.classList.contains("show")) { if (!$("authBody").innerHTML.trim()) render(); ov.classList.add("show"); document.body.style.overflow = "hidden"; }
   }).observe(document.getElementById("authOv"), { attributes: true, attributeFilter: ["class"] });
+  // 👁 비밀번호 보기: 눈 버튼을 누르면 내가 쓴 비밀번호가 보여요
+  function addEyes() {
+    $("authBody").querySelectorAll('input[type="password"]').forEach((inp) => {
+      if (inp.dataset.eye) return;
+      inp.dataset.eye = "1";
+      const wrap = document.createElement("span"); wrap.className = "pw-wrap";
+      inp.parentNode.insertBefore(wrap, inp); wrap.appendChild(inp);
+      const b = document.createElement("button"); b.type = "button"; b.className = "pw-eye"; b.setAttribute("aria-label", "비밀번호 보기"); b.textContent = "👁";
+      b.onclick = () => { const show = inp.type === "password"; inp.type = show ? "text" : "password"; b.textContent = show ? "🙈" : "👁"; b.setAttribute("aria-label", show ? "비밀번호 숨기기" : "비밀번호 보기"); inp.focus(); };
+      wrap.appendChild(b);
+    });
+  }
   const backUrl = () => location.origin + location.pathname; // 메일 링크를 누르면 이 앱으로 돌아와요
   function render(why = "") {
     if (mode === "reset" || mode === "find" || mode === "newpw") { renderHelp(why); return; }
     $("authBody").innerHTML = `
       ${!A.user ? `<div style="text-align:center;margin:8px 0 14px"><img src="icon-192.png?v=3" width="64" height="64" alt="ZONE" style="border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.12)" />
         <div style="font-size:15px;font-weight:700;margin-top:8px">내 기록에 맞춘 수영·자전거·러닝·철인3종 훈련</div>
-        <div class="hint" style="margin-top:4px">⏱️ 가입하는 데 5분도 안 걸려요</div></div>` : ""}
+        <div class="hint" style="margin-top:4px">⏱️ 가입하는 데 5분도 안 걸려요</div>
+        <button type="button" class="link" style="font-size:13px" onclick="window.ZONE_INSTALL && window.ZONE_INSTALL()">📲 휴대폰에 앱으로 설치하는 법</button></div>` : ""}
       <div class="wz-top"><h2 style="margin:0;flex:1">${mode === "login" ? "로그인" : "회원가입"}</h2>
         ${A.user ? '<button type="button" class="pill" data-home="1">🏠 홈</button><button type="button" id="auClose">닫기</button>' : ""}</div>
       ${why ? `<div class="note" style="margin:0 0 12px">${esc(why)}</div>` : ""}
@@ -145,6 +158,7 @@
     if ($("auClose")) $("auClose").onclick = close;
     $("authBody").querySelectorAll("[data-mode]").forEach((b) => { b.onclick = () => { mode = b.dataset.mode; render(why); }; });
     $("auForm").onsubmit = submit;
+    addEyes();
   }
   function toastMsg(t) { const m = $("auMsg"); if (m) { m.style.color = "var(--text)"; m.textContent = t; } }
   // 🔑 비밀번호 찾기 · 이메일 찾기 · 새 비밀번호 정하기
@@ -169,6 +183,7 @@
         ${mode !== "newpw" ? `<div style="text-align:center;font-size:13px"><button type="button" class="link" data-mode="login">‹ 로그인으로</button></div>` : ""}</form>`;
     if ($("auClose")) $("auClose").onclick = close;
     $("authBody").querySelectorAll("[data-mode]").forEach((b) => { b.onclick = () => { mode = b.dataset.mode; render(); }; });
+    addEyes();
     $("auForm").onsubmit = async (e) => {
       e.preventDefault();
       const f = e.target, msg = $("auMsg"), btn = f.querySelector("button[type=submit]");

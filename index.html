@@ -16,6 +16,19 @@
       // 아이폰은 user-scalable=no를 무시할 때가 있어서, 끈 상태면 두 손가락 동작도 막아요
       document.addEventListener("gesturestart", function (e) { if (!on) e.preventDefault(); }, { passive: false });
       document.addEventListener("touchmove", function (e) { if (!on && e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+      // 📲 앱 설치: 갤럭시(안드로이드)는 설치 버튼, 아이폰은 '홈 화면에 추가' 안내
+      var deferred = null;
+      window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferred = e; });
+      if ("serviceWorker" in navigator) window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+      window.ZONE_INSTALL = function () {
+        var ua = navigator.userAgent, standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone;
+        if (standalone) { alert("이미 앱으로 설치되어 있어요 👍"); return; }
+        if (deferred) { deferred.prompt(); deferred.userChoice.finally(function () { deferred = null; }); return; }
+        if (/iPhone|iPad|iPod/.test(ua)) alert("아이폰에 설치하는 법\n\n1. 사파리로 이 사이트를 열어요 (카톡·네이버 앱 안에서는 안 돼요)\n2. 아래 가운데 공유 버튼(□↑)을 눌러요\n3. '홈 화면에 추가'를 누르고 '추가'\n\n홈 화면의 ZONE 아이콘으로 열면 앱처럼 써요.");
+        else if (/SamsungBrowser/.test(ua)) alert("갤럭시(삼성 인터넷)에 설치하는 법\n\n1. 아래 오른쪽 ☰ 메뉴를 눌러요\n2. '현재 페이지 추가' → '홈 화면'\n\n홈 화면의 ZONE 아이콘으로 열면 앱처럼 써요.");
+        else if (/Android/.test(ua)) alert("갤럭시(크롬)에 설치하는 법\n\n1. 오른쪽 위 ⋮ 메뉴를 눌러요\n2. '앱 설치' 또는 '홈 화면에 추가'\n\n홈 화면의 ZONE 아이콘으로 열면 앱처럼 써요.");
+        else alert("휴대폰에서 이 사이트를 열고 '홈 화면에 추가'를 하면 앱처럼 쓸 수 있어요.\n(아이폰: 사파리 공유 버튼 · 갤럭시: 크롬 ⋮ 메뉴)");
+      };
       window.ZONE_ZOOM = { get: function () { return on; }, set: function (v) { on = !!v; try { localStorage.setItem("training.zoom", on ? "1" : "0"); } catch (e) {} apply(); } };
     })();
   </script>
@@ -231,6 +244,9 @@
     .zguide .link { padding: 0; margin-left: 4px; }
     .zone-btn { background: #fff1f2; border: 1px solid #fda4af; color: #e11d48; font-size: 13px; font-weight: 800; padding: 6px 14px; }
     .lv-btn { background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; font-size: 13px; font-weight: 800; padding: 6px 14px; }
+    .pw-wrap { position: relative; display: block; }
+    .pw-wrap input { padding-right: 44px; }
+    .pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: 0; font-size: 18px; padding: 6px 8px; cursor: pointer; }
     .nav-dot { position: absolute; top: 2px; right: 18%; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: #ef4444; color: #fff; font-size: 10px; font-style: normal; font-weight: 800; line-height: 16px; text-align: center; }
 
     .mc i[data-sp] { position: relative; padding-left: 2px; border-left: 3px solid transparent; }
@@ -804,22 +820,22 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="config.js?v=202611143000"></script>
-  <script src="zones.js?v=202611143000"></script>
-  <script src="app.js?v=202611143000"></script>
-  <script src="engine.js?v=202611143000"></script>
-  <script src="profile.js?v=202611143000"></script>
-  <script src="garmin.js?v=202611143000"></script>
-  <script src="tracker.js?v=202611143000"></script>
-  <script src="hub.js?v=202611143000"></script>
-  <script src="auth.js?v=202611143000"></script>
-  <script src="community.js?v=202611143000"></script>
-  <script src="strava.js?v=202611143000"></script>
-  <script src="coach.js?v=202611143000"></script>
-  <script src="predict.js?v=202611143000"></script>
-  <script src="feedback.js?v=202611143000"></script>
-  <script src="drills.js?v=202611143000"></script>
-  <script src="journal.js?v=202611143000"></script>
-  <script src="nav.js?v=202611143000"></script>
+  <script src="config.js?v=202611143100"></script>
+  <script src="zones.js?v=202611143100"></script>
+  <script src="app.js?v=202611143100"></script>
+  <script src="engine.js?v=202611143100"></script>
+  <script src="profile.js?v=202611143100"></script>
+  <script src="garmin.js?v=202611143100"></script>
+  <script src="tracker.js?v=202611143100"></script>
+  <script src="hub.js?v=202611143100"></script>
+  <script src="auth.js?v=202611143100"></script>
+  <script src="community.js?v=202611143100"></script>
+  <script src="strava.js?v=202611143100"></script>
+  <script src="coach.js?v=202611143100"></script>
+  <script src="predict.js?v=202611143100"></script>
+  <script src="feedback.js?v=202611143100"></script>
+  <script src="drills.js?v=202611143100"></script>
+  <script src="journal.js?v=202611143100"></script>
+  <script src="nav.js?v=202611143100"></script>
 </body>
 </html>
