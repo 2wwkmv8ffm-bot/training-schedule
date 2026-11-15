@@ -1,0 +1,8 @@
+{
+  "appId": "com.zone.training",
+  "appName": "ZONE",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  }
+}

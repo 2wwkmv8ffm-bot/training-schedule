@@ -21,6 +21,7 @@
       sport: "run", status: "ready", points: [], cum: [], dist: 0, acc: 0, lastResume: 0,
       splits: [], nextSplit: 1000, gap: false, watch: null, tick: null, lock: null, fix: null,
       sessionId: null, sessionTitle: "", sessionNote: "", startedAt: null, demoT: null, hrs: [],
+      laps: [], lapT: 0, lapD: 0, page: 0, // 🏁 랩 (랩 버튼을 누를 때마다 한 바퀴)
     };
   }
 
@@ -48,7 +49,7 @@
     if ($("tkHrBox")) { $("tkHrBox").innerHTML = hrBoxHtml(); bindHrBox(); }
     if ($("tkHr")) $("tkHr").innerHTML = hrLiveHtml();
   });
-  const voiceOn = () => { try { return localStorage.getItem(VOICE_KEY) !== "off"; } catch (e) { return true; } };
+  const voiceOn = () => { try { return localStorage.getItem(VOICE_KEY) === "on"; } catch (e) { return false; } };
   function speak(text) {
     if (!voiceOn() || !("speechSynthesis" in window)) return;
     try { const u = new SpeechSynthesisUtterance(text); u.lang = "ko-KR"; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) { /* 무시 */ }
@@ -69,6 +70,26 @@
     st.goalM = gm ? Math.round(+gm[1] * 1000) : null;
     st.goalFromPlan = !!gm;
     show();
+    // 📍 처음 한 번: 위치(GPS)를 왜·언제 쓰는지 먼저 알려 드리고 동의를 받아요 (앱스토어·플레이스토어 필수 안내)
+    let locOk = false; try { locOk = !!localStorage.getItem("zone.locOk"); } catch (e) { locOk = true; }
+    if (!locOk) {
+      ov.innerHTML = `<div class="trk"><div class="trk-top"><button type="button" class="icon" id="lcX" aria-label="닫기">✕</button></div>
+        <div class="card" style="margin-top:20px"><div style="font-size:44px;text-align:center">📍</div>
+          <h3 style="text-align:center">위치 정보 사용 안내</h3>
+          <ul class="rules-list">
+            <li>ZONE은 <b>운동을 기록하는 동안에만</b> 위치(GPS)를 써서 거리·페이스·경로를 재요.</li>
+            ${TS.nativeGps ? "<li>기록 중에는 <b>화면이 꺼지거나 앱을 내려도</b> 위치를 계속 재요. 이때 알림창에 'ZONE 기록 중'이 보여요.</li>" : ""}
+            <li>기록을 끝내면 위치 사용도 멈춰요. 다른 때에는 위치를 쓰지 않아요.</li>
+            <li>기록한 경로는 내 기록에 저장되고, 고른 공개 범위(친구만·전체·나만)에 따라 다른 사람에게 보일 수 있어요.</li>
+          </ul>
+          <p class="hint" style="margin:0 0 12px">다음 화면에서 휴대폰이 위치 권한을 물으면 '앱 사용 중 허용'을 눌러 주세요. 자세한 내용은 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 있어요.</p>
+          <button type="button" class="primary" id="lcOk" style="width:100%">동의하고 계속</button>
+          <button type="button" class="link" id="lcNo" style="display:block;margin:10px auto 0">나중에 할게요</button></div></div>`;
+      const go = () => { try { localStorage.setItem("zone.locOk", new Date().toISOString()); } catch (e) { /* 무시 */ } renderReady(); startWatch(); };
+      $("lcOk").onclick = go;
+      $("lcX").onclick = $("lcNo").onclick = () => { st = null; hide(); };
+      return;
+    }
     renderReady();
     startWatch();
   };
@@ -267,6 +288,9 @@
       <div class="trk-top"><span class="row"><button type="button" class="pill" id="tkHomeLive" title="기록은 계속돼요">🏠 홈</button>
         <span class="eyebrow" style="margin:0">${SP[st.sport].icon} ${SP[st.sport].name}${st.status === "paused" ? " · 일시정지" : ""}</span></span>
         <div class="gps" id="tkGps"><span class="dot"></span>GPS</div></div>
+      <div class="tk-tabs"><button type="button" data-pg="0" class="${st.page ? "" : "on"}">① 기록</button><button type="button" data-pg="1" class="${st.page ? "on" : ""}">② 랩 <span id="tkLapN">${st.laps.length ? st.laps.length : ""}</span></button></div>
+      <div class="tk-pages" id="tkPages">
+      <div class="tk-page">
       <div class="live-dist num" id="tkDist">${fmtKm(st.dist)}</div>
       <div class="live-unit">킬로미터</div>
       ${st.goalM ? `<div class="goal-live"><div class="spread"><span id="tkGoalTxt">목표 ${fmtKm(st.goalM)}km</span><span id="tkGoalLeft" class="hint"></span></div>
@@ -278,10 +302,22 @@
       </div>
       <div id="tkHr" style="text-align:center;margin-bottom:14px">${hrLiveHtml()}</div>
       <div class="card" id="tkSplits" style="display:none"></div>
+      </div>
+      <div class="tk-page">
+        <div class="lap-now"><div><b class="num" id="tkLapT">0:00</b><span>이번 랩 시간</span></div><div><b class="num" id="tkLapD">0.00</b><span>이번 랩 거리 km</span></div><div class="lap-avgbox"><b class="num" id="tkLapA">-</b><span id="tkLapAL">${bike ? "랩 평균 속도 km/h" : "랩 평균 페이스"}</span></div></div>
+        <div class="card lap-list" id="tkLaps"></div>
+      </div>
+      </div>
       <div class="ctrl">${st.status === "paused"
         ? `<button type="button" class="white" id="tkStop">종료</button><button type="button" class="primary" id="tkResume">계속</button>`
-        : `<button type="button" class="white" id="tkPause">일시<br>정지</button>`}</div>
+        : `<button type="button" class="white" id="tkLap">🏁<br>랩</button><button type="button" class="white" id="tkPause">일시<br>정지</button>`}</div>
     </div>`;
+    const pages = $("tkPages");
+    const goPg = (n) => { st.page = n; pages.scrollTo({ left: n * pages.clientWidth, behavior: "smooth" }); ov.querySelectorAll("[data-pg]").forEach((b) => b.classList.toggle("on", +b.dataset.pg === n)); };
+    ov.querySelectorAll("[data-pg]").forEach((b) => { b.onclick = () => goPg(+b.dataset.pg); });
+    pages.addEventListener("scroll", () => { const n = Math.round(pages.scrollLeft / Math.max(1, pages.clientWidth)); if (n !== st.page) { st.page = n; ov.querySelectorAll("[data-pg]").forEach((b) => b.classList.toggle("on", +b.dataset.pg === n)); } }, { passive: true });
+    if (st.page) requestAnimationFrame(() => { pages.scrollLeft = pages.clientWidth; });
+    if ($("tkLap")) $("tkLap").onclick = lap;
     if (st.fix) onPos({ coords: { latitude: st.fix.lat, longitude: st.fix.lng, accuracy: st.fix.accuracy } });
     if (DEMO) setGps("ok", "테스트 모드 (가짜 GPS)");
     $("tkHomeLive").onclick = () => { hide(); if (TS.goHome) TS.goHome(); }; // 기록은 계속, 홈의 '기록 중 — 돌아가기'로 다시 열기
@@ -320,6 +356,7 @@
       if (!st.half && pct >= 50) { st.half = true; speak("목표 거리의 절반을 지났어요"); }
       if (!st.goalDone && left <= 0) { st.goalDone = true; if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]); speak("목표 거리 달성! 수고했어요"); }
     }
+    if ($("tkLapT")) { $("tkLapT").textContent = fmtDur(sec - st.lapT); $("tkLapD").textContent = ((st.dist - st.lapD) / 1000).toFixed(2); const lb = $("tkLaps"), h = lapsHtml(st.laps, bike); if (lb.dataset.n !== String(st.laps.length)) { lb.innerHTML = h; lb.dataset.n = st.laps.length; const tS = st.laps.reduce((a, l) => a + l.sec, 0), tM = st.laps.reduce((a, l) => a + l.m, 0); $("tkLapA").textContent = st.laps.length && tM > 20 ? (bike ? ((tM / tS) * 3.6).toFixed(1) : fmtPace((tS * 1000) / tM)) : "-"; $("tkLapAL").textContent = (bike ? "랩 평균 속도 km/h" : "랩 평균 페이스") + (st.laps.length ? ` · ${st.laps.length}랩` : " · 랩을 찍으면 보여요"); } }
     const box = $("tkSplits");
     if (st.splits.length) {
       box.style.display = "";
@@ -328,6 +365,27 @@
         `<div class="pr-row"><span>${s.km}km</span><b>${bike ? `${((unit * 3600) / s.sec).toFixed(1)} km/h` : fmtPace(s.sec / unit)}</b></div>`).join("");
     }
   }
+  // 🏁 랩: 누를 때마다 이번 바퀴의 시간·거리를 기록해요 (② 랩 페이지에서 봐요)
+  function lap(quiet) {
+    if (!st) return;
+    const t = elapsed() / 1000;
+    const L = { lap: st.laps.length + 1, sec: Math.round(t - st.lapT), m: Math.round(st.dist - st.lapD) };
+    st.laps.push(L); st.lapT = t; st.lapD = st.dist;
+    if (quiet === true) return;
+    if (navigator.vibrate) navigator.vibrate(150);
+    speak(`랩 ${L.lap}. ${fmtDur(L.sec)}`);
+    if ($("tkLapN")) $("tkLapN").textContent = st.laps.length;
+    updateLive();
+  }
+  function lapsHtml(laps, bike) {
+    if (!laps.length) return '<p class="hint" style="margin:0;text-align:center">🏁 랩 버튼을 누르면 여기에 바퀴마다 시간·거리가 쌓여요.</p>';
+    const best = Math.min(...laps.map((l) => l.sec));
+    const tS = laps.reduce((a, l) => a + l.sec, 0), tM = laps.reduce((a, l) => a + l.m, 0);
+    const avg = `<div class="lap-row lap-avg"><span>평균</span><b>${fmtDur(Math.round(tS / laps.length))}</b><b>${(tM / laps.length / 1000).toFixed(2)}km</b><b>${tM > 20 ? (bike ? ((tM / tS) * 3.6).toFixed(1) + "km/h" : fmtPace((tS * 1000) / tM)) : "-"}</b></div>`;
+    return avg + `<div class="lap-row lap-h"><span>랩</span><span>시간</span><span>거리</span><span>${bike ? "속도" : "페이스"}</span></div>` +
+      laps.slice().reverse().map((l) => `<div class="lap-row${l.sec === best && laps.length > 1 ? " best" : ""}"><span>${l.lap}</span><b>${fmtDur(l.sec)}</b><span>${(l.m / 1000).toFixed(2)}km</span><span>${l.m > 20 ? (bike ? ((l.m / l.sec) * 3.6).toFixed(1) + "km/h" : fmtPace((l.sec * 1000) / l.m)) : "-"}</span></div>`).join("");
+  }
+  TS.lapsHtml = lapsHtml;
   function pause() {
     st.acc += Date.now() - st.lastResume;
     st.status = "paused";
@@ -347,6 +405,7 @@
     clearInterval(st.tick);
     stopWatch();
     releaseLock();
+    if (st.laps.length && st.dist - st.lapD > 5) lap(true); // 마지막 바퀴도 랩으로
     speak(`운동 완료. ${fmtKm(st.dist)}킬로미터`);
     renderDone();
   }
@@ -395,6 +454,7 @@
       </div>
       ${hrStat().avg ? `<p class="hint" style="text-align:center">❤️ 평균 ${hrStat().avg}bpm · 최고 ${hrStat().max}bpm (가민 시계 심박)</p>` : ""}
       <div class="card mt">${routeSvg(st.points) || '<p class="hint">GPS 경로가 없어요.</p>'}</div>
+      ${st.laps.length ? `<div class="card lap-list"><div class="eyebrow">🏁 랩 기록 (${st.laps.length})</div>${lapsHtml(st.laps, bike)}</div>` : ""}
       <div style="display:grid;gap:12px">
         <label>제목 <input id="tkTitle" value="${esc(defaultTitle(st.sport, new Date(st.startedAt)))}" maxlength="100" /></label>
         <label>운동 자각도(RPE) — 얼마나 힘들었나요? <b id="tkRpeV" style="color:var(--text)">5 · ${RPE_TXT[5]}</b>
@@ -403,8 +463,6 @@
           <select id="tkSess"><option value="">연결 안 함</option>${sess.map((s) =>
             `<option value="${esc(s.id)}"${s.id === st.sessionId ? " selected" : ""}>${esc(s.title)}</option>`).join("")}</select></label>
         <label>메모 <textarea id="tkNote" rows="3" placeholder="컨디션, 날씨, 코스 등"></textarea></label>
-        <label>커뮤니티 공개 범위 ${TS.auth && TS.auth.user ? "" : "<span class='hint'>(로그인하면 공유돼요)</span>"}
-          <select id="tkVis">${[["friends", "👥 친구만"], ["public", "🌏 전체 공개"], ["private", "🔒 나만"]].map(([v, l]) => `<option value="${v}"${TS.privacy().visibility === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
       </div>
       <div class="ctrl" style="gap:10px">
         <button type="button" class="danger" id="tkDiscard" style="width:auto;height:auto;border-radius:12px;padding:14px 18px">버리기</button>
@@ -433,9 +491,9 @@
       duration_s: Math.round(elapsed() / 1000),
       rpe: +$("tkRpe").value,
       route: st.points,
-      splits: st.splits,
+      splits: st.splits.concat(st.laps), // 랩도 같이 저장 (lap 표시가 붙어 있어요)
       notes: $("tkNote").value.trim() || null,
-      visibility: $("tkVis").value,
+      visibility: TS.privacy().visibility, // 커뮤니티에는 자동으로 안 올려요 (저장만)
       source: DEMO ? "demo" : "gps",
       session_id: sid,
     };

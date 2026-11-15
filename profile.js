@@ -80,7 +80,7 @@
     if (!profile || syncBusy || profile.holdSync) return 0; // 대회를 추가하고 "나중에"를 고르면 자동으로 바꾸지 않아요
     syncBusy = true;
     try {
-      const P = makeVariants(profile)[0].plan;
+      const VS = makeVariants(profile), P = VS[pickIdx(VS)].plan;
       const today = iso(new Date()), end = iso(addDays(P.week(0).start, 7 * 8 - 1));
       const { data: old, error } = await TS.mine(db.from(TS.TABLE).select("id,date,title,category,notes,completed")).gte("date", today).lte("date", end).like("notes", "[자동 계획]%");
       if (error || !old || !old.length) return 0;
@@ -208,7 +208,12 @@
     // 예전에 "middle"처럼 내부 이름으로 저장된 대회 거리는 화면용 이름으로 바꿔서 보여줘요
     if (p && p.races && p.sport) { const G = E.GOALS[sportKey(p.sport)] || []; p.races.forEach((r) => { const g = G.find((x) => x[0] === r.event); if (g) r.event = g[1]; }); }
     profile = p;
-    if (p) scheduleSync();
+    if (p) { // 📅 내가 설정을 바꿨을 때만 달력 계획을 다시 짜요 (앱을 나갔다 들어오는 것만으로는 그대로)
+      const sig = JSON.stringify(Object.assign({}, p, { owner: 0, nickname: 0, holdSync: 0, updated_at: 0 }));
+      const k = "zone.planSig." + ((TS.auth && TS.auth.user && TS.auth.user.id) || "local");
+      let prev = null; try { prev = localStorage.getItem(k); localStorage.setItem(k, sig); } catch (e) { /* 무시 */ }
+      if (prev && prev !== sig) scheduleSync();
+    }
     TS.setSport(p ? p.sport : null);
     const b = $("sportBtn");
     if (b) b.textContent = p && p.sport ? `${SPORTS[p.sport].icon} ${p.sport} ▾` : "종목 선택";
@@ -644,6 +649,8 @@
   // ---------- 계획 화면 ----------
   // 계획 2개: A안(추천) + B안(다른 훈련 방식)
   let variants = [], vSel = 0;
+  // 사용자가 고른 안(A·B)을 기억해요 — 설정을 바꿔도 고른 안으로 계속 짜요
+  const pickIdx = (vs, p) => { const k = (p || profile || {}).planPick; const i = vs.findIndex((v) => v.key === k); return i < 0 ? 0 : i; };
   function makeVariants(p) {
     const chosen = E.PHIL[p.philosophy] ? p.philosophy : "polarized";
     const t = p.tests || {};
@@ -673,6 +680,7 @@
     while (w.recovery && i < weekIdx + 3) w = v.plan.week(++i);
     return w;
   }
+  const vTarget = (v) => { const w = vWeek(v); return w.lowTarget || w.lowPct; }; // 이 안의 목표 저강도 %
   function vStats(v) {
     const w = vWeek(v), q = w.sessions.filter((s) => s.lvl >= 3 && s.type !== "Test" && s.type !== "Long");
     return { low: w.lowPct, q: q.length, dbl: w.sessions.filter((s) => s.type === "Double" || /더블/.test(s.tag || "")).length, min: w.total, keys: [...new Set(q.map((s) => s.name || s.tag))] };
@@ -682,7 +690,7 @@
     const [a, b] = variants.map(vStats);
     const line = (n, s) => `<b>${n}</b> 핵심 훈련: ${esc(s.keys.slice(0, 4).join(" · ") || "쉬운 훈련 위주")}`;
     return `<div class="note" style="margin:8px 0 0;font-size:13px;line-height:1.7">🔍 두 안의 차이 (${weekIdx + 1}주차 기준)<br>${line("A안", a)}<br>${line("B안", b)}<br>
-      고강도 비중: A안 ${100 - a.low}% vs B안 ${100 - b.low}% · 질 훈련: A안 주 ${a.q}회 vs B안 주 ${b.q}회</div>`;
+      강도 비율: A안 ${vTarget(variants[0])}:${100 - vTarget(variants[0])} vs B안 ${vTarget(variants[1])}:${100 - vTarget(variants[1])} · 질 훈련: A안 주 ${a.q}회 vs B안 주 ${b.q}회</div>`;
   }
   // ---------- 🎯 목표 먼저: 어떤 대회 · 어떤 거리 · 목표 기록 · 현재 최고기록 ----------
   const PR_KEY = { "5K": "run.5km", "10K": "run.10km", half: "run.하프마라톤", full: "run.마라톤" };
@@ -725,8 +733,8 @@
         <div class="spread"><b style="font-size:17px">🏅 레벨 기준표 (1~10)</b><button type="button" class="link" data-lv="x" style="font-size:20px">✕</button></div>
         <p class="hint" style="margin:0">레벨은 잘하고 못하고의 순위가 아니라, 지금 내 몸에 맞는 훈련 단계예요. 1 = 막 시작한 단계 · 10 = 엘리트 상위 그룹. 기록과 주간 거리를 함께 보고 정해요. 레벨이 높을수록 질 훈련 횟수·한 번의 고강도 양·고강도 비중이 커져요.</p>
         ${levelCard(L, true)}
-        <div class="chips">${ds.map((x) => `<button type="button" class="chip${cur === x ? " on" : ""}" data-lvd="${x}">${E.DISC[x].icon} ${E.DISC[x].name}</button>`).join("")}
-          <span style="flex:1"></span><button type="button" class="chip${!fem ? " on" : ""}" data-lvs="m">남자 기준</button><button type="button" class="chip${fem ? " on" : ""}" data-lvs="f">여자 기준</button></div>
+        <div class="seg" style="margin:0">${ds.map((x) => `<button type="button" class="${cur === x ? "on" : ""}" data-lvd="${x}">${E.DISC[x].icon} ${E.DISC[x].name}</button>`).join("")}</div>
+        <div class="seg" style="margin:0"><button type="button" class="${!fem ? "on" : ""}" data-lvs="m">👨 남자 기준</button><button type="button" class="${fem ? "on" : ""}" data-lvs="f">👩 여자 기준</button></div>
         <div class="lv-table">${t.map((r) => `<div class="lv-row${my === r.lv ? " me" : ""}"><b>${r.lv}</b><span><b>${esc(r.name)}</b>${my === r.lv ? " 👈 나" : ""}<br><span class="hint">${esc(r.rec)}<br>${esc(r.vol)} · 질 훈련 ${esc(r.q)} · ${r.lv <= 3 ? "<b>Z3까지만</b> (Z4·Z5 없음)" : `고강도 최대 ${r.hiMax}%`}</span></span></div>`).join("")}</div>
         ${mine.length > 1 ? '<p class="hint" style="margin:0">철인3종 레벨은 세 종목 레벨을 자전거 45% · 달리기 35% · 수영 20%로 합쳐요 (완주 기록에 미치는 영향 순서).</p>' : ""}
       </div>`;
@@ -831,8 +839,8 @@
     // 계획을 보여주기 전에: 어떤 대회·거리를 목표로, 목표 기록·현재 최고기록이 얼마인지 먼저 확인
     if (!profile.goalSetAt && force !== true) { openGoal(() => openPlan(true)); return; }
     variants = makeVariants(profile);
-    vSel = 0;
-    plan = variants[0].plan;
+    vSel = pickIdx(variants);
+    plan = variants[vSel].plan;
     renderPlan();
     $("planOv").classList.add("show");
     $("planOv").scrollTop = 0;
@@ -1032,6 +1040,7 @@
         <button type="button" class="icon" data-mo="-4" ${monthIdx === 0 ? "disabled" : ""}>‹</button>
         <div class="range">${monthIdx + 1}~${monthIdx + weeks.length}주차 · ${dlabel(s)}–${dlabel(e)}</div>
         <button type="button" class="icon" data-mo="4" ${monthIdx + 4 >= 52 ? "disabled" : ""}>›</button></div>
+      <div class="plan-actions top"><button type="button" class="primary" data-add="${monthIdx}:4">📅 월간 달력에 넣기</button></div>
       <div class="card"><div class="spread"><b>4주 블록</b><span class="hint">총 ${minLabel(tot)}</span></div>
         <p class="hint" style="margin-bottom:0">3주 동안 양을 조금씩 늘리고(적응 → 발전 → 최대) 4주째에 줄여서 회복해요 (3:1 주기). 회복 주에는 기준점 테스트를 넣어 존을 업데이트해요.</p>
         <div class="bars" style="height:90px">${weeks.map((w) => `<div class="b"><i style="height:${Math.max(6, (w.total / Math.max(...weeks.map((x) => x.total), 1)) * 100)}%;background:${w.recovery ? "#94a3b8" : w.phase.color}"></i><span>${w.i + 1}주</span></div>`).join("")}</div></div>
@@ -1039,8 +1048,7 @@
         <div class="spread"><b>${w.i + 1}주차 · ${dlabel(w.start)}~</b><span class="hint">${minLabel(w.total)} · 저강도 ${w.lowPct}%</span></div>
         <div class="row" style="margin:6px 0 8px"><span class="zb" style="background:${w.phase.color};color:#0f172a">${esc(w.phase.name)}</span>${w.recovery ? '<span class="zb" style="background:#94a3b8">회복·테스트</span>' : ""}${w.races.map((r) => `<span class="zb z5">🏁 ${esc(r.name)}</span>`).join("")}</div>
         ${w.sessions.map((x) => `<div class="pr-row" style="align-items:center"><span>${DAY[x.day]} · ${esc(x.title)}</span><span class="row">${zb(x.lvl, `Z${x.lvl} ${x.tag}`)}<span class="hint">${x.minutes ? rangeTxt(x) : ""}</span></span></div>`).join("")}
-        <p class="hint" style="margin:6px 0 0">눌러서 자세히 보기 ›</p></div>`).join("")}
-      <div class="plan-actions"><button type="button" class="primary" data-add="${monthIdx}:4">📅 이 4주를 달력에 넣기</button></div>`;
+        <p class="hint" style="margin:6px 0 0">눌러서 자세히 보기 ›</p></div>`).join("")}`;
   }
 
   // 🗓️ 3개월(13주) 스케줄 — 주간·월간과 연간 사이
@@ -1080,6 +1088,7 @@
         <button type="button" class="icon" data-q="-1" ${qIdx === 0 ? "disabled" : ""}>‹</button>
         <div class="range">${qIdx + 1}분기 · ${first + 1}~${first + all.length}주차 · ${dlabel(s)}–${dlabel(e)}</div>
         <button type="button" class="icon" data-q="1" ${qIdx >= 3 ? "disabled" : ""}>›</button></div>
+      <div class="plan-actions top"><button type="button" class="primary" data-add="${first}:${all.length}">📅 이 3개월 달력에 넣기</button></div>
       <div class="card"><div class="spread"><b>3개월 한눈에</b><span class="hint">총 ${minLabel(totMin)} · ${all.length}주</span></div>
         <div style="display:flex;height:18px;border-radius:8px;overflow:hidden;margin:10px 0 4px">${segs.map((g) => `<div title="${esc(g.phase.name)}" style="flex:${g.ws.length};background:${g.phase.color}"></div>`).join("")}</div>
         <div class="row" style="flex-wrap:wrap;gap:4px;margin-bottom:8px">${segs.map((g) => `<span class="zb" style="background:${g.phase.color};color:#0f172a">${esc(g.phase.name)} ${g.ws.length}주</span>`).join("")}</div>
@@ -1100,8 +1109,7 @@
             <div class="row" style="flex-wrap:wrap;gap:4px;margin:4px 0"><span class="zb" style="background:${w.phase.color};color:#0f172a">${esc(w.phase.name)}</span>${w.recovery ? '<span class="zb" style="background:#94a3b8">회복·테스트</span>' : ""}${w.key === "taper" ? '<span class="zb" style="background:#f59e0b">조정기</span>' : ""}${w.races.map((r) => `<span class="zb z5">🏁 ${esc(r.name || r.event || "대회")}</span>`).join("")}<span class="hint">저강도 ${w.lowPct}%</span></div>
             ${w.sessions.map((x) => `<div class="q-ses${x.lvl >= 4 ? " hard" : ""}"><span class="q-d">${DAY[x.day]}</span>${zb(x.lvl, `Z${x.lvl}`)}<span class="q-t"><b>${esc(x.title.replace(/^.*?· /, ""))}</b> <span class="hint">${x.type === "Race" ? "🏁" : `${x.minutes ? x.minutes + "분" : ""}${x.dist ? " · " + esc(String(x.dist).replace(/(수영|자전거|달리기)\s*/g, "")) : ""}`}</span>${mainOf(x) ? `<br><span class="q-m">${mainOf(x).replace(/^ — /, "")}</span>` : ""}${(x.steps || []).some((t) => /^보강/.test(t)) ? ' <span class="hint">💪 보강</span>' : ""}</span></div>`).join("")}
           </div>`;
-        }).join("")}</div>`).join("")}
-      <div class="plan-actions"><button type="button" class="primary" data-add="${first}:${all.length}">📅 이 3개월을 달력에 넣기</button></div>`;
+        }).join("")}</div>`).join("")}`;
   }
 
   // 📈 체력·피로·컨디션 예상 그래프 (TrainingPeaks 퍼포먼스 매니지먼트 차트 · 앨런/코건 TSS 방식)
@@ -1135,7 +1143,7 @@
     const uniq = new Set(rows.map((r) => r.key)).size;
     const blocks = [];
     rows.forEach((r) => { const b = Math.floor(r.w.i / 4); (blocks[b] = blocks[b] || []).push(r); });
-    return `<div class="card"><div class="spread"><h3 style="margin:0">💪 1년 강한 훈련 (Z4·Z5)</h3><span class="zb" style="background:${uniq === rows.length ? "#16a34a" : "#f97316"}">${rows.length}개 중 ${uniq}개 서로 다름</span></div>
+    return `<div class="card"><div class="spread" style="flex-wrap:wrap;gap:6px"><h3 style="margin:0">💪 1년 강한 훈련 (Z4·Z5)</h3><span class="zb" style="background:${uniq === rows.length ? "#16a34a" : "#f97316"}">${rows.length}개 중 ${uniq}개 서로 다름</span></div>
       <p class="hint" style="margin:6px 0 8px">4주 블록마다 묶었어요. 쉬운 훈련(Z2)은 같아도 괜찮지만, 강한 훈련은 1년 동안 같은 구성이 다시 나오지 않게 짜요.</p>
       ${blocks.map((bl, bi) => bl ? `<details class="sg" ${bi === 0 ? "open" : ""}><summary><b>블록 ${bi + 1}</b> <span class="hint">${bi * 4 + 1}~${bi * 4 + 4}주차 · ${dlabel(all[bi * 4].start)}~ · 강한 훈련 ${bl.length}개</span></summary>
         ${bl.map((r) => `<div class="pr-row" data-goweek="${r.w.i}" style="cursor:pointer;align-items:flex-start"><span><b>${r.w.i + 1}주 ${DAY[r.s.day]}</b> ${zb(r.s.lvl, `Z${r.s.lvl}`)} ${esc(r.s.title.replace(/^.*?· /, ""))}<br><span class="hint">${esc(r.main.slice(0, 120))}</span></span></div>`).join("")}</details>` : "").join("")}
@@ -1160,11 +1168,11 @@
         ${segs.map((s) => `<div class="pr-row" data-goweek="${s.i}" style="cursor:pointer;align-items:flex-start">
           <span><span class="zb" style="background:${s.phase.color};color:#0f172a">${esc(s.phase.name)}</span> <span class="hint">${s.n}주</span><br><span class="hint">${esc(s.phase.focus)}</span></span>
           <span class="hint" style="white-space:nowrap">${s.i + 1}주차 · ${dlabel(s.start)}~</span></div>`).join("")}</div>
-      <div class="card"><h3>주별 한눈에 보기</h3><div class="zt-wrap"><table class="zt" style="min-width:420px">
-        <tr><th>주</th><th>날짜</th><th>단계</th><th>시간</th><th>비고</th></tr>
-        ${all.map((w) => `<tr data-goweek="${w.i}" style="cursor:pointer"><td>${w.i + 1}</td><td>${dlabel(w.start)}</td><td>${esc(w.phase.name)}</td><td>${minLabel(w.total)}</td>
-          <td>${[w.recovery ? "회복·테스트" : "", ...w.races.map((r) => `🏁 ${r.priority} ${r.name}`), w.virtualRace ? "🏁 시즌 목표(가상)" : ""].filter(Boolean).map(esc).join(" · ")}</td></tr>`).join("")}
-      </table></div></div>`;
+      <div class="card"><h3>주별 한눈에 보기</h3><div class="yr-list">
+        <div class="yr-row yr-h"><span>주</span><span>날짜</span><span>단계</span><span>시간</span></div>
+        ${all.map((w) => { const note = [w.recovery ? "회복·테스트" : "", ...w.races.map((r) => `🏁 ${r.priority} ${r.name}`), w.virtualRace ? "🏁 시즌 목표(가상)" : ""].filter(Boolean).map(esc).join(" · ");
+          return `<div class="yr-row${w.races.length ? " race" : w.recovery ? " rec" : ""}" data-goweek="${w.i}"><span>${w.i + 1}</span><span>${dlabel(w.start)}</span><span class="yr-ph"><i style="background:${w.phase.color}"></i>${esc(w.phase.name)}</span><span>${minLabel(w.total)}</span>${note ? `<small>${note}</small>` : ""}</div>`; }).join("")}
+      </div></div>`;
   }
 
   function renderBasisTab() {
@@ -1183,28 +1191,28 @@
     if (ds.includes("run")) {
       html += `<div class="card"><h3>🏃 달리기 — VDOT ${R ? `<b>${R.vdot.toFixed(1)}</b>` : ""}</h3>
         ${R ? `<p class="hint" style="margin-top:0">기준: ${esc(R.src)}</p>
-          <div class="zt-wrap"><table class="zt" style="min-width:520px"><tr><th>페이스</th><th>속도</th><th>설명 · 한 주 상한</th><th>효과</th></tr>
+          <div class="zt-wrap"><table class="zt-card zt zt-m" style="min-width:520px"><tr><th>페이스</th><th>속도</th><th>설명 · 한 주 상한</th><th>효과</th></tr>
           ${E.RUN_PACES.map(([k, n, lvl, d, eff]) => `<tr><td>${zb(lvl, k)} <b>${n}</b></td><td><b>${esc(E.runPaceText(R, k))}</b></td><td>${esc(d)}</td><td>${esc(eff)}</td></tr>`).join("")}</table></div>
           <p class="hint">예상 기록: ${Object.entries(R.pred).map(([k, v]) => `${k} ${fmt(v)}`).join(" · ")} — 4~6주마다 새 기록으로 다시 계산하세요.</p>`
           : `<p class="hint">1500m 이상 달리기 기록을 입력하면 VDOT와 E/M/T/I/R 페이스를 계산해요.</p>`}
         ${H.lthrRun ? `<h3 class="mt">❤️ 러닝 심박 (LTHR ${H.lthrRun}bpm ${H.runMeasured ? "측정" : "추정"})</h3>
-          <div class="zt-wrap"><table class="zt" style="min-width:360px"><tr><th>존</th><th>심박(bpm)</th><th>% LTHR</th></tr>
+          <div class="zt-wrap"><table class="zt-card zt" style="min-width:360px"><tr><th>존</th><th>심박(bpm)</th><th>% LTHR</th></tr>
           ${E.FRIEL_RUN.map((r, i) => `<tr><td><b>${r[0]}</b> ${r[1]}</td><td>${E.frielRange(E.FRIEL_RUN, H.lthrRun, i)}</td><td>${!r[2] ? `~${r[3]}%` : !r[3] ? `${r[2]}%+` : `${r[2]}–${r[3]}%`}</td></tr>`).join("")}</table></div>` : ""}
       </div>`;
     }
     if (ds.includes("bike")) {
       html += `<div class="card"><h3>🚴 자전거 — FTP ${B ? `<b>${B.ftp}W</b>${B.wkg ? ` (${B.wkg.toFixed(2)}W/kg)` : ""}` : ""}</h3>
-        ${B ? `<p class="hint" style="margin-top:0">기준: ${esc(B.src)}</p><div class="zt-wrap"><table class="zt" style="min-width:460px"><tr><th>존</th><th>파워</th><th>% FTP</th><th>효과</th></tr>
+        ${B ? `<p class="hint" style="margin-top:0">기준: ${esc(B.src)}</p><div class="zt-wrap"><table class="zt-card zt" style="min-width:460px"><tr><th>존</th><th>파워</th><th>% FTP</th><th>효과</th></tr>
           ${E.COGGAN.map(([z, n, lo, hi, lvl, eff]) => `<tr><td>${zb(lvl, z)} <b>${n}</b></td><td><b>${E.watt(B.ftp, lo, hi)}</b></td><td>${lo}${hi ? "–" + hi : "+"}%</td><td>${esc(eff)}</td></tr>`).join("")}</table></div>
           <p class="hint">스윗스팟: FTP 88~93% (${E.watt(B.ftp, 88, 93)})</p>` : `<p class="hint">FTP(또는 20분 테스트)를 입력하면 7개 파워 존을 계산해요.</p>`}
         ${H.lthrBike ? `<h3 class="mt">❤️ 사이클 심박 (LTHR ${H.lthrBike}bpm ${H.bikeMeasured ? "측정" : "추정"})</h3>
-          <div class="zt-wrap"><table class="zt" style="min-width:360px"><tr><th>존</th><th>심박(bpm)</th><th>% LTHR</th></tr>
+          <div class="zt-wrap"><table class="zt-card zt" style="min-width:360px"><tr><th>존</th><th>심박(bpm)</th><th>% LTHR</th></tr>
           ${E.FRIEL_BIKE.map((r, i) => `<tr><td><b>${r[0]}</b> ${r[1]}</td><td>${E.frielRange(E.FRIEL_BIKE, H.lthrBike, i)}</td><td>${!r[2] ? `~${r[3]}%` : !r[3] ? `${r[2]}%+` : `${r[2]}–${r[3]}%`}</td></tr>`).join("")}</table></div>` : ""}
       </div>`;
     }
     if (ds.includes("swim")) {
       html += `<div class="card"><h3>🏊 수영 — CSS ${S ? `<b>${fmt(S.css)}/100m</b>` : ""}</h3>
-        ${S ? `<p class="hint" style="margin-top:0">기준: ${esc(S.src)}</p><div class="zt-wrap"><table class="zt" style="min-width:420px"><tr><th>구간</th><th>100m당</th><th>쓰임·효과</th></tr>
+        ${S ? `<p class="hint" style="margin-top:0">기준: ${esc(S.src)}</p><div class="zt-wrap"><table class="zt-card zt zt-m" style="min-width:420px"><tr><th>구간</th><th>100m당</th><th>쓰임·효과</th></tr>
           ${E.SWIM_Z.map((z, i) => `<tr><td>${zb(z[3], z[0])}</td><td><b>${E.swimPace(S.css, i)}</b></td><td>${esc(z[4])}</td></tr>`).join("")}</table></div>`
           : `<p class="hint">CSS 테스트(400m·200m)를 입력하면 수영 페이스를 계산해요.</p>`}</div>`;
     }
@@ -1218,21 +1226,23 @@
     const g = ctx.goal;
     const body = { week: renderWeekTab, month: renderMonthTab, quarter: renderQuarterTab, year: renderYearTab, basis: renderBasisTab }[planTab]();
     $("planBody").innerHTML = `
-      <div class="wz-top"><h2 style="margin:0;flex:1">📋 내 훈련 계획</h2><button type="button" class="pill" data-home="1">🏠 홈</button><button type="button" id="planEdit">⚙️ 설정</button><button type="button" id="planClose">닫기</button></div>
+      <div class="wz-top plan-hd"><h2>📋 내 훈련 계획</h2><button type="button" class="pill" data-home="1">🏠 홈</button><button type="button" id="planEdit">⚙️ 설정</button><button type="button" id="planClose">닫기</button></div>
       ${cloudOk ? "" : `<div class="note" style="margin:0 0 12px">⚠️ 프로필이 지금은 이 기기에만 저장됐어요. 로그인하고 인터넷이 연결되면 다른 기기에서도 보여요.</div>`}
       <div class="card"><div class="kv">
         <span>종목 · 목표</span><b>${SPORTS[p.sport].icon} ${esc(g.name)}${g.timeText ? ` · ${esc(g.timeText)}` : ""}</b>
         ${plan.feas ? `<span>목표 판단</span><b>VDOT ${plan.feas.now.toFixed(1)} → ${plan.feas.need.toFixed(1)} · 목표 페이스 ${fmt(plan.feas.pace)}/km · <span style="color:${plan.feas.verdict === "무리" ? "#dc2626" : plan.feas.verdict === "도전적" ? "#ea580c" : "#16a34a"}">${plan.feas.verdict}</span>${plan.feas.weeksLeft ? ` <span class="hint">(필요 약 ${plan.feas.weeksNeed}주 · 대회까지 ${plan.feas.weeksLeft}주)</span>` : ""}</b>` : ""}
-        <span></span><b><button type="button" class="pill" data-goaledit="1">🎯 목표 바꾸기</button> <button type="button" class="pill" data-predict="1">🔮 기록 예측</button></b>
+        <div class="kv-act"><button type="button" class="pill" data-goaledit="1">🎯 목표 변경</button><button type="button" class="pill" data-predict="1">🔮 기록 예측</button>${plan.level ? `<button type="button" class="pill" data-lvtable="1">📊 레벨표</button>` : ""}</div>
         <span>훈련 시간</span><b>주 ${(p.days || []).length}회 · 주 최대 ${plan.availHours.toFixed(1)}시간</b>
-        ${discsOf(p.sport).includes("bike") ? `<span>자전거 타는 곳</span><b><span class="chips" style="display:inline-flex">${[["indoor", "🏠 실내"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="chip${((p.env || {}).bike || "outdoor") === k ? " on" : ""}" data-benv="${k}">${l}</button>`).join("")}</span> <span class="hint">실내면 8분 이내 페달링 드릴이 들어가요</span></b>` : ""}
-        ${discsOf(p.sport).includes("run") ? `<span>달리는 곳</span><b><span class="chips" style="display:inline-flex">${[["indoor", "🏠 트레드밀"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="chip${((p.env || {}).run || "outdoor") === k ? " on" : ""}" data-renv="${k}">${l}</button>`).join("")}</span> <span class="hint">트레드밀이면 속도(km/h)·경사(%)로 알려 드려요</span></b>` : ""}
-        ${plan.level ? `<span>레벨</span><b>레벨 ${plan.level.lv}/10 · ${plan.level.name}${plan.level.comeback ? " · 🔄 복귀 중" : ""} <button type="button" class="pill" data-lvtable="1">레벨 기준표</button></b>` : ""}
+        ${discsOf(p.sport).includes("bike") ? `<span>자전거 타는 곳</span><b><span class="mini-seg">${[["indoor", "🏠 실내"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="${((p.env || {}).bike || "outdoor") === k ? " on" : ""}" data-benv="${k}">${l}</button>`).join("")}</span><span class="hint" style="display:block;margin-top:4px;font-weight:400">실내면 8분 이내 페달링 드릴이 들어가요</span></b>` : ""}
+        ${discsOf(p.sport).includes("run") ? `<span>달리는 곳</span><b><span class="mini-seg">${[["indoor", "🏠 트레드밀"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="${((p.env || {}).run || "outdoor") === k ? " on" : ""}" data-renv="${k}">${l}</button>`).join("")}</span><span class="hint" style="display:block;margin-top:4px;font-weight:400">트레드밀이면 속도(km/h)·경사(%)로 알려 드려요</span></b>` : ""}
+        ${plan.level ? `<span>레벨</span><b>레벨 ${plan.level.lv}/10 · ${plan.level.name}${plan.level.comeback ? " · 🔄 복귀 중" : ""}</b>` : ""}
       </div>
       <div class="eyebrow mt">계획 2가지 — 골라서 보세요</div>
-      <div class="vpick">${variants.map((v, i) => { const st = vStats(v); return `<button type="button" data-v="${i}" class="${vSel === i ? "on" : ""}">
-          <span class="vt">${i === 0 ? "A안" : "B안"}${v.rec ? " ⭐ 추천" : ""}</span><span class="vn">${E.PHIL[v.key].name}</span>
-          <span class="hint" style="font-size:12px;line-height:1.5;margin-top:4px">저강도 ${st.low}% : 고강도 ${100 - st.low}%<br>질 훈련 주 ${st.q}회${st.dbl ? ` (더블 ${st.dbl})` : ""} · ${minLabel(st.min)}</span></button>`; }).join("")}</div>
+      <div class="vpick">${variants.map((v, i) => { const st = vStats(v), t = vTarget(v), on = i === pickIdx(variants); return `<button type="button" data-v="${i}" class="${vSel === i ? "on" : ""}">
+          <span class="vt">${i === 0 ? "A안" : "B안"}${v.rec ? " ⭐ 추천" : ""}${on ? ' <span class="v-on">✅ 적용 중</span>' : ""}</span><span class="vn">${E.PHIL[v.key].name}</span>
+          <span class="v-ratio"><b>${t}</b> : <b>${100 - t}</b><small>저강도 : 고강도</small></span>
+          <span class="hint" style="font-size:12px;line-height:1.5">질 훈련 주 ${st.q}회${st.dbl ? ` (더블 ${st.dbl})` : ""} · ${minLabel(st.min)}</span></button>`; }).join("")}</div>
+      <p class="hint" style="margin:6px 2px 0;font-size:12px">A안·B안을 누르면 그 안으로 달력(8주)이 바로 바뀌어요.</p>
       ${vCompare()}
       <div class="note">${variants[vSel].rec ? "⭐ 추천 이유: " : ""}${esc(variants[vSel].why)}</div></div>
       <div class="seg">${[["week", "주간"], ["month", "월간"], ["quarter", "3개월"], ["year", "연간"], ["basis", "강도 기준"]].map(([k, l]) => `<button type="button" data-tab="${k}" class="${planTab === k ? "on" : ""}">${l}</button>`).join("")}</div>
@@ -1240,7 +1250,7 @@
     $("planClose").onclick = closePlan;
     $("planEdit").onclick = () => { closePlan(); openWizard(1); };
   }
-  $("planBody").addEventListener("click", (e) => {
+  $("planBody").addEventListener("click", async (e) => {
     const el = e.target.closest("[data-tab],[data-wk],[data-mo],[data-q],[data-goweek],[data-add],[data-v],[data-ratio],[data-ratioapply],[data-goaledit],[data-syncnow],[data-benv],[data-renv],[data-lvtable],[data-setphil]");
     if (!el) return;
     const d = el.dataset;
@@ -1248,11 +1258,22 @@
     if (d.ratioapply) { applyRatio(el); return; }
     if (d.goaledit) { openGoal(() => openPlan(true)); return; }
     if (d.lvtable) { openLevel(); return; }
-    if (d.setphil) { updateProfile({ philosophy: d.setphil }).then(() => { variants = makeVariants(profile); plan = variants[0].plan; vSel = 0; renderPlan(); toastP("⚖️ 폴라리제드 80/20으로 바꿨어요"); }); return; }
+    if (d.setphil) { updateProfile({ philosophy: d.setphil, planPick: d.setphil }).then(() => { variants = makeVariants(profile); vSel = pickIdx(variants); plan = variants[vSel].plan; renderPlan(); toastP("⚖️ 폴라리제드 80/20으로 바꿨어요"); }); return; }
     if (d.benv) { setBikeEnv(d.benv).then(() => { variants = makeVariants(profile); plan = variants[Math.min(vSel, variants.length - 1)].plan; renderPlan(); }); return; }
     if (d.renv) { setBikeEnv(d.renv, "run").then(() => { variants = makeVariants(profile); plan = variants[Math.min(vSel, variants.length - 1)].plan; renderPlan(); }); return; }
     if (d.syncnow) { el.disabled = true; applyPlanToCalendar().then(async (n) => { const p = clone(profile); delete p.holdSync; await saveProfile(p); profile = p; toastP(`📅 대회에 맞춰 스케줄을 바꿨어요 (${n}개)`); TS.reload(); renderPlan(); }); return; }
-    if (d.v !== undefined) { vSel = +d.v; plan = variants[vSel].plan; renderPlan(); return; }
+    if (d.v !== undefined) { // A안·B안을 누르면 → 그 안으로 앞으로 8주 달력을 바로 바꿔요
+      const i = +d.v, v = variants[i];
+      if (!v) return;
+      if (i === vSel && profile.planPick === v.key) { toastP(`✅ 지금 ${i === 0 ? "A안" : "B안"}이 적용돼 있어요`); return; }
+      const name = `${i === 0 ? "A안" : "B안"} · ${E.PHIL[v.key].name} (저강도 ${vTarget(v)} : 고강도 ${100 - vTarget(v)})`;
+      if (!await TS.ask(`${name}으로 바꿀까요?\n이번 주부터 8주 동안의 자동 계획이 이 안으로 바뀌어요. 이미 완료한 훈련은 그대로 둬요.`, "바꾸기", "취소")) return;
+      vSel = i; plan = v.plan;
+      await updateProfile({ planPick: v.key });
+      variants = makeVariants(profile); vSel = pickIdx(variants); plan = variants[vSel].plan;
+      await addToCalendar(0, 8, el, true);
+      return;
+    }
     if (d.tab) { if ((d.tab === "year" || d.tab === "quarter") && TS.plan && !TS.plan.can("yearPlan")) return; planTab = d.tab; } // 💎 유료 전환 시 잠금 (지금은 무료)
     else if (d.wk) weekIdx = Math.max(0, Math.min(51, weekIdx + +d.wk));
     else if (d.q) qIdx = Math.max(0, Math.min(3, qIdx + +d.q));
@@ -1287,16 +1308,16 @@
     const last = Math.min(51, first + count - 1);
     const from = iso(plan.week(first).start), to = iso(addDays(plan.week(last).start, 6));
     btn.disabled = true;
-    const { data: old, error: e1 } = await TS.mine(db.from(TS.TABLE).select("id")).gte("date", from).lte("date", to).like("notes", "[자동 계획]%");
+    const { data: old, error: e1 } = await TS.mine(db.from(TS.TABLE).select("id,date,completed")).gte("date", from).lte("date", to).like("notes", "[자동 계획]%");
     if (e1) { alert(TS.explainError(e1).replace(/<[^>]+>/g, "")); btn.disabled = false; return; }
     if (old.length) {
       if (!noAsk && !await TS.ask(`이 기간에 이미 자동 계획 ${old.length}개가 있어요. 새 계획으로 바꿀까요?`)) { btn.disabled = false; return; }
-      await db.from(TS.TABLE).delete().in("id", old.map((x) => x.id));
+      const del = old.filter((x) => !x.completed); if (del.length) await db.from(TS.TABLE).delete().in("id", del.map((x) => x.id)); // 완료한 훈련은 그대로 둬요
     }
-    const rows = [];
+    const done = new Set((old || []).filter((x) => x.completed).map((x) => x.date)), rows = [];
     for (let i = first; i <= last; i++) {
       const W = plan.week(i);
-      W.sessions.forEach((s) => rows.push({
+      W.sessions.filter((s) => !done.has(iso(addDays(W.start, s.day)))).forEach((s) => rows.push({
         date: iso(addDays(W.start, s.day)), title: s.title,
         start_time: s.slot === "오전" ? "07:00" : s.slot === "오후" ? "18:30" : null, // 오전·오후 순서대로 보이게
         category: s.disc === "brick" ? "브릭" : DISC[s.disc].cat,
@@ -1330,7 +1351,7 @@
       <div class="spread"><h2 style="margin:0">종목 바꾸기</h2><button type="button" data-sq="close">닫기</button></div>
       <p class="hint" style="margin:0">종목을 누르면 홈이 바로 그 종목으로 바뀌어요. 문진표는 종목마다 따로 저장돼서, 각 종목의 <b>✏️ 문진표</b>를 누르면 그 종목 것만 고칠 수 있어요.</p>
       <div class="sport-grid">${Object.entries(SPORTS).map(([n, s]) => `<div class="sq-cell"><button type="button" class="sport-card${profile.sport === n ? " selected" : ""}" data-sq="${n}">
-          <span class="ico">${s.icon}</span><span class="nm">${n}</span><span class="ds">${profile.sport === n ? "✓ 지금 종목" : hasSaved(n) ? "설정 저장됨" : "설정 전 — 눌러서 시작"}</span></button>
+          <span class="ico">${s.icon}</span><span class="nm">${n}</span><span class="ds">${profile.sport === n ? "✓ 지금 종목" : hasSaved(n) ? "설정 저장됨" : "설정 전"}</span></button>
           <button type="button" class="pill" data-sqset="${n}">✏️ ${n} 문진표</button></div>`).join("")}</div>
       <p class="hint" style="margin:0;text-align:center">이름·몸무게·나이·심박은 모든 종목 공통이에요.</p></div>`;
     d.onclick = async (e) => {
@@ -1356,7 +1377,7 @@
   (async () => {
     const p = await loadProfile();
     if (p && p.sport && SPORTS[p.sport]) setProfile(p);
-    else { window.dispatchEvent(new Event("ts:profile")); openWizard(0); }
+    else window.dispatchEvent(new Event("ts:profile")); // 문진표는 로그인한 뒤 (새 계정이면) 열어요 — 로그아웃 상태에서는 빈 화면
   })();
   // 로그인·로그아웃하면 그 사람의 프로필로 바꾸기
   let lastUid = null;
@@ -1368,7 +1389,7 @@
     if (p && uid) {
       // 다른 계정 것인지 확인: 주인 표시가 다르거나, (예전 데이터) 문진표 이름이 계정 닉네임과 다르면 남의 프로필이에요
       const nick = TS.auth.member && TS.auth.member.nickname;
-      const foreign = p.owner ? p.owner !== uid : !!(p.nickname && nick && p.nickname.trim() !== nick.trim());
+      const foreign = !!(p.owner && p.owner !== uid); void nick; // 닉네임을 바꿔도 내 계획은 지우지 않아요 (계정 주인 표시로만 확인)
       if (foreign) {
         p = null;
         // 잘못 복사된 프로필을 빈 프로필(주인 표시만)로 덮어써요 → 문진표를 처음부터
@@ -1386,6 +1407,7 @@
       if (uid) saveProfile(p); // 이 기기 프로필을 내 계정에도 저장 (이때 이 기기 프로필의 주인도 이 계정으로 표시돼요)
     } else if (uid) {
       setProfile(null); // 새 계정: 다른 사람 프로필 대신 빈 상태로 시작 → 문진표를 새로 써요
+      setTimeout(() => openWizard(0), 300); // 처음 가입하면 문진표부터
       try { localStorage.removeItem(LS_KEY); localStorage.setItem(OWNER_KEY, uid); } catch (e) { /* 무시 */ }
     }
   });

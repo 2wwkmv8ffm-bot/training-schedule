@@ -1,0 +1,24 @@
+{
+  "name": "zone-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "ZONE 훈련 앱 — 안드로이드·아이폰 앱(백그라운드 GPS)",
+  "scripts": {
+    "copy": "node copy-web.js",
+    "setup": "node copy-web.js && npx cap add android && node patch-android.js && npx cap sync android",
+    "sync": "node copy-web.js && npx cap sync android",
+    "open": "npx cap open android",
+    "setup:ios": "node copy-web.js && npx cap add ios && node patch-ios.js && npx cap sync ios",
+    "sync:ios": "node copy-web.js && node patch-ios.js && npx cap sync ios",
+    "open:ios": "npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor-community/background-geolocation": "^1.2.19",
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}

@@ -19,10 +19,11 @@
     if (name === "record") { TS.openTracker(); return; }
     // 탭을 옮길 때마다 기록해서, 휴대폰 '뒤로'로 이전 탭에 돌아갈 수 있게
     if (!(opts && opts.fromPop) && name !== current) { try { history.pushState({ tab: name }, ""); } catch (e) { /* 무시 */ } }
+    if (name === "community" && current !== "community" && TS.community && TS.community.toAll) TS.community.toAll();
     current = name;
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("show", t.id === "tab-" + name));
     document.querySelectorAll(".tabbar button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
-    window.scrollTo(0, 0);
+    if (window.ZONE_SCROLL) window.ZONE_SCROLL.scrollTo(0); else window.scrollTo(0, 0);
     renderCurrent();
   }
   function renderCurrent() {
@@ -33,6 +34,20 @@
   }
   TS.showTab = showTab;
   TS.currentTab = () => current;
+  // 📱 휴대폰 홈 화면으로 나갔다가 다시 켜면 → 홈 탭 맨 위에서 시작 (기록 중이거나 글 쓰는 중이면 그대로)
+  let hiddenAt = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+    const gap = hiddenAt ? Date.now() - hiddenAt : 0; hiddenAt = 0;
+    if (gap < 8000) return; // 사진 고르기처럼 잠깐 나갔다 온 건 그대로
+    if (TS.isRecording && TS.isRecording()) return;
+    const busy = [...document.querySelectorAll("dialog[open], .ov.show")].some((d) => [...d.querySelectorAll("textarea, input[type=text]")].some((t) => t.value && t.value.trim()) || d.id === "trackerOv");
+    if (busy) return;
+    document.querySelectorAll("dialog[open]").forEach((d) => { try { d.close(); } catch (e) { /* 무시 */ } });
+    document.querySelectorAll(".ov.show").forEach((o) => o.classList.remove("show"));
+    current = "";
+    showTab("home", { fromPop: true });
+  });
 
   // 🏠 어느 화면에서든 홈으로 (기록 중인 GPS는 계속 측정돼요)
   function goHome() {
@@ -44,6 +59,21 @@
   }
   TS.goHome = goHome;
   document.addEventListener("click", (e) => { if (e.target.closest("[data-home]")) goHome(); });
+  // ⛶ '구성 · 강도 · 대안' 내용을 화면 가득 크게 보기 (홈·계획 어디서든)
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-bigview]");
+    if (!b) return;
+    e.preventDefault();
+    const det = b.closest("details.sess-more");
+    if (!det) return;
+    let d = document.getElementById("bigDlg2");
+    if (!d) { d = document.createElement("dialog"); d.id = "bigDlg2"; d.className = "wide-dlg"; document.body.appendChild(d); }
+    const box = det.cloneNode(true); box.open = true; box.querySelectorAll("[data-bigview]").forEach((x) => x.remove()); const sm = box.querySelector("summary"); if (sm) sm.remove();
+    d.innerHTML = `<div class="wide-hd"><b>🔍 구성 · 강도 · 대안</b><span class="hint"></span><button type="button" class="wide-x" aria-label="닫기">✕</button></div><div class="wide-body big-body"></div>`;
+    d.querySelector(".wide-body").appendChild(box);
+    d.querySelector(".wide-x").onclick = () => d.close();
+    if (!d.open) d.showModal();
+  });
   document.querySelectorAll(".tabbar button").forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
   $("manualBtn").onclick = () => TS.openManual();
 
@@ -288,7 +318,7 @@
         <div><span>힘든 정도</span><b>${n.rpe ? "RPE " + esc(n.rpe) : "-"}</b></div></div>
       <div class="spread" style="margin-top:10px">${s.completed ? '<span class="hint">완료 ✓</span>' : `<span class="hint">${canStart ? "준비되면 시작하세요" : ""}</span>`}
         ${s.completed || !canStart ? "" : `<button type="button" class="primary pill" data-start="${esc(s.id)}">${s.category === "수영" ? "📝 기록하기" : "▶ 이 훈련 시작"}</button>`}</div>
-      ${(n.hiText || n.steps.length || n.alt || n.point) ? `<details class="sess-more" ${expanded ? "open" : ""}><summary>구성 · 강도 · 대안 자세히 보기</summary>
+      ${(n.hiText || n.steps.length || n.alt || n.point) ? `<details class="sess-more" ${expanded ? "open" : ""}><summary>구성 · 강도 · 대안 자세히 보기</summary><button type="button" class="pill big-open" data-bigview="1">⛶ 한눈에 크게 보기</button>
       ${window.ZONE ? (n.hiText ? window.ZONE.mixBar(n.hiText) : n.dist && n.z && n.z <= 2 ? window.ZONE.mixBar(`고강도 0% 0km · 저강도 100% ${n.dist}`) : n.dist && n.z ? `<p class="hint" style="margin:8px 0 0">⚖️ 계획에서 '달력에 넣기'를 다시 누르면 고강도·저강도 km가 보여요.</p>` : "") : ""}
       ${window.ZONE && n.z ? window.ZONE.guideLine(n.z) : ""}
       ${n.steps.length && TS.stepTable ? `<div style="margin-top:8px">${TS.stepTable(n.steps)}</div>` : ""}
@@ -334,6 +364,7 @@
   }
 
   async function renderHome() {
+    document.body.classList.toggle("guest", !(TS.auth && TS.auth.user)); // 로그아웃이면 종목·심박 존·레벨 기준표 숨김
     const p = TS.getProfile ? TS.getProfile() : null;
     const now = new Date();
     const h = now.getHours();
@@ -401,7 +432,7 @@
       </div>
 
       <div class="card"><div class="spread"><div class="eyebrow" style="margin:0">${dayTitle}</div>
-        <button type="button" class="link" id="hToPlan">전체 계획 ›</button></div>${todayHtml}</div>
+        <span></span></div>${todayHtml}</div>
       ${TS.journal ? TS.journal.dayCard(homeDay, true) : ""}
 
       ${(() => { // 🏁 내 대회 + 대회 추가
@@ -435,7 +466,7 @@
     `;
     if ($("hGo")) $("hGo").onclick = () => TS.openTracker();
     if ($("hMakePlan")) $("hMakePlan").onclick = () => TS.openPlan();
-    $("hToPlan").onclick = () => showTab("plan");
+    if ($("hToPlan")) $("hToPlan").onclick = () => showTab("plan");
     if (TS.journal) TS.journal.bind($("homeBody"));
     $("homeBody").querySelectorAll("[data-raceadd]").forEach((b) => { b.onclick = () => TS.openRaceAdd(); });
     $("homeBody").querySelectorAll("[data-racerm]").forEach((b) => { b.onclick = () => TS.removeRace(+b.dataset.racerm); });
@@ -499,28 +530,29 @@
     $("actBody").innerHTML = `
       <div class="seg">${[["week", "주"], ["month", "월"], ["year", "년"], ["all", "전체"]].map(([k, l]) =>
         `<button type="button" data-period="${k}" class="${period === k ? "on" : ""}">${l}</button>`).join("")}</div>
-      <div class="chips" style="margin-bottom:12px">${[["all", "전체"], ["run", "🏃 달리기"], ["bike", "🚴 자전거"], ["swim", "🏊 수영"], ["tri", "🏅 철인3종"]].map(([k, l]) =>
+      <div class="chips act-filter" style="margin-bottom:12px">${[["all", "전체"], ["run", "🏃 달리기"], ["bike", "🚴 자전거"], ["swim", "🏊 수영"], ["tri", "🏅 철인"]].map(([k, l]) =>
         `<button type="button" class="chip${filter === k ? " on" : ""}" data-filter="${k}">${l}</button>`).join("")}</div>
       <div class="card">
         <div class="spread">${period !== "all" ? `<button type="button" class="icon" data-off="-1">‹</button>` : "<span></span>"}
           <b>${periodLabel(s)}</b>
           ${period !== "all" ? `<button type="button" class="icon" data-off="1" ${offset >= 0 ? "disabled" : ""}>›</button>` : "<span></span>"}</div>
-        <div style="text-align:center;margin-top:12px"><div class="num hero">${totKm.toFixed(1)}</div><div class="hero-unit">킬로미터</div></div>
+        ${list.length ? `<div style="text-align:center;margin-top:12px"><div class="num hero">${totKm.toFixed(1)}</div><div class="hero-unit">킬로미터</div></div>
         <div class="trio" style="text-align:center">
           <div><b class="num">${list.length}</b><span>활동</span></div>
           <div><b class="num">${fmtDur(totT)}</b><span>시간</span></div>
-          <div><b class="num">${runs.length ? fmtPace(runPace) : "-"}</b><span>평균 달리기 페이스</span></div>
+          <div><b class="num">${runs.length ? fmtPace(runPace) : "-"}</b><span>평균 페이스</span></div>
         </div>
-        ${vals.length ? bars(vals, labels) : ""}
+        ${vals.length ? bars(vals, labels) : ""}` : `<p class="hint" style="text-align:center;margin:10px 0 0">이 기간에 기록이 없어요 — 0km · 0회</p>`}
       </div>
       ${TS.store.cloud ? "" : `<div class="note" style="margin-bottom:12px">⚠️ 활동 기록이 이 기기에만 저장되고 있어요. ${TS.auth && TS.auth.user ? "서버 저장이 잠시 안 되고 있어요 — 연결되면 계정에 저장돼요." : "로그인하면 계정에 저장돼요 (나 → 로그인)."}</div>`}
-      ${list.length ? list.map(actCard).join("") : `<div class="card" style="text-align:center"><p class="hint">이 기간에 기록이 없어요.</p>
+      ${list.length ? list.map(actCard).join("") : `<div class="card" style="text-align:center;padding:14px">
         <button type="button" class="primary" id="aGo">▶ 첫 기록 시작하기</button></div>`}
     `;
     $("actBody").querySelectorAll("[data-period]").forEach((b) => { b.onclick = () => { period = b.dataset.period; offset = 0; renderActivity(); }; });
     $("actBody").querySelectorAll("[data-filter]").forEach((b) => { b.onclick = () => { filter = b.dataset.filter; renderActivity(); }; });
     $("actBody").querySelectorAll("[data-off]").forEach((b) => { b.onclick = () => { offset = Math.min(0, offset + +b.dataset.off); renderActivity(); }; });
     if ($("aGo")) $("aGo").onclick = () => TS.openTracker();
+    if ($("actStart")) $("actStart").onclick = () => TS.openTracker(); // ▶ 활동 탭 맨 위 기록 시작
     bindActCards($("actBody"));
   }
 
@@ -530,7 +562,7 @@
     const d = dateOf(a);
     const bike = a.sport === "bike";
     const efforts = a.sport === "run" ? EFFORTS.map(([l, dist]) => [l, bestEffort(a, dist)]).filter((x) => x[1]) : [];
-    const sp = a.splits || [];
+    const sp = (a.splits || []).filter((x) => !x.lap), laps = (a.splits || []).filter((x) => x.lap); // 🏁 랩은 따로
     const unit = bike ? 5 : 1;
     const maxSec = Math.max(...sp.map((x) => x.sec), 1), minSec = Math.min(...sp.map((x) => x.sec), maxSec);
     $("detailBody").innerHTML = `
@@ -539,19 +571,18 @@
         <div class="hint">${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} ${DAY[(d.getDay() + 6) % 7]}요일 ${TS.pad(d.getHours())}:${TS.pad(d.getMinutes())}</div></div>
         <button type="button" class="pill" data-home="1">🏠 홈</button>
         <button type="button" class="danger pill" id="dDel">삭제</button></div>
-      ${fresh ? `<div class="note" style="margin:0 0 12px">저장했어요! 💪 ${newBadgeText()}</div>` : ""}
+      ${fresh ? `<div class="note" style="margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1">저장했어요! 💪 ${newBadgeText()}</span><button type="button" class="primary" id="dAgain" style="margin:0;padding:8px 14px;border-radius:999px">▶ 다시 시작</button></div>` : ""}
       ${a.route && a.route.length > 1 ? `<div class="map" id="dMap"></div>` : ""}
       ${a.source === "strava" ? `<div class="card"><div class="spread"><span class="hint">🔒 스트라바 기록은 약관상 본인만 볼 수 있어요</span>
         ${a.external_id ? `<a class="strava-link" href="https://www.strava.com/activities/${esc(String(a.external_id).replace("strava:", ""))}" target="_blank" rel="noopener">Strava에서 보기 ›</a>` : ""}</div>
         <div class="hint" style="margin-top:4px">Powered by Strava</div></div>` : ""}
-      ${a.source !== "strava" && !a.local && a.visibility && TS.auth && TS.auth.user && a.user_id === TS.auth.user.id ? `<div class="card"><div class="set-row" style="border:0;padding:0">
-        <span>커뮤니티 공개 범위</span><select id="dVis" style="width:auto">${[["friends", "👥 친구만"], ["public", "🌏 전체 공개"], ["private", "🔒 나만"]].map(([v, l]) => `<option value="${v}"${a.visibility === v ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>` : ""}
       <div class="card"><div class="stats4">
         <div><b class="num">${distText(a)}</b><span>거리</span></div>
         <div><b class="num">${fmtDur(a.duration_s)}</b><span>시간</span></div>
         <div><b class="num">${speedText(a)}</b><span>${bike ? "평균 속도" : a.sport === "swim" ? "100m 평균" : "평균 페이스"}</span></div>
         <div><b class="num">${a.rpe || "-"}</b><span>운동 자각도${a.rpe && TS.RPE_TXT ? ` · ${TS.RPE_TXT[a.rpe]}` : ""}</span></div>
       </div></div>
+      ${laps.length && TS.lapsHtml ? `<div class="card lap-list"><h3>🏁 랩 기록 (${laps.length})</h3>${TS.lapsHtml(laps, bike)}</div>` : ""}
       ${sp.length ? `<div class="card"><h3>구간 기록 (${unit}km)</h3>${sp.map((x) => `<div class="split"><span>${x.km}</span>
         <b>${bike ? ((unit * 3600) / x.sec).toFixed(1) : fmtPace(x.sec / unit)}</b>
         <i style="width:${Math.max(8, 100 - ((x.sec - minSec) / Math.max(maxSec - minSec, 1)) * 60)}%;${x.sec === minSec ? "" : "opacity:.6"}"></i></div>`).join("")}
@@ -573,6 +604,7 @@
       if (!await TS.ask("이 활동을 삭제할까요? 되돌릴 수 없어요.")) return;
       if (await TS.deleteActivity(a)) closeDetail();
     };
+    if ($("dAgain")) $("dAgain").onclick = () => { $("detailOv").classList.remove("show"); TS.openTracker({ sport: a.sport }); }; // 끝나자마자 바로 다시 시작
     if ($("dVis")) $("dVis").onchange = (e) => TS.setVisibility(a, e.target.value);
     $("dAddMedia").onclick = () => $("dFile").click();
     $("dFile").onchange = (e) => uploadMedia(a, [...e.target.files]);
@@ -681,6 +713,14 @@
 
   // ---------- 나 ----------
   async function renderMe() {
+    if (!(TS.auth && TS.auth.user)) { // 로그아웃 상태: 기록·레벨·최고 기록 없이 로그인 안내만
+      $("meBody").innerHTML = `<div class="card" style="text-align:center;padding:28px 18px">
+        <div style="font-size:44px">🙂</div><h3 style="margin:8px 0">로그인하면 내 기록이 보여요</h3>
+        <p class="hint">레벨 · 개인 최고 기록 · 연속 기록 · 설정은 로그인한 뒤에 보여요.</p>
+        <button type="button" class="primary" id="meLogin" style="padding:12px 24px;margin-top:6px">로그인 · 회원가입</button></div>`;
+      $("meLogin").onclick = () => TS.auth && TS.auth.open("login");
+      return;
+    }
     const p = TS.getProfile ? TS.getProfile() : null;
     const s = stats();
     const lv = levelOf(s.total);
@@ -695,12 +735,13 @@
 
     const myPR = p ? Object.entries(p.records || {}).filter(([, r]) => r && r.pr) : [];
     const appPR = appPRs();
-    const badgeHtml = BADGES.map((b) => {
+    const badgeList = BADGES.map((b) => {
       const [c, g] = b.p(s);
       const ok = c >= g;
-      return `<div class="badge${ok ? "" : " locked"}" title="${esc(b.desc)}"><div class="em">${b.icon}</div><div class="bn">${b.name}</div>
-        <div class="bp">${ok ? "획득 ✓" : g > 1 ? `${Math.floor(Math.min(c, g) * 10) / 10}/${g}` : esc(b.desc)}</div></div>`;
-    }).join("");
+      return [`<div class="badge${ok ? "" : " locked"}" title="${esc(b.desc)}"><div class="em">${b.icon}</div><div class="bn">${b.name}</div>
+        <div class="bp">${ok ? "획득 ✓" : g > 1 ? `${Math.floor(Math.min(c, g) * 10) / 10}/${g}` : esc(b.desc)}</div></div>`, ok, c / g];
+    }).sort((a, b) => (b[1] - a[1]) || (b[2] - a[2])); // 받은 배지 → 거의 다 된 배지 순
+    const badgeHtml = badgeList.slice(0, 6).map((x) => x[0]).join("") + (badgeList.length > 6 ? `<div class="badges-more" style="display:none">${badgeList.slice(6).map((x) => x[0]).join("")}</div>` : "");
     const earned = BADGES.filter((b) => { const [c, g] = b.p(s); return c >= g; }).length;
 
     $("meBody").innerHTML = `
@@ -730,14 +771,17 @@
         <div class="spread"><span>🔥 연속 훈련</span><b class="num" style="font-size:24px">${st.cur}일 <span class="hint">(최고 ${st.max}일)</span></b></div>
       </div>
 
-      <div class="card"><h3>⏱ 개인 최고 기록</h3>
-        ${appPR.map((x) => `<div class="pr-row"><span>${x.label} <span class="hint">앱 기록</span></span><b>${fmtDur(x.sec)}</b></div>`).join("")}
-        ${myPR.map(([k, r]) => `<div class="pr-row"><span>${esc(prLabel(k))}${r.year ? ` <span class="hint">올해 목표 ${esc(r.year)}</span>` : ""}</span><b>${esc(r.pr)}</b></div>`).join("")}
-        ${!appPR.length && !myPR.length ? '<p class="hint">아직 기록이 없어요. 설정에서 최고 기록을 적거나 달리기를 기록해 보세요.</p>' : ""}
-      </div>
+      ${(() => { // ⏱ 개인 최고 기록 — 배지처럼 작은 칸 3줄, 6개만 먼저
+        const tiles = appPR.map((x) => `<div class="pr-tile"><span class="pl">${esc(x.label)}</span><b>${fmtDur(x.sec)}</b><small>앱 기록</small></div>`)
+          .concat(myPR.map(([k, r]) => `<div class="pr-tile"><span class="pl">${esc(prLabel(k))}</span><b>${esc(r.pr)}</b><small>${r.year ? `목표 ${esc(r.year)}` : "내 기록"}</small></div>`));
+        return `<div class="card"><div class="spread"><h3 style="margin:0">⏱ 개인 최고 기록</h3><span class="hint">${tiles.length ? tiles.length + "개" : ""}</span></div>
+          ${tiles.length ? `<div class="pr-grid mt">${tiles.slice(0, 6).join("")}<div class="pr-more" style="display:none">${tiles.slice(6).join("")}</div></div>
+          ${tiles.length > 6 ? `<button type="button" class="pill" id="mePrMore" style="width:100%;margin-top:10px">▼ 나머지 기록 ${tiles.length - 6}개 보기</button>` : ""}`
+          : '<p class="hint">아직 기록이 없어요. 설정에서 최고 기록을 적거나 달리기를 기록해 보세요.</p>'}</div>`;
+      })()}
 
       <div class="card"><div class="spread"><h3 style="margin:0">🎖 배지</h3><span class="hint">${earned}/${BADGES.length}</span></div>
-        <div class="badges mt">${badgeHtml}</div></div>
+        <div class="badges mt">${badgeHtml}</div>${BADGES.length > 6 ? `<button type="button" class="pill" id="meBadgeMore" style="width:100%;margin-top:10px">▼ 나머지 배지 ${BADGES.length - 6}개 보기</button>` : ""}</div>
 
       ${accountCard()}
       <div class="card"><h3>⚙️ 설정</h3>
@@ -747,13 +791,13 @@
         <div class="set-row"><span>💎 내 요금제</span><b>${TS.plan && TS.plan.tier === "pro" ? "프로" : TS.plan && TS.plan.paidOn ? "무료" : "무료 — 지금은 모든 기능을 무료로 쓸 수 있어요"}</b></div>
         <div class="set-row"><span>🔮 대회 기록 예측</span><button type="button" class="pill" data-predict="1">보기</button></div>
         <div class="set-row"><span>🎯 목표 대회·기록</span><button type="button" class="pill" id="meGoal">바꾸기</button></div>
-        ${p && TS.discsOf && TS.discsOf(p.sport).includes("bike") ? `<div class="set-row"><span>🚴 자전거 타는 곳</span><span class="chips" style="display:inline-flex">${[["indoor", "🏠 실내"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="chip${((p.env || {}).bike || "outdoor") === k ? " on" : ""}" data-mebenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
-        ${p && TS.discsOf && TS.discsOf(p.sport).includes("run") ? `<div class="set-row"><span>🏃 달리는 곳</span><span class="chips" style="display:inline-flex">${[["indoor", "🏠 트레드밀"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="chip${((p.env || {}).run || "outdoor") === k ? " on" : ""}" data-merenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
+        ${p && TS.discsOf && TS.discsOf(p.sport).includes("bike") ? `<div class="set-row"><span>🚴 자전거</span><span class="mini-seg">${[["indoor", "🏠 실내"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="${((p.env || {}).bike || "outdoor") === k ? " on" : ""}" data-mebenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
+        ${p && TS.discsOf && TS.discsOf(p.sport).includes("run") ? `<div class="set-row"><span>🏃 달리기</span><span class="mini-seg">${[["indoor", "🏠 트레드밀"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="${((p.env || {}).run || "outdoor") === k ? " on" : ""}" data-merenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
         <div class="set-row"><span>📖 드릴 가이드 (수영·자전거·달리기)</span><button type="button" class="pill" data-drills="swim">보기</button></div>
         <div class="set-row"><span>📲 휴대폰에 앱으로 설치 (아이폰·갤럭시)</span><button type="button" class="pill" onclick="window.ZONE_INSTALL && window.ZONE_INSTALL()">설치하기</button></div>
         <div class="set-row"><span>💪 보강 가이드 (맨몸 10가지)</span><button type="button" class="pill" data-drills="str">보기</button></div>
         <div class="set-row"><span>🚫 차단한 사람</span><button type="button" class="pill" id="meBlocks">보기</button></div>
-        <div class="set-row"><span>🔍 두 손가락으로 화면 확대·축소</span><button type="button" class="pill" id="meZoom">${window.ZONE_ZOOM && window.ZONE_ZOOM.get() ? "켜짐 — 끄기" : "꺼짐 — 켜기"}</button></div>
+        <div class="set-row"><span>🔍 두 손가락 확대·축소</span>${(() => { const z = window.ZONE_ZOOM && window.ZONE_ZOOM.get(); return `<button type="button" class="sw${z ? " on" : ""}" id="meZoom" role="switch" aria-checked="${z ? "true" : "false"}" aria-label="화면 확대·축소"><i></i><b>${z ? "ON" : "OFF"}</b></button>`; })()}</div>
         <div class="set-row"><span>📝 훈련 일지 (컨디션·운동 기록·일기)</span><button type="button" class="pill" id="meJournal">모아보기</button></div>
         <div class="set-row"><span>기록 중 음성 안내</span><button type="button" class="pill" id="meVoice">${voiceOn() ? "켜짐 🔊" : "꺼짐 🔇"}</button></div>
         <div class="set-row"><span>데이터 저장</span><span class="hint">${TS.store.cloud && TS.isProfileCloud() ? "계정에 저장 중 ✓" : "일부는 이 기기에만 저장돼요 (로그인하면 계정에 저장)"}</span></div>
@@ -826,6 +870,8 @@
     const pick = () => { const b = $("meAvPick"); b.hidden = !b.hidden; }; // 카메라 · 앨범 · 파일 중 고르기
     $("meAvatar").onclick = pick;
     if ($("meLvTable")) $("meLvTable").onclick = () => TS.openLevel && TS.openLevel();
+    if ($("mePrMore")) $("mePrMore").onclick = () => { const m = $("meBody").querySelector(".pr-more"), open = m.style.display === "none"; m.style.display = open ? "contents" : "none"; $("mePrMore").textContent = open ? "▲ 접기" : `▼ 나머지 기록 ${m.children.length}개 보기`; };
+    if ($("meBadgeMore")) $("meBadgeMore").onclick = () => { const m = $("meBody").querySelector(".badges-more"), open = m.style.display === "none"; m.style.display = open ? "contents" : "none"; $("meBadgeMore").textContent = open ? "▲ 접기" : `▼ 나머지 배지 ${m.children.length}개 보기`; };
     if ($("meZoom")) $("meZoom").onclick = () => { const z = window.ZONE_ZOOM; if (!z) return; z.set(!z.get()); renderMe(); }; // 확대 켜기·끄기 (꺼 두면 앱처럼 고정)
     if ($("meBlocks")) $("meBlocks").onclick = async () => { // 🚫 차단 목록 · 풀기
       if (!TS.blocks) return;
@@ -856,20 +902,34 @@
       <div class="set-row"><span>📤 ZONE 앱 친구에게 공유하기 <span class="hint">(카톡·문자)</span></span><button type="button" class="primary pill" id="acShareApp">공유</button></div>
       <div class="set-row"><span>새 기록 기본 공개 범위</span>
         <select id="acVis" style="width:auto">${[["friends", "👥 친구만"], ["public", "🌏 전체 공개"], ["private", "🔒 나만"]].map(([v, l]) => `<option value="${v}"${pv.visibility === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
-      <div class="set-row"><span>지도에서 출발·도착 200m 가리기 <span class="hint">(집 위치 보호)</span></span>
-        <label class="check"><input type="checkbox" id="acHide" ${pv.hideEnds ? "checked" : ""} /> 켜기</label></div>
       ${A.user && !TS.store.cloud && TS.store.reason === "sql" ? `<div class="note">⚠️ 지금은 계정 저장이 잠시 안 돼서 이 기기에 저장돼요.</div>` : ""}</div>`;
   }
   function bindAccount() {
     const A = TS.auth || {};
     if ($("acLogin")) $("acLogin").onclick = () => A.open("login");
     if ($("acOut")) $("acOut").onclick = () => A.signOut();
-    if ($("acShareApp")) $("acShareApp").onclick = async () => { // 📤 앱 공유: 휴대폰 공유창(카톡·문자 등) → 받은 사람은 링크로 ZONE에 들어와요
+    if ($("acShareApp")) $("acShareApp").onclick = () => { // 📤 앱 공유: 휴대폰 공유창(카톡·문자 등) 또는 링크 복사
       const url = "https://2wwkmv8ffm-bot.github.io/training-schedule/";
       const text = "🏊🚴🏃 ZONE(존) — 내 기록에 맞춘 수영·자전거·러닝·철인3종 훈련 스케줄을 자동으로 짜 줘요. 같이 해요!";
-      if (navigator.share) { try { await navigator.share({ title: "ZONE", text, url }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
-      try { await navigator.clipboard.writeText(`${text}\n${url}`); alert("링크를 복사했어요! 카톡·문자 창에 붙여넣기 해서 보내 주세요."); }
-      catch (e) { prompt("아래 링크를 복사해서 보내 주세요", url); }
+      let d = $("appShareDlg");
+      if (!d) { d = document.createElement("dialog"); d.id = "appShareDlg"; document.body.appendChild(d); d.onclick = (e) => { if (e.target === d) d.close(); }; }
+      d.innerHTML = `<div style="padding:18px;display:grid;gap:12px">
+        <div class="spread"><b style="font-size:17px">📤 ZONE 공유하기</b><button type="button" class="link" data-x="1" aria-label="닫기" style="font-size:20px">✕</button></div>
+        <p class="hint" style="margin:0">친구에게 링크를 보내면 바로 ZONE에 들어올 수 있어요.</p>
+        <input type="text" readonly value="${url}" id="asUrl" style="font-size:13px" />
+        ${navigator.share ? `<button type="button" class="primary" id="asNative">📱 카톡 · 문자로 보내기</button>` : ""}
+        <button type="button" class="${navigator.share ? "" : "primary"}" id="asCopy">🔗 링크 복사</button>
+      </div>`;
+      d.querySelector("[data-x]").onclick = () => d.close();
+      if ($("asNative")) $("asNative").onclick = async () => { try { await navigator.share({ title: "ZONE", text, url }); d.close(); } catch (e) { /* 취소 */ } };
+      $("asCopy").onclick = async () => {
+        const all = `${text}\n${url}`;
+        let ok = false;
+        try { await navigator.clipboard.writeText(all); ok = true; } catch (e) { /* 아래 방법으로 */ }
+        if (!ok) { const inp = $("asUrl"); inp.value = all; inp.select(); try { ok = document.execCommand("copy"); } catch (e) { /* 무시 */ } inp.value = url; }
+        $("asCopy").textContent = ok ? "✅ 복사했어요 — 카톡·문자 창에 붙여넣기" : "링크를 길게 눌러 복사해 주세요";
+      };
+      if (!d.open) d.showModal();
     };
     if ($("acNotify")) $("acNotify").onclick = async () => { // 🔔 알림 켜기·끄기 (서버에 저장 → 꺼 두면 알림이 아예 안 만들어져요)
       const next = !(A.member && A.member.notify_on !== false);
@@ -906,10 +966,10 @@
       refresh();
     };
     $("acVis").onchange = (e) => TS.setPrivacy({ visibility: e.target.value });
-    $("acHide").onchange = (e) => TS.setPrivacy({ hideEnds: e.target.checked });
+
   }
 
-  const voiceOn = () => { try { return localStorage.getItem("training.voice") !== "off"; } catch (e) { return true; } };
+  const voiceOn = () => { try { return localStorage.getItem("training.voice") === "on"; } catch (e) { return false; } };
   function prLabel(k) {
     const [a, b, c] = k.split(".");
     if (a === "swim") return `수영 ${b} ${c}m`;

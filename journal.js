@@ -173,6 +173,7 @@
   const mark = (date) => { const e = get(date); return e ? (e.condition ? COND[e.condition] : "📝") : ""; };
 
   // ---------- 모아보기 (최근 30일 흐름 + 목록) ----------
+  let jy = null; // 몰아보기에서 고른 연도
   function openList() {
     let d = $("jnList");
     if (!d) { d = document.createElement("dialog"); d.id = "jnList"; d.className = "sheet-dlg"; document.body.appendChild(d); d.onclick = (ev) => { if (ev.target === d) d.close(); }; }
@@ -187,9 +188,21 @@
         <div class="jn-trend">${days.map((x, i) => { const s = sc(i); return `<i title="${x} ${s == null ? "" : s}" style="height:${s == null ? 4 : Math.max(8, s)}%;background:${s == null ? "var(--line)" : s >= 70 ? "#22c55e" : s >= 50 ? "#eab308" : "#ef4444"}"></i>`; }).join("")}</div>
         <div class="hint" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px"><span>쓴 날 <b>${es.filter(Boolean).length}</b>/30</span>${avg("sleep") ? `<span>평균 잠 <b>${avg("sleep").toFixed(1)}시간</b></span>` : ""}${avg("condition") ? `<span>평균 컨디션 <b>${COND[Math.round(avg("condition"))]}</b></span>` : ""}${avg("rhr") ? `<span>평균 안정시 심박 <b>${Math.round(avg("rhr"))}</b></span>` : ""}</div>
         <p class="hint" style="margin:6px 0 0">안정시 심박이 평소보다 5 이상 높거나, 빨간 날이 이어지면 피로가 쌓인 신호예요 — 쉬운 주로 바꿔 보세요.</p></div>
-      ${all.length ? all.slice(0, 60).map((x) => { const e = map[x], dt = new Date(x + "T00:00:00"); return `<button type="button" class="jn-item" data-jn="${x}"><b>${dt.getMonth() + 1}/${dt.getDate()} (${"일월화수목금토"[dt.getDay()]})</b> <span>${esc(summary(e))}</span>${e.body || e.workout ? `<span class="hint">${esc((e.workout || e.body).slice(0, 60))}</span>` : ""}</button>`; }).join("")
+      ${all.length ? (() => {
+        // 📅 연도 → 월별로 접어 두고, 누르면 그 달만 펼쳐져요 (몇 년 써도 보기 편하게)
+        const years = [...new Set(all.map((x) => x.slice(0, 4)))];
+        if (!years.includes(jy)) jy = years[0];
+        const ms = {}; all.filter((x) => x.slice(0, 4) === jy).forEach((x) => { (ms[x.slice(0, 7)] = ms[x.slice(0, 7)] || []).push(x); });
+        const keys = Object.keys(ms).sort().reverse();
+        const row = (x) => { const e = map[x], dt = new Date(x + "T00:00:00"), t = e.workout || e.body || "";
+          return `<button type="button" class="jn-item" data-jn="${x}"><span class="jn-d"><b>${dt.getDate()}</b><small>${"일월화수목금토"[dt.getDay()]}</small></span><span class="jn-b"><span class="jn-s">${esc(summary(e)) || "몸 상태 미입력"}</span>${t ? `<span class="jn-t">${esc(t)}</span>` : ""}</span></button>`; };
+        return `${years.length > 1 ? `<div class="seg jn-years" style="margin:0">${years.map((y) => `<button type="button" class="${y === jy ? "on" : ""}" data-jy="${y}">${y}년</button>`).join("")}</div>` : ""}
+          <div class="jn-months">${keys.map((k, i) => { const list = ms[k], cs = list.map((x) => map[x].condition).filter(Boolean), c = cs.length ? COND[Math.round(cs.reduce((a, b) => a + b, 0) / cs.length)] : "";
+            return `<details class="jn-month"${i === 0 ? " open" : ""}><summary><b>${+k.slice(5)}월</b><span class="hint">${list.length}일 기록${c ? ` · 평균 ${c}` : ""}</span><i>›</i></summary><div class="jn-mlist">${list.map(row).join("")}</div></details>`; }).join("")}</div>`;
+      })()
         : '<p class="hint" style="text-align:center">아직 쓴 일지가 없어요. 홈이나 달력에서 날짜를 눌러 써 보세요.</p>'}</div>`;
     d.querySelector("[data-x]").onclick = () => d.close();
+    d.querySelectorAll("[data-jy]").forEach((b) => { b.onclick = () => { jy = b.dataset.jy; openList(); }; });
     d.querySelectorAll("[data-jn]").forEach((b) => { b.onclick = () => { d.close(); open(b.dataset.jn); }; });
     if (!d.open) d.showModal();
   }

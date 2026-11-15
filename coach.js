@@ -316,6 +316,7 @@
     } else if (/피곤|잠을 못/.test(feel)) {
       out = hard ? easyFor(disc, Math.max(25, Math.round(dur * 0.7)), I, `${/잠/.test(feel) ? "잠이 부족한 날" : "피곤한 날"} 질 훈련은 효과보다 부상 위험이 커요. 오늘은 쉽게.` + moveTxt)
         : null;
+      if (!out && !sess) out = easyFor(disc, 30, I, `${/잠/.test(feel) ? "잠이 부족한 날" : "피곤한 날"}이라 오늘은 짧고 쉽게 몸만 풀어요. 너무 힘들면 쉬어도 괜찮아요.`);
       if (!out) {
         const mins = Math.max(20, Math.round(dur * 0.75));
         out = scaleTo({ ...parseSess(sess, I), duration_min: dur }, mins);
@@ -387,31 +388,46 @@
   ];
   const aboutHtml = () => `<details class="sg coach-about" open><summary><b>👤 코치 소개</b> <span class="hint">이 앱을 만든 사람</span></summary>
     <div style="display:grid;gap:8px;padding:8px 2px;line-height:1.7;font-size:14px">${ABOUT.map((t, i) => `<p style="margin:0${i === 4 ? ";font-weight:700" : ""}">${esc(t)}</p>`).join("")}</div></details>`;
+  // 💡 질문 목록 한눈에 보기: 화면을 가득 채워 모든 질문을 묶음별로 보여 주고, 누르면 바로 물어봐요
+  function openQuestions(onPick) {
+    let q = document.getElementById("qDlg");
+    if (!q) { q = document.createElement("dialog"); q.id = "qDlg"; q.className = "wide-dlg"; document.body.appendChild(q); }
+    q.innerHTML = `<div class="wide-hd"><b>💡 질문 목록 한눈에 보기</b><span class="hint">질문 ${QCOUNT}개 · 누르면 바로 물어봐요</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
+      <div class="wide-body">${SUGGEST_GROUPS.map(([g, sub, qs]) => `<section class="q-grp"><div class="q-h"><b>${g}</b> <span class="hint">${esc(sub)}</span></div>
+        <div class="q-list">${qs.map((s) => `<button type="button" class="q-it" data-pick="${esc(s)}">${esc(s)}</button>`).join("")}</div></section>`).join("")}</div>`;
+    q.querySelector(".wide-x").onclick = () => q.close();
+    q.querySelectorAll("[data-pick]").forEach((b) => { b.onclick = () => { q.close(); onPick(b.dataset.pick); }; });
+    if (!q.open) q.showModal();
+  }
   let showAbout = false;
   function openChat() {
     showAbout = false; // 코치 소개는 '👤 코치 소개'를 눌렀을 때만
     const d = dlg();
     const draw = () => {
       d.innerHTML = `<div style="display:flex;flex-direction:column;height:min(80vh,640px)">
-        <div class="spread" style="padding:14px 16px;border-bottom:1px solid var(--line)"><b>🧑‍🏫 코치에게 물어보기</b>
-          <span><button type="button" class="link" data-c="about" style="font-size:13px">👤 코치 소개</button> <button type="button" class="link" data-c="guide" style="font-size:13px">💡 질문 목록</button> <button type="button" class="link" data-c="clear" style="font-size:13px">대화 지우기</button>
-          <button type="button" class="link" data-c="x" aria-label="닫기" style="font-size:20px;margin-left:8px">✕</button></span></div>
+        <div class="coach-hd">
+          <div class="coach-title"><b>🧑‍🏫 코치에게 물어보기</b><button type="button" class="coach-x" data-c="x" aria-label="닫기">✕</button></div>
+          <div class="coach-tools"><button type="button" class="${showAbout ? "on" : ""}" data-c="about">👤 코치 소개</button><button type="button" data-c="guide">💡 질문 목록</button><button type="button" data-c="clear">🗑 대화 지우기</button></div>
+        </div>
         <div id="coachLog" style="flex:1;overflow-y:auto;padding:12px 16px;display:grid;gap:10px;align-content:start">
           ${showAbout ? aboutHtml() : ""}
-          ${hist.length ? "" : guideHtml(true)}
+          ${guideHtml(false)}
           ${hist.map((m) => `<div class="cmsg ${m.role === "user" ? "me" : "ai"}">${esc(m.content)}</div>`).join("")}
-          ${hist.length ? guideHtml(false) : ""}
+          ${hist.length ? `<button type="button" class="pill coach-again" data-c="again">🔄 질문 다시하기</button>` : ""}
         </div>
         <form id="coachForm" style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line)">
-          <input id="coachIn" placeholder="예: 내일 인터벌 페이스는?" autocomplete="off" style="flex:1" />
+          <button type="button" class="pill" data-c="guide2" title="질문 목록" aria-label="질문 목록" style="flex:none;padding:0 12px;font-size:18px">💡</button>
+          <input id="coachIn" placeholder="예: 내일 인터벌 페이스는?" autocomplete="off" style="flex:1;min-width:0" />
           <button class="primary">보내기</button></form>
         <p class="hint" style="margin:0 12px 10px;font-size:11px">일반적인 코칭 기준의 자동 답변이에요. 통증이 계속되면 전문가 진료를 받으세요.</p>
       </div>`;
       const log = d.querySelector("#coachLog"); log.scrollTop = log.scrollHeight;
       d.querySelector('[data-c="x"]').onclick = () => d.close();
       d.querySelector('[data-c="clear"]').onclick = () => { hist = []; saveHist(); draw(); };
+      const ag = d.querySelector('[data-c="again"]'); if (ag) ag.onclick = () => { hist = []; saveHist(); showAbout = false; draw(); d.querySelector("#coachLog").scrollTop = 0; }; // 처음 들어온 것처럼 다시 시작
       d.querySelector('[data-c="about"]').onclick = () => { showAbout = !showAbout; draw(); if (showAbout) d.querySelector("#coachLog").scrollTop = 0; };
-      d.querySelector('[data-c="guide"]').onclick = () => { const g = d.querySelector(".coach-guide"); if (g) { g.querySelector("details").open = true; g.scrollIntoView({ behavior: "smooth", block: "start" }); } };
+      d.querySelector('[data-c="guide"]').onclick = () => openQuestions((q) => send(q)); // 💡 질문 목록 한눈에 보기 (화면 가득)
+      d.querySelector('[data-c="guide2"]').onclick = () => openQuestions((q) => send(q)); // 입력칸 옆 💡 — 위로 올리지 않고 바로 다른 질문
       d.querySelectorAll("[data-q]").forEach((b) => { b.onclick = () => send(b.dataset.q); });
       d.querySelector("#coachForm").onsubmit = (e) => { e.preventDefault(); send(d.querySelector("#coachIn").value); };
     };

@@ -95,7 +95,18 @@
   }
   async function setUser(u) {
     const changed = (A.user && A.user.id) !== (u && u.id);
+    if (A.user && !u) { // 🚪 로그아웃: 이 기기에 남은 내 기록을 모두 지우고, 처음 온 사람처럼 홈에서 빈 화면으로
+      try {
+        PERSONAL.concat(["zone.coachChat", "zone.maxHr", "training.feedScope", "training.planView", "training.privacy"]).forEach((k) => localStorage.removeItem(k));
+        Object.keys(localStorage).filter((k) => /^zone\.(planSig|likeWins)\./.test(k)).forEach((k) => localStorage.removeItem(k));
+        sessionStorage.setItem("zone.afterLogout", "1");
+        history.replaceState(null, "", location.pathname);
+      } catch (e) { /* 무시 */ }
+      location.reload();
+      return;
+    }
     A.user = u || null;
+    if (changed && u && A.ready && TS.showTab) TS.showTab("home"); // 로그인하면 항상 홈으로
     if (changed && u && wipeIfOtherAccount(u.id)) return;
     await loadMember();
     await loadPlan().catch(() => {});
@@ -277,7 +288,8 @@
     }
     await setUser(s ? s.user : null);
     // 로그인 안 했으면 앱을 열자마자 로그인 · 회원가입 화면
-    if (!s && !/error_description=|type=recovery/.test(location.hash + location.search)) open("login");
+    let afterOut = false; try { afterOut = sessionStorage.getItem("zone.afterLogout") === "1"; sessionStorage.removeItem("zone.afterLogout"); } catch (e) { /* 무시 */ }
+    if (!s && !afterOut && !/error_description=|type=recovery/.test(location.hash + location.search)) open("login"); // 방금 로그아웃했으면 빈 홈부터
   });
   // 메일 링크가 만료됐거나 잘못된 경우 (주소 뒤에 error=… 가 붙어 와요)
   const linkErr = /error_description=([^&]+)/.exec(location.hash + "&" + location.search);

@@ -271,9 +271,9 @@
 
   // ---------- 훈련 방식 ----------
   const PHIL = {
-    polarized: { name: "폴라리제드 80/20", by: "스티븐 세일러 · 맷 피츠제럴드",
+    polarized: { name: "폴라리제드", by: "스티븐 세일러 · 맷 피츠제럴드",
       desc: "훈련 시간의 약 80%는 저강도(Z1–2), 20%는 중·고강도. 쉬운 날은 확실히 쉽게, 힘든 날은 확실히 힘들게. 고강도는 주 2회면 충분해요." },
-    norwegian: { name: "노르웨이 방식 (더블 역치)", by: "잉에브릭트센·블루멘펠트·이덴",
+    norwegian: { name: "노르웨이 방식 (역치)", by: "잉에브릭트센·블루멘펠트·이덴",
       desc: "역치 바로 아래(젖산 2.0~3.0mmol)에서 많은 양을 쌓고 나머지 날은 진짜 쉽게. 아마추어는 3주에 한 번 더블 역치(하루 2회)부터 시작해요." },
     maf: { name: "MAF (심박 상한 훈련)", by: "필 마페톤",
       desc: "180 − 나이(건강 상태로 보정)를 상한으로, 그보다 10 낮은 범위에서 훈련해 유산소 기초를 만들어요. 기초기에는 고강도를 하지 않아요." },
@@ -1992,12 +1992,13 @@
       w.factor *= cb.ramp[k]; w.recovery = false;
       w.comeback = { k: k + 1, n: cb.weeks, easy: k < Math.ceil(cb.weeks / 2), name: cb.name, pct: Math.round(cb.ramp[k] * 100) };
     });
-    const lowTarget0 = clamp(num(p.lowPct) || 80, 50, 100); // 저강도 목표 % (추천 80)
-    // 노르웨이 방식은 역치 훈련량이 많아서 설정한 비율보다 고강도를 8% 더 (예: 80:20 → 72:28)
-    const lowTarget1 = ctx.phil === "norwegian" ? Math.max(50, lowTarget0 - 8) : lowTarget0;
-    // 레벨이 낮으면 고강도 비중 상한을 낮춰요 (레벨 1: 5% · 2: 8% · 3: 10% · 4: 12% · 5: 15% · 6: 18% · 7: 25% …)
+    const lowTarget0 = clamp(num(p.lowPct) || 80, 50, 100); // 저강도 목표 % (추천 80) = A안(폴라리제드) 비율
+    // 레벨이 낮으면(1~5) 고강도 비중 상한을 지켜요 (레벨 1: 5% · 2: 8% · 3: 10% · 4: 12% · 5: 15%). 레벨 6 이상은 설정한 비율 그대로
     const hiMax = level ? LEVEL_HI_MAX[level.lv] : 35;
-    const lowTarget = Math.max(lowTarget1, 100 - hiMax);
+    const baseLow = level && level.lv <= 5 ? Math.max(lowTarget0, 100 - hiMax) : lowTarget0;
+    // 노르웨이 방식(B안)은 항상 A안보다 고강도 5% 더 (예: 80:20 → 75:25 · 85:15 → 80:20)
+    const lowTarget1 = ctx.phil === "norwegian" ? Math.max(50, baseLow - 5) : baseLow;
+    const lowTarget = lowTarget1;
     const cache = {};
     const week = (i) => (cache[i] = cache[i] || (() => {
       const wk = ss.weeks[i];
@@ -2053,7 +2054,7 @@
       if (level && level.lv <= 3 && !p.allowHi && i === 0) r.notes.push(`🌱 레벨 ${level.lv}(${level.name})은 Z3까지만 훈련해요 — Z4(역치)·Z5(최대 산소) 훈련은 레벨 4부터 넣어요. 이유: ① 지금 단계에서 실력이 가장 많이 느는 건 쉬운 강도(Z1~Z2)로 쌓는 시간이에요 — 심장·혈관·근육 속 에너지 공장(미토콘드리아)이 이 강도에서 가장 많이 자라요. ② 심폐는 몇 주 만에 좋아지지만 힘줄·인대·뼈는 몇 달이 걸려서, 강한 훈련을 일찍 넣으면 숨은 버텨도 몸이 다치기 쉬워요(정강이·무릎·아킬레스건). ③ Z4·Z5는 회복에 2~3일이 걸려 다음 운동을 망치고, 꾸준함이 무너지기 쉬워요. ④ Z3(말은 짧게 할 수 있는 정도)만으로도 처음 몇 달은 기록이 충분히 좋아져요. 주간 거리를 늘리거나 기록이 좋아져 레벨 4가 되면 강한 훈련이 자동으로 들어가요.`);
       if (level && lowTarget > lowTarget1 && i === 0) r.notes.push(`🏅 레벨 ${level.lv}(${level.name})이라 고강도 비중을 최대 ${LEVEL_HI_MAX[level.lv]}%까지만 넣어요 — 레벨이 오르면 강도도 같이 올라가요.`);
       if (prog && prog.pace && ["r4", "taper", "race", "peak", "build2"].includes(wk.key)) r.notes.push(`🏁 목표 레이스 페이스 ${fmt(prog.pace)}/km — 레이스 특화 시기라 M·T 세션 일부와 오프너를 이 페이스로 연습해요.`);
-      return { ...wk, ...r, sig, hardSigs, total: m.tot, lowPct: m.low, lowTarget: wkLow, userLow: lowTarget1, levelCap: lowTarget > lowTarget1, byDist: m.byDist, vdotWeek: cw.run ? cw.run.vdot : null, tss: r.sessions.reduce((a, s) => a + (s.tss || 0), 0) };
+      return { ...wk, ...r, sig, hardSigs, total: m.tot, lowPct: m.low, lowTarget: wkLow, userLow: lowTarget0, levelCap: baseLow > lowTarget0, byDist: m.byDist, vdotWeek: cw.run ? cw.run.vdot : null, tss: r.sessions.reduce((a, s) => a + (s.tss || 0), 0) };
     })());
     // 📈 체력(CTL·42일)·피로(ATL·7일)·컨디션(TSB) 예상 — TrainingPeaks 퍼포먼스 매니지먼트 차트 방식
     let pmcCache = null;
