@@ -74,6 +74,15 @@
     html, body, * { scrollbar-width: none; -ms-overflow-style: none; } *::-webkit-scrollbar { display: none; width: 0; height: 0; }
     button, a, input, select, textarea, label { touch-action: manipulation; }
     body { font-family: "Noto Sans KR", system-ui, sans-serif; font-size: 15px; -webkit-tap-highlight-color: transparent; }
+    /* 🔒 앱 안의 글·기록은 복사하지 못하게 (길게 눌러도 선택·복사 메뉴가 안 떠요). 입력칸에는 다른 곳에서 복사한 글을 붙여넣을 수 있어요 */
+    body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    input, textarea, select, [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+    /* 👆 손가락으로 누르기 쉽게: 작은 버튼·체크박스 최소 크기 (마지막 점검) */
+    .pill { min-height: 32px; }
+    input[type="checkbox"] { width: 20px; height: 20px; flex: none; }
+    .day-head > button { min-width: 34px; min-height: 32px; }
+    .mini-seg > button, .sw { min-height: 34px; }
+    [data-racerm] { min-width: 36px; min-height: 36px; }
     .num { font-family: "Barlow Condensed", "Noto Sans KR", sans-serif; font-weight: 800; letter-spacing: -.5px; line-height: 1; }
     .app { max-width: 640px; margin: 0 auto; padding: var(--safe-top) 16px calc(100px + env(safe-area-inset-bottom)); } /* 📱 위쪽 카메라·시계 영역 피하기 */
     .tab { display: none; }
@@ -962,22 +971,22 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="config.js?v=202611161600"></script>
-  <script src="zones.js?v=202611161600"></script>
-  <script src="app.js?v=202611161600"></script>
-  <script src="engine.js?v=202611161600"></script>
-  <script src="profile.js?v=202611161600"></script>
-  <script src="garmin.js?v=202611161600"></script>
-  <script src="tracker.js?v=202611161600"></script>
-  <script src="hub.js?v=202611161600"></script>
-  <script src="auth.js?v=202611161600"></script>
-  <script src="community.js?v=202611161600"></script>
-  <script src="strava.js?v=202611161600"></script>
-  <script src="coach.js?v=202611161600"></script>
-  <script src="predict.js?v=202611161600"></script>
-  <script src="feedback.js?v=202611161600"></script>
-  <script src="drills.js?v=202611161600"></script>
-  <script src="journal.js?v=202611161600"></script>
+  <script src="config.js?v=202611162200"></script>
+  <script src="zones.js?v=202611162200"></script>
+  <script src="app.js?v=202611162200"></script>
+  <script src="engine.js?v=202611162200"></script>
+  <script src="profile.js?v=202611162200"></script>
+  <script src="garmin.js?v=202611162200"></script>
+  <script src="tracker.js?v=202611162200"></script>
+  <script src="hub.js?v=202611162200"></script>
+  <script src="auth.js?v=202611162200"></script>
+  <script src="community.js?v=202611162200"></script>
+  <script src="strava.js?v=202611162200"></script>
+  <script src="coach.js?v=202611162200"></script>
+  <script src="predict.js?v=202611162200"></script>
+  <script src="feedback.js?v=202611162200"></script>
+  <script src="drills.js?v=202611162200"></script>
+  <script src="journal.js?v=202611162200"></script>
   <script>
     // 🔒 창(팝업·전체 화면)이 열려 있는 동안 뒤 화면은 고정 — 안쪽만 스크롤돼요. 모두 닫히면 자동으로 풀려요.
     (function () {
@@ -1000,6 +1009,7 @@
       sync();
     })();
     try { history.scrollRestoration = "manual"; } catch (e) { /* 앱을 다시 켜면 항상 맨 위에서 시작 */ }
+    ["copy", "cut"].forEach(function (ev) { document.addEventListener(ev, function (e) { e.preventDefault(); }, true); }); // 🔒 앱 안에서는 복사 안 돼요 (붙여넣기는 돼요)
     // 💬 브라우저 기본 알림창 대신 앱 안의 알림창 (앱에서도 똑같이 보이게)
     (function () {
       window.alert = function (msg) {
@@ -1034,6 +1044,6 @@
       document.addEventListener("scroll", onScroll, true);
     })();
   </script>
-  <script src="nav.js?v=202611161600"></script>
+  <script src="nav.js?v=202611162200"></script>
 </body>
 </html>

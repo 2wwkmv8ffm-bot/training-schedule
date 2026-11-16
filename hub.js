@@ -261,6 +261,22 @@
     { icon: "🌅", name: "새벽 훈련", desc: "오전 6시 전에 시작", p: (s) => [s.early ? 1 : 0, 1] },
     { icon: "🌙", name: "야간 훈련", desc: "오후 9시 이후 시작", p: (s) => [s.night ? 1 : 0, 1] },
   ];
+  function openBadges() { // 🎖 내 배지 모두 보기 (받은 배지 · 앞으로 받을 배지)
+    let d = $("badgeDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "badgeDlg"; d.className = "wide-dlg"; document.body.appendChild(d); d.onclick = (e) => { if (e.target === d) d.close(); }; }
+    const s = stats();
+    const list = BADGES.map((b) => { const [c, g] = b.p(s); return { b, ok: c >= g, c, g }; });
+    const got = list.filter((x) => x.ok), rest = list.filter((x) => !x.ok).sort((a, z) => z.c / z.g - a.c / a.g);
+    const tile = (x) => `<div class="badge${x.ok ? "" : " locked"}"><div class="em">${x.b.icon}</div><div class="bn">${esc(x.b.name)}</div><div class="bp">${x.ok ? "획득 ✓" : x.g > 1 ? `${Math.floor(Math.min(x.c, x.g) * 10) / 10}/${x.g}` : "아직"}</div><div class="bp">${esc(x.b.desc)}</div></div>`;
+    d.innerHTML = `<div class="wide-hd"><b>🎖 내 배지</b><span class="hint">${got.length}/${BADGES.length}</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
+      <div class="wide-body" style="padding:14px">
+        <h3 style="margin:0 0 8px">받은 배지 ${got.length}개</h3>
+        ${got.length ? `<div class="badges">${got.map(tile).join("")}</div>` : '<p class="hint">아직 받은 배지가 없어요. 첫 운동을 기록하면 🌱 첫 기록 배지를 받아요.</p>'}
+        <h3 style="margin:16px 0 8px">앞으로 받을 배지 ${rest.length}개</h3><div class="badges">${rest.map(tile).join("")}</div>
+      </div>`;
+    d.querySelector(".wide-x").onclick = () => d.close();
+    if (!d.open) d.showModal();
+  }
   const LEVELS = [[0, "스타터"], [50, "무버"], [200, "챌린저"], [500, "애슬리트"], [1000, "엘리트"], [2500, "마스터"], [5000, "레전드"]];
   function levelOf(total) {
     let i = 0;
@@ -781,7 +797,8 @@
       })()}
 
       <div class="card"><div class="spread"><h3 style="margin:0">🎖 배지</h3><span class="hint">${earned}/${BADGES.length}</span></div>
-        <div class="badges mt">${badgeHtml}</div>${BADGES.length > 6 ? `<button type="button" class="pill" id="meBadgeMore" style="width:100%;margin-top:10px">▼ 나머지 배지 ${BADGES.length - 6}개 보기</button>` : ""}</div>
+        <div class="badges mt">${badgeHtml}</div>
+        <button type="button" class="pill" id="meBadgeAll" style="width:100%;margin-top:10px">🎖 내 배지 모두 보기</button></div>
 
       ${accountCard()}
       <div class="card"><h3>⚙️ 설정</h3>
@@ -871,6 +888,7 @@
     $("meAvatar").onclick = pick;
     if ($("meLvTable")) $("meLvTable").onclick = () => TS.openLevel && TS.openLevel();
     if ($("mePrMore")) $("mePrMore").onclick = () => { const m = $("meBody").querySelector(".pr-more"), open = m.style.display === "none"; m.style.display = open ? "contents" : "none"; $("mePrMore").textContent = open ? "▲ 접기" : `▼ 나머지 기록 ${m.children.length}개 보기`; };
+    if ($("meBadgeAll")) $("meBadgeAll").onclick = () => openBadges();
     if ($("meBadgeMore")) $("meBadgeMore").onclick = () => { const m = $("meBody").querySelector(".badges-more"), open = m.style.display === "none"; m.style.display = open ? "contents" : "none"; $("meBadgeMore").textContent = open ? "▲ 접기" : `▼ 나머지 배지 ${m.children.length}개 보기`; };
     if ($("meZoom")) $("meZoom").onclick = () => { const z = window.ZONE_ZOOM; if (!z) return; z.set(!z.get()); renderMe(); }; // 확대 켜기·끄기 (꺼 두면 앱처럼 고정)
     if ($("meBlocks")) $("meBlocks").onclick = async () => { // 🚫 차단 목록 · 풀기

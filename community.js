@@ -218,18 +218,15 @@
   const SAVE_KEY = "training.savedPosts";
   const saved = new Set((() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || "[]"); } catch (e) { return []; } })());
   const keepSaved = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify([...saved])); } catch (e) { /* 무시 */ } };
-  let tag = null, stories = [], board = [], hotP = "week", champs = null;
+  let tag = null, stories = [], board = [], hotP = "week", champs = null, hotFb = false; let reviewOk = false; // 심사용 계정: 이번에 들어와서 동의했는지 (커뮤니티에 다시 들어오면 다시 물어요)
   const clean = (rows) => (rows || []).map((p) => ({ ...p, activities: p.activities && p.activities.source !== "strava" ? p.activities : null }));
   const monday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; };
 
   // ---------- 🔥 인기: 오늘·주간·월간·전체 좋아요 1등 + 1등 배지 ----------
   const HOT_P = [["day", "오늘"], ["week", "주간"], ["month", "월간"], ["all", "전체"]];
-  function periodStart(k) {
-    const d = new Date(); d.setHours(0, 0, 0, 0);
-    if (k === "week") return monday().toISOString();
-    if (k === "month") { d.setDate(1); return d.toISOString(); }
+  function periodStart(k) { // 최근 24시간 · 7일 · 30일 (월요일·1일에도 비어 보이지 않게 '지금부터 거꾸로' 세요)
     if (k === "all") return "";
-    return d.toISOString();
+    return new Date(Date.now() - { day: 1, week: 7, month: 30 }[k] * 864e5).toISOString();
   }
   const nLikes = (p) => (p.post_likes || []).length;
   function hotChamps(list) {
@@ -284,7 +281,9 @@
     }
     // 📜 커뮤니티 이용 규칙 동의 (처음 한 번 — 앱스토어 심사: 사용자 글이 있는 앱은 규칙 동의·신고·차단이 필요해요)
     const RK = "zone.comRules." + A.user.id;
-    let agreed = false; try { agreed = !!localStorage.getItem(RK); } catch (e) { agreed = true; }
+    const mem = A.member || {}, isReview = /^ZONE\s*심사/.test(mem.nickname || "") && tagNo(A.user.id) === "1486"; // 🍎 심사용 계정(ZONE 심사#1486)은 들어올 때마다 동의를 보여 줘요
+    let agreed = isReview ? reviewOk : !!(A.user.user_metadata && A.user.user_metadata.comRules); // 계정에 저장된 동의 — 한 번 동의하면 다시 묻지 않아요
+    if (!agreed && !isReview) { try { agreed = !!localStorage.getItem(RK); } catch (e) { agreed = true; } if (agreed) db.auth.updateUser({ data: { comRules: new Date().toISOString() } }).catch(() => {}); }
     if (!agreed) {
       box.innerHTML = `<div class="card rules-card"><h3>📜 커뮤니티 이용 규칙</h3>
         <p class="hint" style="margin-top:0">모두가 즐겁게 운동 이야기를 나눌 수 있도록 아래 규칙을 지켜 주세요.</p>
@@ -298,7 +297,7 @@
         <label class="check" style="font-size:13.5px"><input type="checkbox" id="rulesChk" /> 위 규칙과 <a href="terms.html" target="_blank" rel="noopener">이용약관</a>에 동의해요</label>
         <button type="button" class="primary" id="rulesOk" disabled style="width:100%;margin-top:10px">동의하고 커뮤니티 시작</button></div>`;
       $("rulesChk").onchange = (e) => { $("rulesOk").disabled = !e.target.checked; };
-      $("rulesOk").onclick = () => { try { localStorage.setItem(RK, new Date().toISOString()); } catch (e) { /* 무시 */ } render(); };
+      $("rulesOk").onclick = () => { if (isReview) { reviewOk = true; render(); return; } const t = new Date().toISOString(); try { localStorage.setItem(RK, t); } catch (e) { /* 무시 */ } A.user.user_metadata = Object.assign({}, A.user.user_metadata, { comRules: t }); db.auth.updateUser({ data: { comRules: t } }).catch(() => {}); render(); };
       return;
     }
     if (!feed.length) box.innerHTML = '<p class="hint">불러오는 중…</p>';
@@ -319,7 +318,7 @@
       db.from("posts").select("user_id,members!posts_user_id_fkey(nickname,avatar_url),activities(sport,distance_m,duration_s,started_at,source)").in("user_id", circle).not("activity_id", "is", null).gte("created_at", monday().toISOString()).limit(200),
     ]);
     feed = clean(main.data);
-    if (scope === "hot") { champs = hotChamps(feed); Object.values(champs).forEach((p) => { if (p) extra[p.id] = p; }); feed = feed.filter((p) => p.created_at >= periodStart(hotP)).sort((a, b) => (b.post_likes || []).length - (a.post_likes || []).length); recordWins(champs); }
+    if (scope === "hot") { champs = hotChamps(feed); Object.values(champs).forEach((p) => { if (p) extra[p.id] = p; }); { const byL = (a, b) => (b.post_likes || []).length - (a.post_likes || []).length || b.created_at.localeCompare(a.created_at); const inP = feed.filter((p) => p.created_at >= periodStart(hotP)); hotFb = !inP.length && feed.length > 0; feed = (hotFb ? feed.slice(0, 30) : inP).sort(byL); } recordWins(champs); }
     stories = clean(st.data);
     board = rank(bd.data || []);
     await loadFollows([...feed, ...stories].map((p) => p.user_id).concat(board.map((o) => o.id)));
@@ -354,7 +353,7 @@
       <div class="com-bar">${(() => { const SC = [["all", "🌏 전체"], ["friends", "👥 친구"], ["hot", "🔥 인기"], ["saved", "🔖 저장"]]; const cur = SC.find(([k]) => k === scope) || SC[0];
         return `<details class="scope-pick"><summary><span>${cur[1]}</span><i>▾</i></summary><div class="scope-menu">${SC.map(([k, l]) => `<button type="button" data-scope="${k}" class="${scope === k ? "on" : ""}">${l}${scope === k ? " ✓" : ""}</button>`).join("")}</div></details>`; })()}<button type="button" id="comWrite" class="com-w">✍️ 사진·글 올리기</button></div>
       ${scope === "hot" && !tag ? `<div class="seg hot-p">${HOT_P.map(([k, l]) => `<button type="button" data-hotp="${k}" class="${hotP === k ? "on" : ""}">${l}</button>`).join("")}</div>
-        <div class="card hot-champ"><b>👑 좋아요 1등</b>${HOT_P.map(([k, l]) => { const p = champs && champs[k], m = (p && p.members) || {}; return `<button type="button" class="hc-row" ${p ? `data-open="${esc(p.id)}"` : "disabled"}><span class="hc-k">${WIN_ICON[k]} ${l}</span>${p ? `${avatar(m, 26)}<b>${esc(p.user_id === me() ? "나" : m.nickname || "?")}</b><span class="hc-n">❤️ ${nLikes(p)}</span>` : '<span class="hint">아직 없어요</span>'}</button>`; }).join("")}</div>
+        <p class="hint" style="margin:4px 2px 8px">오늘 = 최근 24시간 · 주간 = 최근 7일 · 월간 = 최근 30일</p>${hotFb ? `<div class="note">이 기간에 올라온 글이 아직 없어서, 최근 인기 글을 보여 드려요.</div>` : ""}<div class="card hot-champ"><b>👑 좋아요 1등</b>${HOT_P.map(([k, l]) => { const p = champs && champs[k], m = (p && p.members) || {}; return `<button type="button" class="hc-row" ${p ? `data-open="${esc(p.id)}"` : "disabled"}><span class="hc-k">${WIN_ICON[k]} ${l}</span>${p ? `${avatar(m, 26)}<b>${esc(p.user_id === me() ? "나" : m.nickname || "?")}</b><span class="hc-n">❤️ ${nLikes(p)}</span>` : '<span class="hint">아직 없어요</span>'}</button>`; }).join("")}</div>
         <details class="card wbox"><summary><b>🏅 내 1등 배지</b> <span class="hint">1등 하면 받아요</span></summary><div class="wb-grid">${winBadges()}</div></details>` : ""}
       ${tag ? `<div class="tag-bar"><b>#${esc(tag)}</b><span class="hint">태그가 달린 글</span><button type="button" class="link" id="comTagX">✕ 태그 해제</button></div>` : ""}
       ${board.length && scope === "friends" && !tag ? `<details class="card board" open><summary><b>🏆 이번 주 친구 랭킹</b> <span class="hint">운동 시간 기준 · 월요일부터</span></summary>
@@ -973,7 +972,7 @@
     });
   }
 
-  TS.community = { render, toAll: () => { if (scope !== "all" || tag) { scope = "all"; tag = null; feed = []; } }, _paint: (f, s, b, sc) => { if (sc) scope = sc; feed = f; stories = s; board = b; if (scope === "hot") { champs = hotChamps(f); feed = f.filter((p) => p.created_at >= periodStart(hotP)); } paint($("comBody")); } }; // _paint: 화면 미리보기·점검용
+  TS.community = { render, toAll: () => { reviewOk = false; if (scope !== "all" || tag) { scope = "all"; tag = null; feed = []; } }, _paint: (f, s, b, sc) => { if (sc) scope = sc; feed = f; stories = s; board = b; if (scope === "hot") { champs = hotChamps(f); feed = f.filter((p) => p.created_at >= periodStart(hotP)); } paint($("comBody")); } }; // _paint: 화면 미리보기·점검용
   window.addEventListener("ts:auth", () => {
     // (공유 링크로 들어와도 앱은 항상 홈에서 시작해요. 커뮤니티 탭을 열면 그 글로 이동해요)
     if (document.getElementById("tab-community").classList.contains("show")) render();

@@ -175,9 +175,9 @@
     const today = iso(new Date());
     const up = (profile.races || []).filter((r) => r.date >= today).map((r) => r.date).sort();
     const lastRace = up.length ? new Date(up[up.length - 1] + "T00:00:00") : null;
-    const nW = lastRace ? Math.min(16, Math.max(8, Math.ceil((lastRace - P.week(0).start) / (7 * 864e5)) + 2)) : 8; // 최소 8주
+    const nW = savedCalWeeks() || (lastRace ? Math.min(16, Math.max(8, Math.ceil((lastRace - P.week(0).start) / (7 * 864e5)) + 2)) : 8); // 달력에 넣은 기간 그대로 (처음엔 8주, 대회가 있으면 대회까지)
     const end = iso(addDays(P.week(0).start, 7 * nW - 1));
-    const { data: old } = await TS.mine(db.from(TS.TABLE).select("id,date,notes,completed")).gte("date", today).lte("date", end).like("notes", "[자동 계획]%");
+    const { data: old } = await TS.mine(db.from(TS.TABLE).select("id,date,notes,completed")).gte("date", today).like("notes", "[자동 계획]%");
     const keep = new Set((old || []).filter((s) => s.completed || /🧑‍🏫 코치:/.test(s.notes || "")).map((s) => s.date));
     const del = (old || []).filter((s) => !keep.has(s.date));
     if (del.length) await db.from(TS.TABLE).delete().in("id", del.map((x) => x.id));
@@ -663,10 +663,10 @@
   // A안·B안 비교: 지금 보고 있는 주(강도가 있는 주 기준) 저강도 비율·질 훈련 수·핵심 훈련
   function vWeek(v) { // 회복 주면 다음 주를 대표로
     let i = weekIdx, w = v.plan.week(i);
-    while (w.recovery && i < weekIdx + 3) w = v.plan.week(++i);
+    while ((w.recovery || ["taper", "race"].includes(w.key)) && i < weekIdx + 3) w = v.plan.week(++i); // 회복·조정기 주는 건너뛰고 보통 주로 비교
     return w;
   }
-  const vTarget = (v) => { const w = vWeek(v); return w.lowTarget || w.lowPct; }; // 이 안의 목표 저강도 %
+  const vTarget = (v) => { const w = vWeek(v); return w.planLow || w.lowTarget || w.lowPct; }; // 이 안의 목표 저강도 % (대회 직전 조정기에도 A·B 원래 비율로 — 항상 5% 차이)
   function vStats(v) {
     const w = vWeek(v), q = w.sessions.filter((s) => s.lvl >= 3 && s.type !== "Test" && s.type !== "Long");
     return { low: w.lowPct, q: q.length, dbl: w.sessions.filter((s) => s.type === "Double" || /더블/.test(s.tag || "")).length, min: w.total, keys: [...new Set(q.map((s) => s.name || s.tag))] };
@@ -1257,7 +1257,7 @@
       vSel = i; plan = v.plan;
       await updateProfile({ planPick: v.key });
       variants = makeVariants(profile); vSel = pickIdx(variants); plan = variants[vSel].plan;
-      await addToCalendar(0, 8, el, true);
+      await addToCalendar(0, savedCalWeeks() || 8, el, true);
       return;
     }
     if (d.tab) { if ((d.tab === "year" || d.tab === "quarter") && TS.plan && !TS.plan.can("yearPlan")) return; planTab = d.tab; } // 💎 유료 전환 시 잠금 (지금은 무료)
@@ -1291,18 +1291,25 @@
       ...(s.alt ? ["", `대안: ${s.alt.name} — ${s.alt.why}`, "대안구성:", ...s.alt.steps.map((x) => `- ${x}`)] : []),
     ].filter((x) => x !== null).join("\n");
   }
+  // 📅 달력에 넣은 기간(주 수)을 기억해요 — 설정이 바뀌어 자동으로 다시 짤 때도 그 기간만큼만 넣어요
+  const calWeeksKey = () => "zone.calWeeks." + ((TS.auth && TS.auth.user && TS.auth.user.id) || "local");
+  function savedCalWeeks() { try { return +localStorage.getItem(calWeeksKey()) || 0; } catch (e) { return 0; } }
   async function addToCalendar(first, count, btn, noAsk) {
     clearTimeout(syncTimer); // 직접 넣는 중에는 자동 맞춤을 잠시 멈춰요
     const last = Math.min(51, first + count - 1);
-    const from = iso(plan.week(first).start), to = iso(addDays(plan.week(last).start, 6));
+    const from = iso(plan.week(first).start), to = iso(addDays(plan.week(last).start, 6)), today = iso(new Date());
+    const low = from < today ? from : today; // 이 기간 + 오늘 이후 자동 계획은 모두 새로 — 고른 기간만 달력에 남아요
     btn.disabled = true;
-    const { data: old, error: e1 } = await TS.mine(db.from(TS.TABLE).select("id,date,completed")).gte("date", from).lte("date", to).like("notes", "[자동 계획]%");
+    const { data: old, error: e1 } = await TS.mine(db.from(TS.TABLE).select("id,date,notes,completed")).gte("date", low).like("notes", "[자동 계획]%");
     if (e1) { alert(TS.explainError(e1).replace(/<[^>]+>/g, "")); btn.disabled = false; return; }
-    if (old.length) {
-      if (!noAsk && !await TS.ask(`이 기간에 이미 자동 계획 ${old.length}개가 있어요. 새 계획으로 바꿀까요?`)) { btn.disabled = false; return; }
-      const del = old.filter((x) => !x.completed); if (del.length) await db.from(TS.TABLE).delete().in("id", del.map((x) => x.id)); // 완료한 훈련은 그대로 둬요
+    const keepRow = (x) => x.completed || /🧑‍🏫 코치:/.test(x.notes || ""); // 완료한 훈련·코치가 고친 날은 그대로
+    const del = (old || []).filter((x) => !keepRow(x) && (x.date >= today || (x.date >= from && x.date <= to)));
+    if (del.length) {
+      if (!noAsk && !await TS.ask(`달력에 있던 자동 계획 ${del.length}개를 지우고, 고른 기간(${count}주)만 새로 넣을게요. 완료한 훈련은 그대로 둬요.`, "넣기", "취소")) { btn.disabled = false; return; }
+      await db.from(TS.TABLE).delete().in("id", del.map((x) => x.id));
     }
-    const done = new Set((old || []).filter((x) => x.completed).map((x) => x.date)), rows = [];
+    try { localStorage.setItem(calWeeksKey(), String(last - first + 1)); } catch (e) { /* 무시 */ }
+    const done = new Set((old || []).filter(keepRow).map((x) => x.date)), rows = [];
     for (let i = first; i <= last; i++) {
       const W = plan.week(i);
       W.sessions.filter((s) => !done.has(iso(addDays(W.start, s.day)))).forEach((s) => rows.push({
