@@ -1,8 +1,16 @@
 {
-  "appId": "com.zone.training",
+  "appId": "com.zonetraining.app",
   "appName": "ZONE",
   "webDir": "www",
+  "server": {
+    "url": "https://2wwkmv8ffm-bot.github.io/training-schedule/",
+    "cleartext": false
+  },
   "android": {
     "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "never",
+    "limitsNavigationsToAppBoundDomains": false
   }
 }

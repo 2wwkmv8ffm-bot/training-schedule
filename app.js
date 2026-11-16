@@ -27,7 +27,7 @@
   }
   function mine(q) {
     if (!session.user) return q.eq("user_id", "00000000-0000-0000-0000-000000000000"); // 로그인 전에는 아무 일정도 안 보여요
-    if (!session.scoped) return q;
+    // 🔒 어떤 경우에도 내 일정만 (예전엔 확인이 실패하면 모든 사람 일정이 보일 수 있었어요)
     return session.user ? q.eq("user_id", session.user.id) : q.eq("user_id", "00000000-0000-0000-0000-000000000000"); // 로그인 전에는 아무 일정도 안 보여요 (손님 일정 공유 방지)
   }
 
@@ -87,7 +87,7 @@
 
   // ---------- 주간 / 월간(캘린더) 보기 ----------
   const VIEW_KEY = "training.planView";
-  let view = (() => { try { return localStorage.getItem(VIEW_KEY) === "month" ? "month" : "week"; } catch (e) { return "week"; } })();
+  let view = "month"; // 계획 탭은 언제나 월간부터 보여요
   let monthCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   let selDay = null;
   function monthGrid() {
@@ -104,6 +104,7 @@
     load();
   }
   document.querySelectorAll("#viewSeg [data-view]").forEach((b) => { b.onclick = () => setView(b.dataset.view); });
+  setTimeout(() => { window.TS.planMonth = () => { if (view !== "month") setView("month"); }; }, 0); // 계획 탭에 들어가면 월간부터
 
   // ---------- 데이터 ----------
   async function load() {

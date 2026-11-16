@@ -20,6 +20,7 @@
     // 탭을 옮길 때마다 기록해서, 휴대폰 '뒤로'로 이전 탭에 돌아갈 수 있게
     if (!(opts && opts.fromPop) && name !== current) { try { history.pushState({ tab: name }, ""); } catch (e) { /* 무시 */ } }
     if (name === "community" && current !== "community" && TS.community && TS.community.toAll) TS.community.toAll();
+    if (name === "plan" && current !== "plan" && TS.planMonth) TS.planMonth();
     current = name;
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("show", t.id === "tab-" + name));
     document.querySelectorAll(".tabbar button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
@@ -536,10 +537,9 @@
         <div class="spread">${period !== "all" ? `<button type="button" class="icon" data-off="-1">‹</button>` : "<span></span>"}
           <b>${periodLabel(s)}</b>
           ${period !== "all" ? `<button type="button" class="icon" data-off="1" ${offset >= 0 ? "disabled" : ""}>›</button>` : "<span></span>"}</div>
-        ${list.length ? `<div style="text-align:center;margin-top:12px"><div class="num hero">${totKm.toFixed(1)}</div><div class="hero-unit">킬로미터</div></div>
-        <div class="trio" style="text-align:center">
+        ${list.length ? `<div class="hero-pair"><div><div class="num hero">${totKm.toFixed(1)}</div><div class="hero-unit">킬로미터</div></div><div><div class="num hero">${fmtDur(totT)}</div><div class="hero-unit">시간</div></div></div>
+        <div class="trio" style="text-align:center;grid-template-columns:1fr 1fr">
           <div><b class="num">${list.length}</b><span>활동</span></div>
-          <div><b class="num">${fmtDur(totT)}</b><span>시간</span></div>
           <div><b class="num">${runs.length ? fmtPace(runPace) : "-"}</b><span>평균 페이스</span></div>
         </div>
         ${vals.length ? bars(vals, labels) : ""}` : `<p class="hint" style="text-align:center;margin:10px 0 0">이 기간에 기록이 없어요 — 0km · 0회</p>`}

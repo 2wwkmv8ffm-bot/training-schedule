@@ -25,7 +25,7 @@
   const LV_FG = (l) => (l === 3 ? "#422006" : "#fff");
 
   let profile = null, draft = null, step = 0, cloudOk = true;
-  let planTab = "week", weekIdx = 0, monthIdx = 0, qIdx = 0, plan = null;
+  let planTab = "month", weekIdx = 0, monthIdx = 0, qIdx = 0, plan = null;
 
   const clone = (o) => JSON.parse(JSON.stringify(o));
   function getPath(o, p) { return p.split(".").reduce((a, k) => (a == null ? undefined : a[k]), o); }
@@ -80,29 +80,11 @@
     if (!profile || syncBusy || profile.holdSync) return 0; // 대회를 추가하고 "나중에"를 고르면 자동으로 바꾸지 않아요
     syncBusy = true;
     try {
-      const VS = makeVariants(profile), P = VS[pickIdx(VS)].plan;
-      const today = iso(new Date()), end = iso(addDays(P.week(0).start, 7 * 8 - 1));
-      const { data: old, error } = await TS.mine(db.from(TS.TABLE).select("id,date,title,category,notes,completed")).gte("date", today).lte("date", end).like("notes", "[자동 계획]%");
-      if (error || !old || !old.length) return 0;
-      const cats = new Set([...discsOf(profile.sport).map((x) => DISC[x].cat), "브릭"]);
-      if (!old.some((s) => cats.has(s.category))) return 0; // 다른 종목 계획이 들어 있으면 건드리지 않아요
-      const keep = new Set(old.filter((s) => s.completed || /🧑‍🏫 코치:/.test(s.notes || "")).map((s) => s.date));
-      const weeks = new Set(old.map((s) => iso(mondayOf(new Date(s.date + "T00:00:00")))));
-      const rows = [];
-      for (let i = 0; i < 8; i++) {
-        const W = P.week(i);
-        if (!weeks.has(iso(W.start))) continue; // 달력에 넣어 둔 주만
-        W.sessions.forEach((s) => { const d = iso(addDays(W.start, s.day)); if (d >= today && d <= end && !keep.has(d)) rows.push(rowOf(s, d)); });
-      }
-      const oldRep = old.filter((s) => !keep.has(s.date));
-      const sig = (a) => a.map((x) => `${x.date}|${x.title}`).sort().join(";");
-      if (sig(oldRep) === sig(rows)) return 0;
-      if (oldRep.length) await db.from(TS.TABLE).delete().in("id", oldRep.map((x) => x.id));
-      if (rows.length) await db.from(TS.TABLE).insert(rows);
-      const el = document.createElement("div"); el.className = "toast"; el.textContent = `📅 바뀐 계획을 달력에도 반영했어요 (${rows.length}개)`;
-      document.body.appendChild(el); setTimeout(() => el.remove(), 3500);
+      // 설정이 바뀌면 → 이번 주부터 8주(대회가 있으면 대회까지) 달력·홈 일정을 새 계획 그대로 (완료한 훈련·코치가 바꾼 날은 그대로)
+      const n = await applyPlanToCalendar();
+      if (n) { const el = document.createElement("div"); el.className = "toast"; el.textContent = `📅 바뀐 설정대로 달력을 새로 짰어요 (${n}개)`; document.body.appendChild(el); setTimeout(() => el.remove(), 3500); }
       TS.reload();
-      return rows.length;
+      return n;
     } finally { syncBusy = false; }
   }
   // 🏁 홈에서 대회 추가 → 이 대회에 맞춰 스케줄을 바꿀지 물어보기
@@ -189,11 +171,11 @@
   // 오늘부터 대회(+회복)까지 (4~16주) 앞으로의 자동 계획을 새 계획으로 바꿔요
   async function applyPlanToCalendar() {
     clearTimeout(syncTimer);
-    const P = makeVariants(profile)[0].plan;
+    const VS = makeVariants(profile), P = VS[pickIdx(VS)].plan; // 고른 안(A·B) 그대로
     const today = iso(new Date());
     const up = (profile.races || []).filter((r) => r.date >= today).map((r) => r.date).sort();
     const lastRace = up.length ? new Date(up[up.length - 1] + "T00:00:00") : null;
-    const nW = lastRace ? Math.min(16, Math.max(4, Math.ceil((lastRace - P.week(0).start) / (7 * 864e5)) + 2)) : 4;
+    const nW = lastRace ? Math.min(16, Math.max(8, Math.ceil((lastRace - P.week(0).start) / (7 * 864e5)) + 2)) : 8; // 최소 8주
     const end = iso(addDays(P.week(0).start, 7 * nW - 1));
     const { data: old } = await TS.mine(db.from(TS.TABLE).select("id,date,notes,completed")).gte("date", today).lte("date", end).like("notes", "[자동 계획]%");
     const keep = new Set((old || []).filter((s) => s.completed || /🧑‍🏫 코치:/.test(s.notes || "")).map((s) => s.date));
@@ -548,11 +530,15 @@
     draft.updatedAt = new Date().toISOString();
     draft.bySport = draft.bySport || {};
     draft.bySport[draft.sport] = pickSport(draft); // 이 종목 문진표로 저장
+    delete draft.holdSync; // 문진표를 새로 저장하면 그 설정대로 바로 달력에 반영해요
     await saveProfile(draft);
     $("wzNext").disabled = false;
     setProfile(clone(draft));
+    clearTimeout(syncTimer);
+    // 📅 설정한 대로: 이번 주부터 8주(대회가 있으면 대회까지) 달력·홈 일정을 새 계획으로 바꿔요 (완료한 훈련·코치가 바꾼 날은 그대로)
+    try { const n = await applyPlanToCalendar(); if (n) toastP(`📅 문진표대로 달력을 새로 짰어요 (${n}개)`); TS.reload(); } catch (e) { /* 무시 */ }
     closeWizard();
-    planTab = "week"; weekIdx = 0; monthIdx = 0; qIdx = 0;
+    planTab = "month"; weekIdx = 0; monthIdx = 0; qIdx = 0;
     openPlan();
   }
 
@@ -838,7 +824,7 @@
     if (!profile) { openWizard(0); return; }
     // 계획을 보여주기 전에: 어떤 대회·거리를 목표로, 목표 기록·현재 최고기록이 얼마인지 먼저 확인
     if (!profile.goalSetAt && force !== true) { openGoal(() => openPlan(true)); return; }
-    variants = makeVariants(profile);
+    variants = makeVariants(profile); planTab = "month"; // 계획을 열면 월간부터
     vSel = pickIdx(variants);
     plan = variants[vSel].plan;
     renderPlan();
@@ -1280,8 +1266,10 @@
     else if (d.mo) monthIdx = Math.max(0, Math.min(48, monthIdx + +d.mo));
     else if (d.goweek !== undefined) { weekIdx = +d.goweek; planTab = "week"; }
     else if (d.add) { const [i, c] = d.add.split(":").map(Number); addToCalendar(i, c, el); return; }
+    const ov = $("planOv"), keepY = ov.scrollTop;
     renderPlan();
-    $("planOv").scrollTop = 0;
+    // 버튼을 눌러도 화면이 위로 튀지 않게 (보던 자리 그대로). 주를 눌러 들어갈 때만 탭 줄이 보이는 곳으로
+    if (d.goweek !== undefined) { const sg = ov.querySelector("#planBody .seg"); ov.scrollTop = sg ? Math.max(0, sg.offsetTop - 8) : 0; } else ov.scrollTop = keepY;
   });
 
   $("planBody").addEventListener("input", (e) => { // 슬라이더 움직이면 숫자만 바로 바꾸기
