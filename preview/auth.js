@@ -249,8 +249,8 @@
       b.onclick = () => {
         const id = f.email.value.split("@")[0].trim();
         if (!b.dataset.dom) { f.email.focus(); return; }
-        f.email.value = (id || "") + "@" + b.dataset.dom;
-        if (!id) { f.email.focus(); f.email.setSelectionRange(0, 0); }
+        if (!id) { f.email.placeholder = `아이디를 먼저 적고 눌러 주세요 (예: zone@${b.dataset.dom})`; f.email.focus(); return; } // 이메일 칸은 커서 위치를 못 바꿔서, 아이디부터 받아요
+        f.email.value = id + "@" + b.dataset.dom;
       };
     });
   }
