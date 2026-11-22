@@ -636,7 +636,11 @@
     .car-wrap { position: relative; margin-bottom: 4px; user-select: none; }
     .car { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; background: #000; }
     .car::-webkit-scrollbar { display: none; }
-    .car img { flex: none; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; scroll-snap-align: center; display: block; }
+    .car img, .car video { flex: none; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; scroll-snap-align: center; display: block; background: #000; }
+    .ex-cell { position: relative; } .ex-cell video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .vid-ic { position: absolute; top: 6px; right: 6px; color: #fff; font-size: 13px; text-shadow: 0 1px 3px rgba(0,0,0,.6); pointer-events: none; }
+    .sv-media video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+    .media .m video { width: 100%; height: 100%; object-fit: cover; display: block; }
     .car-dots { display: flex; justify-content: center; gap: 4px; padding: 6px 0 0; }
     .car-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
     .car-dots i.on { background: var(--accent); }

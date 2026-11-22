@@ -61,6 +61,20 @@
   }
   // 사진인지 확인 (안드로이드 파일 앱은 형식이 비어 있을 때가 있어서 확장자도 봐요)
   function isImg(f) { return /^image\//.test(f.type) || /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i.test(f.name || ""); }
+  // 🎬 동영상 (1개, 60초·50MB까지)
+  const VID_MAX_MB = 50, VID_MAX_SEC = 60;
+  function isVid(f) { return /^video\//.test(f.type) || /\.(mp4|mov|m4v|webm)$/i.test(f.name || ""); }
+  const isVidPath = (ph) => /\.(mp4|mov|m4v|webm)$/i.test(String(ph || ""));
+  const vidLen = (f) => new Promise((res) => { const v = document.createElement("video"); v.preload = "metadata"; v.onloadedmetadata = () => { res(v.duration || 0); URL.revokeObjectURL(v.src); }; v.onerror = () => res(0); v.src = URL.createObjectURL(f); });
+  async function uploadVideo(file, path) {
+    const { error } = await db.storage.from(BUCKET).upload(path, file, { contentType: file.type || "video/mp4", upsert: true });
+    if (error) throw new Error(/mime|type|size|large|payload/i.test(error.message) ? "동영상을 올릴 수 없어요. 서버의 동영상 허용 설정이 필요해요." : error.message);
+    return path;
+  }
+  // 사진·동영상 한 칸 그리기
+  const mediaTag = (ph, cls = "") => isVidPath(ph) ? `<video class="${cls}" src="${esc(pubUrl(ph))}" playsinline muted loop controls preload="metadata"></video>` : `<img class="${cls}" src="${esc(pubUrl(ph))}" alt="운동 사진" loading="lazy" />`;
+  // ⭕ 스토리는 'stories/' 폴더에 저장된 글이에요 (게시물과 따로, 24시간만 보여요)
+  const isStoryPost = (p) => Array.isArray(p.media) && /^stories\//.test(String(p.media[0] || ""));
   async function uploadImage(file, path, max) {
     const blob = await shrink(file, max);
     const { error } = await db.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || "image/jpeg", upsert: true });
@@ -323,9 +337,9 @@
       db.from("posts").select(SEL).in("user_id", circle).gte("created_at", new Date(Date.now() - 864e5).toISOString()).order("created_at", { ascending: true }).limit(60),
       db.from("posts").select("user_id,members!posts_user_id_fkey(nickname,avatar_url),activities(sport,distance_m,duration_s,started_at,source)").in("user_id", circle).not("activity_id", "is", null).gte("created_at", monday().toISOString()).limit(200),
     ]);
-    feed = clean(main.data);
+    feed = clean(main.data).filter((p) => !isStoryPost(p)); // 스토리는 피드에 안 나와요
     if (scope === "hot") { champs = hotChamps(feed); Object.values(champs).forEach((p) => { if (p) extra[p.id] = p; }); { const byL = (a, b) => (b.post_likes || []).length - (a.post_likes || []).length || b.created_at.localeCompare(a.created_at); const inP = feed.filter((p) => p.created_at >= periodStart(hotP)); hotFb = !inP.length && feed.length > 0; feed = (hotFb ? feed.slice(0, 30) : inP).sort(byL); } recordWins(champs); }
-    stories = clean(st.data);
+    stories = clean(st.data).filter(isStoryPost); // 스토리로 올린 것만
     board = rank(bd.data || []);
     await loadFollows([...feed, ...stories].map((p) => p.user_id).concat(board.map((o) => o.id)));
     await loadBlocks(); // 🚫 내가 차단한 사람 글은 빼요
@@ -373,13 +387,13 @@
   }
   function gridCell(p) {
     const ph = Array.isArray(p.media) && p.media[0], a = p.activities, n = (p.post_likes || []).length;
-    return `<button type="button" class="ex-cell" data-open="${esc(p.id)}">${ph ? `<img src="${esc(pubUrl(ph))}" alt="" loading="lazy" />`
+    return `<button type="button" class="ex-cell" data-open="${esc(p.id)}">${ph ? (isVidPath(ph) ? `<video src="${esc(pubUrl(ph))}#t=0.1" muted playsinline preload="metadata"></video><span class="vid-ic">▶</span>` : `<img src="${esc(pubUrl(ph))}" alt="" loading="lazy" />`)
       : `<span class="ex-txt">${a ? `${SP[a.sport] ? SP[a.sport].icon : ""}<b>${dist(a)}</b>` : esc((p.body || "").slice(0, 40))}</span>`}
       ${Array.isArray(p.media) && p.media.length > 1 ? '<i class="ex-multi">❐</i>' : ""}${n ? `<i class="ex-like">❤️ ${n}</i>` : ""}</button>`;
   }
   function bindFeed(box) {
-    $("comWrite").onclick = openComposer;
-    $("comStoryAdd").onclick = openComposer;
+    $("comWrite").onclick = () => openComposer("post");
+    $("comStoryAdd").onclick = () => openComposer("story");
     box.querySelectorAll("[data-story]").forEach((b) => { b.onclick = () => openStory(b.dataset.story); });
     box.querySelectorAll("[data-scope]").forEach((b) => { b.onclick = () => { scope = b.dataset.scope; tag = null; try { localStorage.setItem(SCOPE_KEY, scope); } catch (e) { /* 무시 */ } feed = []; render(); }; });
     if ($("comTagX")) $("comTagX").onclick = () => { tag = null; render(); };
@@ -492,7 +506,7 @@
       <div class="seg" style="margin:0"><button type="button" data-pv="posts" class="${profView === "posts" ? "on" : ""}">▦ 게시물 ${posts.length}</button><button type="button" data-pv="photos" class="${profView === "photos" ? "on" : ""}">🖼️ 사진 ${photos.length}</button></div>
       ${isMe && posts.length ? `<p class="hint" style="margin:0">사진을 누르면 크게 보고 <b>📌 고정</b>·<b>삭제</b>할 수 있어요. 고정한 글은 맨 위에 보여요 (최대 ${MAX_PINS}개).</p>` : ""}
       ${profView === "photos"
-        ? (photos.length ? `<div class="ex-grid">${photos.map((x) => `<button type="button" class="ex-cell" data-open="${esc(x.id)}"><img src="${esc(pubUrl(x.ph))}" alt="" loading="lazy" />${pins.has(String(x.id)) ? '<i class="ex-pin">📌</i>' : ""}</button>`).join("")}</div>`
+        ? (photos.length ? `<div class="ex-grid">${photos.map((x) => `<button type="button" class="ex-cell" data-open="${esc(x.id)}">${isVidPath(x.ph) ? `<video src="${esc(pubUrl(x.ph))}#t=0.1" muted playsinline preload="metadata"></video><span class="vid-ic">▶</span>` : `<img src="${esc(pubUrl(x.ph))}" alt="" loading="lazy" />`}${pins.has(String(x.id)) ? '<i class="ex-pin">📌</i>' : ""}</button>`).join("")}</div>`
           : `<p class="hint" style="text-align:center">${isMe ? "아직 올린 사진이 없어요." : "볼 수 있는 사진이 없어요."}</p>`)
         : (posts.length ? `<div class="ex-grid">${posts.map((p) => gridCell(p).replace("</button>", `${pins.has(String(p.id)) ? '<i class="ex-pin">📌</i>' : ""}</button>`)).join("")}</div>`
           : `<p class="hint" style="text-align:center">${isMe ? "아직 올린 글이 없어요." : "볼 수 있는 글이 없어요 (친구가 되면 친구 공개 글도 보여요)."}</p>`)}</div>`;
@@ -532,7 +546,7 @@
       d.innerHTML = `<div class="story-view">
         <div class="sv-bars">${ps.map((_, i) => `<i class="${i < k ? "done" : i === k ? "run" : ""}"></i>`).join("")}</div>
         <div class="sv-hd">${avatar(m, 32)}<b>${esc(m.nickname || "?")}</b><span>${ago(p.created_at)}</span><button type="button" data-sv="x">✕</button></div>
-        <div class="sv-media">${ph ? `<img src="${esc(pubUrl(ph))}" alt="" />` : `<div class="sv-card">${a ? `<div style="font-size:54px">${SP[a.sport] ? SP[a.sport].icon : "🏅"}</div><b>${esc(a.title || "")}</b><div class="sv-stats"><span>${dist(a)}</span><span>${speed(a)}</span><span>${fmtDur(a.duration_s)}</span></div>` : `<div style="font-size:54px">💬</div>`}</div>`}</div>
+        <div class="sv-media">${ph ? (isVidPath(ph) ? `<video src="${esc(pubUrl(ph))}" playsinline autoplay muted loop></video>` : `<img src="${esc(pubUrl(ph))}" alt="" />`) : `<div class="sv-card">${a ? `<div style="font-size:54px">${SP[a.sport] ? SP[a.sport].icon : "🏅"}</div><b>${esc(a.title || "")}</b><div class="sv-stats"><span>${dist(a)}</span><span>${speed(a)}</span><span>${fmtDur(a.duration_s)}</span></div>` : `<div style="font-size:54px">💬</div>`}</div>`}</div>
         ${p.body ? `<div class="sv-txt">${esc(p.body.slice(0, 160))}</div>` : ""}
         ${ph && a ? `<div class="sv-chip">${SP[a.sport] ? SP[a.sport].icon : ""} ${dist(a)} · ${speed(a)} · ${fmtDur(a.duration_s)}</div>` : ""}
         <div class="sv-nav"><button type="button" data-sv="p" aria-label="이전"></button><button type="button" data-sv="n" aria-label="다음"></button></div>
@@ -566,7 +580,7 @@
     cv.width = W; cv.height = H;
     const c = cv.getContext("2d"), a = p.activities, m = p.members || {};
     const photos = Array.isArray(p.media) ? p.media : [];
-    const img = photos.length ? await loadImg(pubUrl(photos[0])) : null;
+    const img = photos.length && !isVidPath(photos[0]) ? await loadImg(pubUrl(photos[0])) : null; // 동영상이면 카드에 그림 없이
     if (img) { // 사진을 꽉 차게
       const s = Math.max(W / img.width, H / img.height);
       c.drawImage(img, (W - img.width * s) / 2, (H - img.height * s) / 2, img.width * s, img.height * s);
@@ -704,7 +718,7 @@
         <div style="flex:1;min-width:0"><div class="nm-row"><button type="button" class="link nm" data-prof="${esc(p.user_id)}"><span class="nm-t">${esc(m.nickname || "알 수 없음")}</span></button>${badge(p.user_id)}${!mine && fol.ok && !fol.following.has(p.user_id) && !fr.accepted.includes(p.user_id) ? ` <button type="button" class="link fol-btn" data-follow="${esc(p.user_id)}">팔로우</button>` : ""}${mine ? ' <span class="hint">(나)</span>' : ""}</div>
           <div class="hint nm-sub"><span class="ntag" style="margin:0">#${tagNo(p.user_id)}</span> · ${a && SP[a.sport] ? `${SP[a.sport].icon} ${SP[a.sport].name} · ` : ""}${VIS[p.visibility] || ""}</div></div>
         <div class="post-act">${mine ?`<button type="button" class="link" data-pin="${id}">${pins.has(String(p.id)) ? "고정 해제" : "📌 고정"}</button> <button type="button" class="link" data-delpost="${id}">삭제</button>` : `${TS.isOwner && TS.isOwner(me()) ? `<button type="button" class="link" data-delpost="${id}" style="color:#dc2626" aria-label="관리자 삭제">🛡️</button>` : ""}<button type="button" class="link" data-more="${id}" data-uid="${esc(p.user_id)}" aria-label="신고·차단" style="font-size:18px;padding:0 6px">⋯</button>`}</div></div>
-      ${photos.length ? `<div class="car-wrap" data-dbl="${id}"><div class="car">${photos.map((ph) => `<img src="${esc(pubUrl(ph))}" alt="운동 사진" loading="lazy" />`).join("")}</div>
+      ${photos.length ? `<div class="car-wrap" data-dbl="${id}"><div class="car">${photos.map((ph) => mediaTag(ph)).join("")}</div>
         ${photos.length > 1 ? `<div class="car-dots">${photos.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div><span class="car-n">1/${photos.length}</span>` : ""}</div>` : ""}
       ${a ? `<div class="post-act-card"${photos.length ? "" : ` data-dbl="${id}"`}><div class="post-title">${SP[a.sport] ? SP[a.sport].icon + " " : ""}${esc(a.title || "")}</div>
         <div class="post-stats">
@@ -868,13 +882,17 @@
 
   // ---------- 글쓰기 (사진 + 글 + 운동 기록 + 공개 범위) ----------
   let picked = [];
-  async function openComposer() {
+  let pcKind = "post";
+  async function openComposer(kind) {
     picked = [];
-    $("postBody").innerHTML = `<div class="spread"><h2 style="margin:0">✍️ 사진·글 올리기</h2><button type="button" id="pcClose">닫기</button></div>
+    pcKind = kind === "story" ? "story" : "post";
+    const story = pcKind === "story", MAXN = story ? 1 : MAX_PHOTOS;
+    $("postBody").innerHTML = `<div class="spread"><h2 style="margin:0">${story ? "⭕ 내 스토리 올리기" : "✍️ 게시물 올리기"}</h2><button type="button" id="pcClose">닫기</button></div>
+      ${story ? '<p class="hint" style="margin:0">스토리는 <b>24시간 동안</b> 위쪽 동그라미에만 보여요. 게시물(피드)에는 올라가지 않아요.</p>' : ""}
       <textarea id="pcText" rows="4" maxlength="1000" placeholder="오늘 운동 어땠어요? #오운완 처럼 태그를 달면 같은 태그 글을 모아 볼 수 있어요"></textarea>
       <div class="tag-grid">${["#오운완", "#러닝", "#수영", "#자전거", "#철인3종", "#인터벌", "#롱런", "#대회", "#새벽운동"].map((t) => `<button type="button" class="chip" data-addtag="${t}">${t}</button>`).join("")}
         <button type="button" class="chip" id="pcToday" style="grid-column:1/-1">📋 오늘 훈련 불러오기</button></div>
-      <div><div class="spread"><span class="eyebrow" style="margin:0">📷 사진 (최대 ${MAX_PHOTOS}장)</span>
+      <div><div class="spread"><span class="eyebrow" style="margin:0">${story ? "📷 사진 또는 🎬 동영상 1개 (필수)" : `📷 사진 최대 ${MAX_PHOTOS}장 또는 🎬 동영상 1개 (${VID_MAX_SEC}초까지)`}</span>
         </div>
         <button type="button" class="pc-cam" id="pcCamBtn" aria-label="사진 추가">📷</button>
         <div class="chips" id="pcPickMenu" hidden style="margin-top:6px">
@@ -882,8 +900,8 @@
           <button type="button" class="pill" data-pick="pcAlb">🖼️ 앨범에서 고르기</button>
           <button type="button" class="pill" data-pick="pcDoc">📁 파일에서 고르기</button></div>
         <input type="file" id="pcCam" accept="image/*" capture="environment" hidden />
-        <input type="file" id="pcAlb" accept="image/*" multiple hidden />
-        <input type="file" id="pcDoc" accept="image/*,.heic,.heif" multiple hidden />
+        <input type="file" id="pcAlb" accept="image/*,video/*" ${story ? "" : "multiple"} hidden />
+        <input type="file" id="pcDoc" accept="image/*,.heic,.heif,video/*,.mp4,.mov" ${story ? "" : "multiple"} hidden />
         <div class="media" id="pcPrev" style="margin-top:8px"></div></div>
       <label>공개 범위
         <select id="pcVis">${["public", "friends", "private"].map((v) => `<option value="${v}"${v === "public" ? " selected" : ""}>${VIS[v]}</option>`).join("")}</select></label>
@@ -894,7 +912,7 @@
     $("postDlg").showModal();
     $("pcClose").onclick = () => $("postDlg").close();
     $("postBody").querySelectorAll("[data-pick]").forEach((b) => { b.onclick = () => {
-      if (picked.length >= MAX_PHOTOS) { $("pcMsg").textContent = `사진은 최대 ${MAX_PHOTOS}장까지 올릴 수 있어요.`; return; }
+      if (picked.length >= MAXN || picked.some(isVid)) { $("pcMsg").textContent = story ? "스토리는 1개만 올릴 수 있어요." : picked.some(isVid) ? "동영상은 1개만 올릴 수 있어요." : `사진은 최대 ${MAX_PHOTOS}장까지 올릴 수 있어요.`; return; }
       $("pcPickMenu").hidden = true;
       $(b.dataset.pick).click();
     }; });
@@ -907,30 +925,40 @@
       if (j && j.condition) lines.push(`컨디션 ${["", "😫", "😕", "🙂", "😀", "🤩"][j.condition]}${j.rpe ? ` · 힘든 정도 ${j.rpe}/10` : ""}`);
       const t = $("pcText"); t.value = (t.value ? t.value + "\n" : "") + (lines.length ? lines.join("\n") + "\n#오운완" : "#오운완");
     };
-    ["pcCam", "pcAlb", "pcDoc"].forEach((id) => { $(id).onchange = (e) => {
-      const files = [...e.target.files], ok = files.filter(isImg), before = picked.length;
-      picked = picked.concat(ok).slice(0, MAX_PHOTOS);
-      e.target.value = "";
-      $("pcMsg").textContent = ok.length < files.length ? "사진이 아닌 파일은 빼고 담았어요."
-        : before + ok.length > MAX_PHOTOS ? `사진은 최대 ${MAX_PHOTOS}장까지라 ${MAX_PHOTOS}장만 담았어요.` : "";
+    ["pcCam", "pcAlb", "pcDoc"].forEach((id) => { $(id).onchange = async (e) => {
+      const files = [...e.target.files]; e.target.value = "";
+      const vid = files.find(isVid);
+      if (vid) { // 🎬 동영상은 1개만, 사진과 섞지 않아요
+        if (vid.size > VID_MAX_MB * 1024 * 1024) { $("pcMsg").textContent = `동영상은 ${VID_MAX_MB}MB까지 올릴 수 있어요.`; return; }
+        const sec = await vidLen(vid);
+        if (sec > VID_MAX_SEC + 1) { $("pcMsg").textContent = `동영상은 ${VID_MAX_SEC}초까지 올릴 수 있어요. (지금 ${Math.round(sec)}초)`; return; }
+        picked = [vid]; $("pcMsg").textContent = picked.length && files.length > 1 ? "동영상은 1개만 담았어요." : ""; drawPreview(); return;
+      }
+      const ok = files.filter(isImg), before = picked.length;
+      picked = picked.concat(ok).slice(0, MAXN);
+      $("pcMsg").textContent = ok.length < files.length ? "사진·동영상이 아닌 파일은 빼고 담았어요."
+        : before + ok.length > MAXN ? (story ? "스토리는 1개만 담았어요." : `사진은 최대 ${MAX_PHOTOS}장까지라 ${MAX_PHOTOS}장만 담았어요.`) : "";
       drawPreview();
     }; });
     $("pcGo").onclick = submitPost;
   }
   function drawPreview() {
-    $("pcPrev").innerHTML = picked.map((f, i) => `<div class="m"><img src="${URL.createObjectURL(f)}" alt="" /><button type="button" class="x" data-rmp="${i}">✕</button></div>`).join("");
+    $("pcPrev").innerHTML = picked.map((f, i) => `<div class="m">${isVid(f) ? `<video src="${URL.createObjectURL(f)}" muted playsinline></video>` : `<img src="${URL.createObjectURL(f)}" alt="" />`}<button type="button" class="x" data-rmp="${i}">✕</button></div>`).join("");
     $("pcPrev").querySelectorAll("[data-rmp]").forEach((b) => { b.onclick = () => { picked.splice(+b.dataset.rmp, 1); drawPreview(); }; });
   }
   async function submitPost() {
     const vis = $("pcVis").value, text = $("pcText").value.trim(), actId = null;
     const msg = $("pcMsg"), btn = $("pcGo");
+    if (pcKind === "story" && !picked.length) { msg.textContent = "스토리는 사진이나 동영상이 있어야 해요."; return; }
     if (!text && !picked.length) { msg.textContent = "글이나 사진 중 하나는 있어야 해요."; return; }
     btn.disabled = true; msg.textContent = "";
     try {
       const paths = [];
       for (let i = 0; i < picked.length; i++) {
+        const dir = pcKind === "story" ? "stories" : "posts", f = picked[i];
+        if (isVid(f)) { btn.textContent = "동영상 올리는 중…"; const ext = (/\.(\w+)$/.exec(f.name || "") || [, "mp4"])[1].toLowerCase(); paths.push(await uploadVideo(f, `${dir}/${me()}/${Date.now()}.${ext}`)); continue; }
         btn.textContent = `사진 올리는 중… ${i + 1}/${picked.length}`;
-        paths.push(await uploadImage(picked[i], `posts/${me()}/${Date.now()}-${i}.jpg`));
+        paths.push(await uploadImage(f, `${dir}/${me()}/${Date.now()}-${i}.jpg`));
       }
       btn.textContent = "올리는 중…";
       const { error } = await db.from("posts").insert({ user_id: me(), body: text || null, media: paths, activity_id: actId, visibility: vis });
@@ -939,7 +967,7 @@
       if (scope === "all" && vis !== "public") scope = "friends";
       render();
     } catch (e) {
-      msg.textContent = "올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.";
+      msg.textContent = /동영상/.test(e && e.message) ? e.message : "올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.";
       btn.disabled = false; btn.textContent = "올리기";
     }
   }
