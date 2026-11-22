@@ -288,8 +288,8 @@
         : { title: "🏃 달리기 · 크루즈 인터벌 (T)", tag: "T", zone: 4, rpe: "7", steps: [`워밍업: 천천히 ${wu}분 + 스트라이드 20초 × 4`, `메인: 1km × ${Math.max(3, Math.min(6, Math.round(main / 6)))}회 T 페이스${R ? ` (${mmss(R.T)}/km)` : " ('편하게 힘든' 속도)"}, 사이 1분 조깅`, `쿨다운: ${cd}분 천천히`] },
       bike: low ? { title: "🚴 자전거 · 템포 (Z3)", tag: "Z3", zone: 3, rpe: "5–6", steps: [`워밍업: ${wu}분`, `메인: 10분 × ${Math.max(2, Math.min(4, Math.round(main / 13)))}회 Z3${B ? ` (${Math.round(B.ftp * 0.76)}–${Math.round(B.ftp * 0.9)}W)` : ""}, 사이 3분 가볍게`, `쿨다운: ${cd}분`] }
         : { title: "🚴 자전거 · 역치 인터벌 (Z4)", tag: "Z4", zone: 4, rpe: "7–8", steps: [`워밍업: ${wu}분 (마지막에 1분 빠르게 × 3)`, `메인: 8분 × ${Math.max(2, Math.min(5, Math.round(main / 12)))}회 Z4${B ? ` (${Math.round(B.ftp * 0.91)}–${Math.round(B.ftp * 1.05)}W)` : ""}, 사이 4분 가볍게`, `쿨다운: ${cd}분`] },
-      swim: low ? { title: "🏊 수영 · 지구력 세트 (Z3)", tag: "Z3", zone: 3, rpe: "5–6", steps: ["W-up 400m 편하게", "드릴 200m", `메인: 200m × 6 — '조금 힘들게'${S ? ` (${mmss(S.css + 4)}/100m)` : ""}, 휴식 20초`, "쿨다운 200m"] }
-        : { title: "🏊 수영 · CSS 세트 (Z4)", tag: "CSS", zone: 4, rpe: "7", steps: ["W-up 400m 편하게", "드릴 200m", `메인: 100m × 10 CSS 페이스${S ? ` (${mmss(S.css)}/100m)` : ""}, 휴식 15초`, "쿨다운 200m"] },
+      swim: low ? { title: "🏊 수영 · 지구력 세트 (Z3)", tag: "Z3", zone: 3, rpe: "5–6", steps: ["워밍업 400m 편하게", "드릴 200m", `메인: 200m × 6 — '조금 힘들게'${S ? ` (${mmss(S.css + 4)}/100m)` : ""}, 휴식 20초`, "쿨다운 200m"] }
+        : { title: "🏊 수영 · CSS 세트 (Z4)", tag: "CSS", zone: 4, rpe: "7", steps: ["워밍업 400m 편하게", "드릴 200m", `메인: 100m × 10 CSS 페이스${S ? ` (${mmss(S.css)}/100m)` : ""}, 휴식 15초`, "쿨다운 200m"] },
     }[disc] || null;
     if (!t) return null;
     const cat = { run: "러닝", bike: "사이클", swim: "수영" }[disc];

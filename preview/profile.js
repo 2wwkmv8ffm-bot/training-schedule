@@ -349,13 +349,13 @@
     const n = draft.daysPerWeek;
     return `<h2>훈련 일정</h2><p class="sub">운동할 수 있는 요일과 시간을 알려주세요. 계획은 이 시간에 맞춰 반복 횟수까지 계산돼요.</p>
       <div class="card"><h3>일주일에 몇 번 운동하나요?</h3>
-        <div class="chips">${[1, 2, 3, 4, 5, 6, 7].map((c) => `<button type="button" class="chip${c === n ? " on" : ""}" data-cnt="${c}">${c}회</button>`).join("")}</div>
+        <div class="chips grid7">${[1, 2, 3, 4, 5, 6, 7].map((c) => `<button type="button" class="chip${c === n ? " on" : ""}" data-cnt="${c}">${c}회</button>`).join("")}</div>
         <h3 class="mt">무슨 요일에 하나요? <span class="hint">${draft.days.length}/${n}개 선택</span></h3>
-        <div class="chips">${DAY.map((d, i) => `<button type="button" class="chip${draft.days.includes(i) ? " on" : ""}" data-day="${i}">${d}</button>`).join("")}</div>
+        <div class="chips grid7">${DAY.map((d, i) => `<button type="button" class="chip${draft.days.includes(i) ? " on" : ""}" data-day="${i}">${d}</button>`).join("")}</div>
         ${draft.days.length ? (() => {
           const dbl = draft.days.filter((d) => ((draft.dayOpts || {})[d] || {}).slot === "both");
           return `<h3 class="mt">하루에 2번 운동하는 날이 있나요? <span class="hint">(오전·오후)</span></h3>
-          <div class="chips">${draft.days.map((d) => `<button type="button" class="chip${dbl.includes(d) ? " on" : ""}" data-dbl="${d}">${DAY[d]}</button>`).join("")}</div>
+          <div class="chips grid7">${draft.days.map((d) => `<button type="button" class="chip${dbl.includes(d) ? " on" : ""}" data-dbl="${d}">${DAY[d]}</button>`).join("")}</div>
           <p class="hint" style="margin-bottom:0">${dbl.length ? `👉 주 ${draft.days.length}일 · 총 <b>${draft.days.length + dbl.length}회</b> 운동 (${dbl.map((d) => DAY[d]).join(", ")}요일은 오전·오후 두 번). 오후 시간·종목은 아래 '요일별 설정'에서 정해요.` : "없으면 넘어가세요. 고른 요일은 오전·오후 두 번 훈련으로 짜드려요."}</p>`;
         })() : ""}
       </div>
@@ -543,6 +543,43 @@
     if (step === 0 && !draft.sport) return "종목을 골라주세요.";
     if (step === 1) { const age = num(draft.age); if (!(age >= 10 && age <= 90)) return "심박·MAF 계산에 필요해요. 나이를 적어주세요."; }
     if (step === 3 && draft.days.length !== draft.daysPerWeek) return `운동할 요일을 ${draft.daysPerWeek}개 골라주세요.`;
+    return rangeErr();
+  }
+  // 지금 화면에 보이는 칸 중 범위를 벗어난 숫자를 찾아 알려 줘요
+  const FNAME = { age: "나이", weight: "몸무게", height: "키", maxHr: "최대심박", restHr: "안정시 심박", weeklyHours: "운동할 수 있는 시간", lowPct: "저강도 비율",
+    "volume.run": "달리기 주간 거리", "volume.bike": "자전거 주간 거리", "volume.swim": "수영 주간 거리", "tests.ftp20": "20분 테스트 평균", "tests.ftp": "FTP",
+    "tests.lthrRun": "러닝 LTHR", "tests.lthrBike": "사이클 LTHR", "tests.run5k": "5K 기록", "tests.run10k": "10K 기록", "tests.css400": "400m 테스트", "tests.css200": "200m 테스트", "tests.swim1500": "1500m 기록" };
+  // 받침에 맞는 조사 (거리는 / 기록은)
+  const josa = (w, a, b) => { const c = String(w).charCodeAt(String(w).length - 1); return w + (c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 ? a : b); };
+  function rangeOne(path) {
+    const raw = String(getPath(draft, path) == null ? "" : getPath(draft, path)).trim();
+    if (!raw) return "";
+    const nm = FNAME[path] || "이 칸";
+    if (E.T_RANGE[path]) {
+      const t = E.parseTime(raw), [lo, hi] = E.T_RANGE[path];
+      if (!t) return `${josa(nm, "은", "는")} 분:초로 적어 주세요 (예: 22:30).`;
+      if (t < lo || t > hi) return `${josa(nm, "이", "가")} 너무 ${t < lo ? "빨라요" : "느려요"}. ${E.fmt(lo)} ~ ${E.fmt(hi)} 사이로 적어 주세요.`;
+      return "";
+    }
+    const r = E.RANGE[path];
+    if (!r) return "";
+    const v = Number(raw.replace(/,/g, ""));
+    if (!isFinite(v)) return `${nm}에는 숫자만 적어 주세요.`;
+    if (v < r[0] || v > r[1]) return `${josa(nm, "은", "는")} ${r[0].toLocaleString()} ~ ${r[1].toLocaleString()}${r[2]} 사이로 적어 주세요.`;
+    return "";
+  }
+  function rangeErr() {
+    for (const el of $("wzBody").querySelectorAll("input[data-f]")) { const m = rangeOne(el.dataset.f); if (m) { el.focus(); return m; } }
+    // 하루 평균이 사람이 할 수 있는 양을 넘으면 알려 줘요 (예: 주 1일에 달리기 250km)
+    const nd = (draft.days || []).length || num(draft.daysPerWeek) || 0, ds = discsOf(draft.sport);
+    const DAY_MAX = { run: 45, bike: 250, swim: 12000 };
+    for (const d of ds) {
+      const v = num((draft.volume || {})[d]); if (!v || !nd || !$("wzBody").querySelector(`[data-f="volume.${d}"]`)) continue;
+      const per = v / nd;
+      const DAY_MIN = { run: 2, bike: 8, swim: 400 };
+      if (per < DAY_MIN[d]) return `${DISC[d].name} 주간 거리를 ${nd}일에 나누면 하루 약 ${d === "swim" ? Math.round(per).toLocaleString() + "m" : (Math.round(per * 10) / 10) + "km"}라 너무 짧아요. 운동하는 요일을 줄이거나 거리를 늘려 주세요. (하루 최소 ${d === "swim" ? "400m" : DAY_MIN[d] + "km"})`;
+      if (per > DAY_MAX[d]) return `${DISC[d].name} 주간 거리를 ${nd}일에 나누면 하루 약 ${d === "swim" ? Math.round(per).toLocaleString() + "m" : Math.round(per) + "km"}예요. 너무 많아서 다칠 수 있어요. 거리를 줄이거나 운동하는 요일을 늘려 주세요.`;
+    }
     return "";
   }
   async function finish() {
@@ -581,6 +618,7 @@
     }
     if (t.dataset.f) {
       setPath(draft, t.dataset.f, t.value);
+      if (e.type === "change") { const m = rangeOne(t.dataset.f); t.classList.toggle("bad", !!m); if ($("wzErr")) $("wzErr").textContent = m; }
       if ($("hrHint")) $("hrHint").innerHTML = hrHintText();
       if ($("timeHint")) $("timeHint").textContent = timeHint();
       if ($("testPrev")) $("testPrev").innerHTML = testPreview();
@@ -1091,7 +1129,7 @@
       const rc = m.some((w) => w.races.length) ? " · 🏁 대회 있음" : m.some((w) => w.key === "taper") ? " · 조정기" : "";
       return `<b>${esc(ks.join(" → "))}</b>${rc}<br><span class="hint">중점: ${esc(ph.focus || "")}</span>`;
     };
-    const mainOf = (x) => { const st = x.steps || []; const mn = st.find((t) => /^메인/.test(t)) || st.find((t) => !/워밍업|쿨다운|스컬링|드릴|장비|쉬운 강도|^이지|^킥|^풀|^합계|^IM|^기술/.test(t)); return mn ? ` — ${esc(mn.replace(/^[^:]+:\s*/, "").slice(0, 70))}` : ""; };
+    const mainOf = (x) => { const st = x.steps || []; const mn = st.find((t) => /^메인/.test(t)) || st.find((t) => !/워밍업|쿨다운|스컬링|드릴|장비|쉬운 강도|^이지|^킥|^풀|^합계|^IM|^개인혼영|^기술/.test(t)); return mn ? ` — ${esc(mn.replace(/^[^:]+:\s*/, "").slice(0, 70))}` : ""; };
     return `<div class="weeknav">
         <button type="button" class="icon" data-q="-1" ${qIdx === 0 ? "disabled" : ""}>‹</button>
         <div class="range">${qIdx + 1}분기 · ${first + 1}~${first + all.length}주차 · ${dlabel(s)}–${dlabel(e)}</div>

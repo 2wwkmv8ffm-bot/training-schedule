@@ -742,7 +742,7 @@
   function swimFull(type, D, hiM, o) {
     // ✅ 합계는 언제나 정확히 D m: 각 구간 거리를 실제로 더하고, 남는 거리는 '이지'로 채워요 (마무리 리듬이 붙는 날은 그 거리만큼 비워 둬요)
     const RES = Math.max(0, o.reserve || 0);
-    D = Math.max(300, D - RES);
+    D = Math.max(150, D - RES);
     const S = o.ctx && o.ctx.swim, C = S ? S.css : 110;
     const tri = o.tri, V = Math.abs(o.v || 0), wk = Math.abs(o.week || 0), si = o.sIdx || 0;
     const r50 = (v) => Math.max(0, Math.round(v / 50) * 50);
@@ -763,7 +763,8 @@
     // 메인 2(Start·스프린트)는 짧게 — 사진처럼 50m × 4~8 또는 100m × 4 정도. 남는 고강도는 메인 1의 z4 구간에 넣어요
     const split = D >= 5000; // 하루 5000m 이상일 때만 메인 1·메인 2로 나눠요
     let m2 = !split ? 0 : type === "Rec" ? 0 : hiM != null ? r50(Math.min(hiM, Math.max(200, D * 0.12), 600)) : isEasy ? 200 : 300;
-    const easyM = () => (m2 > 0 ? 100 : 50); // easy 50m 줄 수만큼 (메인 2가 있는 날은 2번)
+    let easyOn = true; // 아주 짧은 날은 '편하게 50m' 줄을 빼요
+    const easyM = () => (!easyOn ? 0 : m2 > 0 ? 100 : 50); // 편하게 50m 줄 수만큼 (메인 2가 있는 날은 2번)
     const fixed = () => wu + scull + drillN * dU + imN * 100 + techN * 50 + easyM() + cd + kick + pull + m2;
     // 거리가 모자라면 줄이는 순서: 킥/풀 → 기술 세트 → IM → 드릴 횟수
     // 강한 날은 설정한 고강도 거리를 담을 만큼 메인을 키워요 (고강도는 메인의 85%까지) — 그래도 모자라면 킥·풀·IM·기술·드릴 순으로 줄여요
@@ -783,6 +784,10 @@
     for (let g = 0; g < 10 && D - fixed() < 200; g++) {
       if (wu > 200) wu -= 100; else if (scull) scull = 0; else if (techN > 0) techN = Math.max(0, techN - 2); else if (cd > 100) cd = 100; else if (drillN > 4) drillN = 4; else break;
     }
+    // 그래도 모자라면(하루 700m 미만): 메인 100m는 남기고 드릴·워밍업·쿨다운을 더 줄여요 → 합계가 목표 거리를 넘지 않아요
+    for (let g = 0; g < 12 && D - fixed() < 100; g++) {
+      if (easyOn) easyOn = false; else if (drillN > 2) drillN -= 2; else if (wu > 100) wu = 100; else if (cd > 50) cd = 50; else if (drillN) drillN = 0; else if (wu > 50) wu = 50; else break;
+    }
     const m1 = Math.max(100, Math.floor((D - fixed()) / 50) * 50);
     let mainAct = 0, m2Act = 0; // 실제로 적힌 메인 거리 (반복 수 × 거리)
     // 드릴 묶음: 이번 주 중점 드릴 + 나머지 3개 (주마다 돌아가요)
@@ -790,10 +795,10 @@
     const six = [0, 1, 2, 3, 4, 5].map((k) => SD[(wk + k) % SD.length]); // 6가지 모두, 주마다 시작 순서를 바꿔요
     const combo = six;
     const L = [];
-    L.push(`워밍업: W-up ${wu}m (자유형 위주로 편하게)`);
-    if (scull) L.push(`스컬링: Sculling ${scull}m (앞 → 가운데 → 뒤 스컬링, 손바닥으로 물 느끼기)`);
-    L.push(`드릴: ${STROKE_NAME[o.stroke] && o.stroke !== "free" ? STROKE_NAME[o.stroke] + " " : ""}드릴 6가지 × 50m${drillN > 6 ? ` + 중점 드릴 50m × ${drillN - 6}` : ""} (총 ${drillN * dU}m) R ${[15, 20][wk % 2]}" — ${combo.map((x, i) => `${i + 1}) ${x}`).join(" · ")} — 이번 주 중점: ${focus}`);
-    if (imN) L.push(`IM: IM 100m × ${imN} (${imN / 2}-Reverse) ${at(100, 3, 15)} — 앞 ${imN / 2}개는 접→배→평→자, 뒤 ${imN / 2}개는 거꾸로 자→평→배→접`);
+    L.push(`워밍업: ${wu}m (자유형 위주로 편하게)`);
+    if (scull) L.push(`스컬링: ${scull}m (앞 → 가운데 → 뒤 스컬링, 손바닥으로 물 느끼기)`);
+    if (drillN) L.push(`드릴: ${STROKE_NAME[o.stroke] && o.stroke !== "free" ? STROKE_NAME[o.stroke] + " " : ""}드릴 ${Math.min(6, drillN)}가지 × 50m${drillN > 6 ? ` + 중점 드릴 50m × ${drillN - 6}` : ""} (총 ${drillN * dU}m) 휴식 ${[15, 20][wk % 2]}초 — ${combo.slice(0, Math.min(6, drillN)).map((x, i) => `${i + 1}) ${x}`).join(" · ")} — 이번 주 중점: ${focus}`);
+    if (imN) L.push(`개인혼영: 100m × ${imN} (${imN / 2}-Reverse) ${at(100, 3, 15)} — 앞 ${imN / 2}개는 접→배→평→자, 뒤 ${imN / 2}개는 거꾸로 자→평→배→접`);
     const TECH = tri ? [
       "[홀=15m 맥스 킥 + 35m DPS 전방주시 2회 · 짝=15m 맥스 스트로크 + 35m DPS 전방주시 2회]",
       "[홀=25m 헤드업 킥 + 25m 캐치업 · 짝=25m ST킥 + 25m 에이스(z3~z5)]",
@@ -806,7 +811,7 @@
       "(15m 돌핀 + 10m 맥스 스트로크 + 25m DPS)",
     ];
     if (techN) L.push(`기술: ○50m × ${techN} ${at(50, 3, 15)} ${TECH[(wk + si) % TECH.length]}`);
-    L.push(`이지: easy 50m`);
+    if (easyOn) L.push(`이지: 편하게 50m`);
     let hiMain = 0, main1 = "";
     if (!split) {
       // 5000m 미만: 메인 하나 — 설정한 강도 비율(고강도 거리)에 맞춰 강한 반복 개수를 정해요
@@ -859,10 +864,10 @@
     }
     L.push(`메인 1: ${main1} — Z2~Z3${tri ? " · 오픈워터처럼 6~8스트로크마다 전방주시" : ""}`);
     }
-    if (kick) L.push(`킥: Kick 50m × ${kick / 50} ${at(50, 2, 20)} (${["F-S-B-F", "Free, Back, Free, 10/10", "F-S-B-F"][(wk + si) % 3]}) — F=자유형 킥, S=사이드킥, B=백킥(뒤돌아 누워서)`);
-    if (pull) L.push(`풀: Pull ${pull >= 600 && (wk + si) % 2 ? `${pull}m 연속` : `100m × ${pull / 100}`} ${pull >= 600 && (wk + si) % 2 ? "" : at(100, 3, 15)} (Bre 3·5·7 — 힘들면 3·5) · 풀부이${(wk + si) % 3 === 2 ? " + 패들" : ""}`);
+    if (kick) L.push(`킥: 50m × ${kick / 50} ${at(50, 2, 20)} (${["F-S-B-F", "Free, Back, Free, 10/10", "F-S-B-F"][(wk + si) % 3]}) — F=자유형 킥, S=사이드킥, B=백킥(뒤돌아 누워서)`);
+    if (pull) L.push(`풀: ${pull >= 600 && (wk + si) % 2 ? `${pull}m 연속` : `100m × ${pull / 100}`} ${pull >= 600 && (wk + si) % 2 ? "" : at(100, 3, 15)} (Bre 3·5·7 — 힘들면 3·5) · 풀부이${(wk + si) % 3 === 2 ? " + 패들" : ""}`);
     if (m2 > 0) {
-      L.push(`이지: easy 50m`);
+      L.push(`이지: 편하게 50m`);
       const n50 = Math.max(1, Math.floor(m2 / 50)), n100 = Math.max(1, Math.floor(m2 / 100));
       const M2 = isEasy ? [[`○50m × ${n50} ${at(50, 3, 20)} 빌드업 [홀=(z3), 짝=25m(z3)+25m(z4)]`, n50 * 50]] : tri ? [
         [`○Start 50m × ${n50} ${at(50, 4, 25)} [홀=25m(z5)+25m(z2), 짝=25m(z3)+25m(z4)]`, n50 * 50],
@@ -879,12 +884,12 @@
       L.push(`메인 2: ${pick[0]} — ${isEasy ? "점점 빠르게, 마지막만 Z4" : "Z4~Z5"}`);
     }
     // 반복 수를 맞추다 남은 거리는 편하게 채워서 합계를 목표 거리와 똑같이
-    const used = wu + scull + drillN * dU + imN * 100 + techN * 50 + (m2 > 0 ? 100 : 50) + mainAct + kick + pull + m2Act + cd;
+    const used = wu + scull + drillN * dU + imN * 100 + techN * 50 + easyM() + mainAct + kick + pull + m2Act + cd;
     const fillM = Math.max(0, D - used);
     if (fillM >= 50) L.push(`이지: 편하게 ${fillM}m (z2) — 오늘 거리 채우기`);
-    L.push(`쿨다운: CD ${cd}m (편하게${D >= 4500 ? " · 뒤에 Cordz + Core 10분" : ""})`);
+    L.push(`쿨다운: ${cd}m (편하게${D >= 4500 ? " · 뒤에 Cordz + Core 10분" : ""})`);
     const Tsum = used + fillM + RES; // 실제 적힌 구간을 모두 더한 합계 (= 오늘 목표 거리)
-    L.push(`합계: T = ${Tsum.toLocaleString()}m${RES ? ` (마무리 ${RES}m 포함)` : ""} · 🧰 장비: ${[kick ? "킥판·오리발" : "", pull ? "풀부이·패들" : "", /PD|Gear/.test(main1) ? "패들·핀(Gear Choice = 장비 자유)" : ""].filter(Boolean).join(" · ") || "없음"}`);
+    L.push(`합계: ${Tsum.toLocaleString()}m${RES ? ` (마무리 ${RES}m 포함)` : ""} · 🧰 장비: ${[kick ? "킥판·오리발" : "", pull ? "풀부이·패들" : "", /PD|Gear/.test(main1) ? "패들·핀(Gear Choice = 장비 자유)" : ""].filter(Boolean).join(" · ") || "없음"}`);
     // 고강도 거리 = 메인 2 + 메인 1 안의 z4 구간(약 25%)
     return { steps: L, drill: focus, hi: hiMain || (split && !isEasy ? m2 + r50(m1 * 0.25) : 0), total: Tsum };
   }
@@ -1727,6 +1732,7 @@
     const ePace = ctx.run ? (ctx.run.E[0] + ctx.run.E[1]) / 2 : 360;
     // 주간 거리를 안 적은 종목은 '가능한 운동 시간'으로 거리를 계산해요 → 모두 거리 기준으로 비율·다양성이 정확해져요
     const V = Object.assign({}, p.volume || {}), estV = [];
+    ["run", "bike", "swim"].forEach((x) => { if (num(V[x])) { const r = { run: [3, 250], bike: [10, 1500], swim: [1500, 80000] }[x]; V[x] = Math.min(r[1], Math.max(r[0], num(V[x])), { run: 45, bike: 250, swim: 12000 }[x] * Math.max(1, days.length)); } }); // 하루 평균 한도도 지켜요
     {
       const baseMin = (budget / Math.max(0.3, wk.factor || 1)) * 0.85;
       const share = tri ? { swim: 0.2, bike: 0.5, run: 0.3 } : { [discs[0]]: 1 };
@@ -1867,7 +1873,7 @@
         }
         if (cntX >= 4 && cntX <= 5) {
           const d0 = hu[0].d;
-          const cand = units.filter((u) => u !== hu[0] && u.p[0] === x && u.p[1] !== "Rec" && sessDist[u.k] && sessDist[u.k][x] && EASY.includes(u.p[1]) && u.k !== longKey && !RD[u.d]) // 리듬 날은 거의 쉬운 훈련이라 '가볍게' 날에도 넣어요
+          const cand = units.filter((u) => u !== hu[0] && u.p[0] === x && u.p[1] !== "Rec" && sessDist[u.k] && sessDist[u.k][x] >= { swim: 1000, run: 4, bike: 15 }[x] && EASY.includes(u.p[1]) && u.k !== longKey && !RD[u.d]) // 너무 짧은 날엔 마무리를 안 붙여요 // 리듬 날은 거의 쉬운 훈련이라 '가볍게' 날에도 넣어요
             .sort((a, b) => (Math.abs(b.d - d0) >= 2) - (Math.abs(a.d - d0) >= 2) || sessDist[a.k][x] - sessDist[b.k][x])[0];
           if (cand) { rhythm[cand.k] = x; rhythmTxt.push(DISC[x].name); }
         }
@@ -2010,7 +2016,8 @@
         const fill = Math.floor(Math.max(0, Dm - have) / 50) * 50;
         x.steps = x.steps.filter((t) => !/^합계/.test(String(t)));
         if (fill >= 50) x.steps.push(`이지: ${type === "Test" ? "테스트 뒤" : "마무리"} 편하게 ${fill}m (z2) — 오늘 거리 채우기`);
-        x.steps.push(`합계: T = ${(have + fill).toLocaleString()}m`);
+        x.steps.push(`합계: ${(have + fill).toLocaleString()}m`);
+        if (have > Dm && typeof x.dist === "string") x.dist = x.dist.replace(/수영 (약 )?[\d,]+m/, `수영 ${have.toLocaleString()}m`); // 테스트 순서는 줄일 수 없어서, 적힌 거리를 실제 합계로
       }
       // 🚴 실내(로라·스마트 트레이너)에서 타면 워밍업 뒤에 8분 이내 페달링 드릴
       const bikeIndoor = (ctx.env || {}).bike === "indoor";
@@ -2092,7 +2099,7 @@
       if (!ks.length) return null;
       let hiSum = 0, all = 0; const hiP = [], loP = [];
       ks.forEach((k) => {
-        const tot = o[k], hi = hp && hp[k] != null ? hp[k] : tot * frac;
+        const tot = o[k], hi = Math.max(0, Math.min(tot, hp && hp[k] != null ? hp[k] : tot * frac));
         const f = (v) => (k === "swim" ? `${Math.round(v / 50) * 50}m` : `${round1(v)}km`);
         const nm = ks.length > 1 ? DISC[k].name + " " : "";
         if (hi > 0.05) hiP.push(nm + f(hi));
@@ -2138,7 +2145,7 @@
         const nt = act;
         s.dist = s.dist.replace(/[\d.]+km/, `${nt}km`);
         const h = /^고강도 (\d+)% ([\d.]+)km · 저강도 \d+% [\d.]+km$/.exec(s.hiText || "");
-        if (h) { const hk = +h[2], pc = Math.round((hk / nt) * 100); s.hiText = `고강도 ${pc}% ${hk}km · 저강도 ${100 - pc}% ${round1(nt - hk)}km`; }
+        if (h) { const hk = Math.min(+h[2], nt), pc = nt > 0 ? Math.round((hk / nt) * 100) : 0; s.hiText = `고강도 ${pc}% ${round1(hk)}km · 저강도 ${100 - pc}% ${round1(Math.max(0, nt - hk))}km`; }
         extra += nt - +m0[1];
       });
       if (Math.abs(extra) < 0.1) return;
@@ -2155,7 +2162,7 @@
         const nv = fl[i] / 10, d = round1(p.v - nv);
         p.s.steps[p.j] = String(p.s.steps[p.j]).replace(/\(약 [\d.]+km\)/, `(약 ${nv}km)`);
         const m = /([\d.]+)km/.exec(p.s.dist || ""); if (m) p.s.dist = p.s.dist.replace(/[\d.]+km/, `${round1(+m[1] - d)}km`);
-        const lo = /([\d.]+)km$/.exec(p.s.hiText || ""); if (lo) p.s.hiText = p.s.hiText.replace(/[\d.]+km$/, `${round1(+lo[1] - d)}km`);
+        const lo = /([\d.]+)km$/.exec(p.s.hiText || ""); if (lo) p.s.hiText = p.s.hiText.replace(/[\d.]+km$/, `${round1(Math.max(0, +lo[1] - d))}km`);
       });
     });
 
@@ -2181,6 +2188,31 @@
       s.dist = s.disc === "brick" ? `${estOne("bike", s.minutes * 0.7, 3)} + ${estOne("run", s.minutes * 0.3, 3)}` : estOne(s.disc, s.minutes, s.lvl);
     });
 
+    // 🏊 테스트 날은 순서를 줄일 수 없어서, 적힌 거리가 실제 합계보다 작으면 합계로 맞춰요
+    {
+      const N = (x) => +String(x).replace(/,/g, "");
+      let over = 0;
+      sessions.forEach((s) => {
+        if (s.disc !== "swim" || !["Test", "Opener"].includes(s.type) || typeof s.dist !== "string" || !Array.isArray(s.steps)) return;
+        const t = /^합계: ([\d,]+)m/.exec(String(s.steps[s.steps.length - 1] || "")), d = /수영 (?:약 )?([\d,]+)m/.exec(s.dist);
+        if (t && d && N(t[1]) > N(d[1])) { over += N(t[1]) - N(d[1]); s.dist = s.dist.replace(d[0], `수영 ${t[1]}m`); }
+      });
+      // 늘어난 만큼 다른 수영 날의 '오늘 거리 채우기' 구간에서 덜어내 주간 합계를 그대로 지켜요
+      sessions.forEach((s) => {
+        if (over < 50 || s.disc !== "swim" || ["Test", "Opener", "Race"].includes(s.type) || typeof s.dist !== "string" || !Array.isArray(s.steps)) return;
+        const j = s.steps.findIndex((t) => /^이지: 편하게 [\d,]+m \(z2\) — 오늘 거리 채우기/.test(String(t)));
+        if (j < 0) return;
+        const have = N(/편하게 ([\d,]+)m/.exec(s.steps[j])[1]), cut = Math.min(have, Math.floor(over / 50) * 50);
+        if (!cut) return;
+        over -= cut;
+        if (have - cut >= 50) s.steps[j] = String(s.steps[j]).replace(/편하게 [\d,]+m/, `편하게 ${have - cut}m`); else s.steps.splice(j, 1);
+        const k = s.steps.findIndex((t) => /^합계: [\d,]+m/.test(String(t)));
+        if (k >= 0) s.steps[k] = String(s.steps[k]).replace(/합계: ([\d,]+)m/, (q, v) => `합계: ${(N(v) - cut).toLocaleString()}m`);
+        const d = /수영 (?:약 )?([\d,]+)m/.exec(s.dist); if (d) s.dist = s.dist.replace(d[0], `수영 ${(N(d[1]) - cut).toLocaleString()}m`);
+      });
+      // 그래도 덜어낼 곳이 없으면 이번 주 수영 목표를 실제 합계로 (달력·주간·월간 숫자가 서로 같게)
+      if (over >= 50 && targets.swim) targets.swim += over;
+    }
     // 목표 거리 요약 · 시간 확인
     const tkeys = Object.keys(targets);
     const doubles = days.filter((d) => plan2[d]).length;
@@ -2255,8 +2287,8 @@
         const hi = r.sessions.reduce((a, s) => a + s.hiMin, 0);
         const R = r.ratio ? Object.values(r.ratio) : [];
         // 거리 목표가 있으면 '거리 기준' 비율 (종목별 저강도 거리 ÷ 총 거리의 평균), 없으면 시간 기준
-        const low = R.length ? Math.round((R.reduce((a, x) => a + (x.total - x.hi) / x.total, 0) / R.length) * 100)
-          : tot ? Math.round(((tot - hi) / tot) * 100) : 100;
+        const low = Math.max(0, Math.min(100, R.length ? Math.round((R.reduce((a, x) => a + (x.total - Math.min(x.total, x.hi)) / (x.total || 1), 0) / R.length) * 100)
+          : tot ? Math.round(((tot - Math.min(tot, hi)) / tot) * 100) : 100)); // 0~100% 밖으로 나가지 않게
         return { tot, low, byDist: R.length > 0, err: R.length ? r.ratioScore : Math.abs(low - wkLow) };
       };
       const wkLow = ["taper", "race"].includes(wk.key) ? Math.max(lowTarget, 90) : lowTarget; // 조정기는 고강도 10%만 (양은 줄이고 강도 감각은 유지)
@@ -2409,7 +2441,17 @@
     return { ctx, season: ss, week, gap, availHours: avail, intensityNote, level, prog, feas, pmc };
   }
 
+  // 문진표에 적을 수 있는 현실적인 범위 (이 밖의 숫자는 계획이 이상해져요)
+  const RANGE = {
+    age: [10, 90, "세"], weight: [25, 200, "kg"], height: [100, 230, "cm"], maxHr: [120, 230, "bpm"], restHr: [30, 110, "bpm"],
+    weeklyHours: [1, 40, "시간"], lowPct: [50, 100, "%"],
+    "volume.run": [3, 250, "km"], "volume.bike": [10, 1500, "km"], "volume.swim": [1500, 80000, "m"],
+    "tests.ftp20": [60, 650, "W"], "tests.ftp": [50, 600, "W"], "tests.lthrRun": [100, 220, "bpm"], "tests.lthrBike": [100, 220, "bpm"],
+  };
+  // 기록(시:분:초) 범위 — 초 단위
+  const T_RANGE = { "tests.run5k": [720, 5400], "tests.run10k": [1560, 10800], "tests.css400": [210, 1500], "tests.css200": [100, 720], "tests.swim1500": [840, 4500] };
   TS.E = {
+    RANGE, T_RANGE,
     parseTime, autoTime, fmt, minLabel, num, DISC, sportKey, discsOf, SWIM_EVENTS, SWIM_PH, RUN_EVENTS, TRI_RACES, TRI_LEGS, GOALS,
     goalOf, runInfo, bikeInfo, swimInfo, hrInfo, buildPlan, vdotFrom, predict, PHASES, levelOf, LEVELS, LEVEL_CUT, LEVEL_HI_MAX, levelTable, COMEBACK, comebackOf, recoveryDays, prepAdvice, runFrom,
     RUN_PACES, runPaceText, COGGAN, watt, SWIM_Z, swimPace, FRIEL_RUN, FRIEL_BIKE, frielRange, MAF_ADJ, PHIL, RPE,
