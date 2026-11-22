@@ -321,15 +321,17 @@
       <p class="hint" style="margin-top:0">시간이 많은 날은 길게, 강하게 하고 싶은 날은 '강하게'로 정해 주세요.${tri ? " 철인3종은 그날 할 종목도 정할 수 있어요 (예: 수 수영, 목 달리기)." : ""}</p>
       ${draft.days.map((d) => {
         const both = o(d).slot === "both";
-        return `<div class="dayopt-wrap"><div class="dayopt"><b>${DAY[d]}</b>
-        ${sel(d, "slot", [["", "시간대: 상관없음"], ["am", "오전"], ["pm", "오후"], ["both", "오전·오후 두 번"]], o(d).slot || "")}
-        ${sel(d, "min", SESSION_MIN.map((m) => [m, (both ? "오전 " : "") + minLabel(m)]), dayMin(d))}
-        ${sel(d, "pref", [["auto", "강도: 자동"], ["hard", "💥 강하게"], ["easy", "🌿 가볍게"]], o(d).pref || "auto")}
-        ${tri ? sel(d, "disc", [["auto", both ? "오전 종목: 자동" : "종목: 자동"], ["swim", "🏊 수영"], ["bike", "🚴 자전거"], ["run", "🏃 달리기"], ["brick", "🚴🏃 브릭"]], o(d).disc || "auto") : ""}
-        </div>${both ? `<div class="dayopt dayopt2"><span class="hint">오후</span>
-          ${sel(d, "min2", SESSION_MIN.map((m) => [m, "오후 " + minLabel(m)]), num(o(d).min2) || 45)}
-          ${tri ? sel(d, "disc2", [["auto", "오후 종목: 자동"], ["swim", "🏊 수영"], ["bike", "🚴 자전거"], ["run", "🏃 달리기"]], o(d).disc2 || "auto") : `<span class="hint">오후는 가벼운 두 번째 훈련</span>`}
-        </div>` : ""}</div>`;
+        const f = (label, html, wide) => `<label class="do-f${wide ? " wide" : ""}"><span>${label}</span>${html}</label>`;
+        return `<div class="do-card"><div class="do-head"><span class="do-day">${DAY[d]}</span><span class="do-sum">${both ? "오전·오후 두 번" : o(d).slot === "am" ? "오전" : o(d).slot === "pm" ? "오후" : "시간대 자유"}</span></div>
+        <div class="do-grid">
+          ${f("시간대", sel(d, "slot", [["", "상관없음"], ["am", "오전"], ["pm", "오후"], ["both", "오전·오후 두 번"]], o(d).slot || ""))}
+          ${f(both ? "오전 운동 시간" : "운동 시간", sel(d, "min", SESSION_MIN.map((m) => [m, minLabel(m)]), dayMin(d)))}
+          ${f("강도", sel(d, "pref", [["auto", "자동"], ["hard", "강하게"], ["easy", "가볍게"]], o(d).pref || "auto"))}
+          ${tri ? f(both ? "오전 종목" : "종목", sel(d, "disc", [["auto", "자동"], ["swim", "수영"], ["bike", "자전거"], ["run", "달리기"], ["brick", "브릭 (자전거+달리기)"]], o(d).disc || "auto")) : ""}
+        </div>${both ? `<div class="do-sub"><div class="do-sub-t">오후 운동</div><div class="do-grid">
+          ${f("운동 시간", sel(d, "min2", SESSION_MIN.map((m) => [m, minLabel(m)]), num(o(d).min2) || 45))}
+          ${tri ? f("종목", sel(d, "disc2", [["auto", "자동"], ["swim", "수영"], ["bike", "자전거"], ["run", "달리기"]], o(d).disc2 || "auto")) : `<div class="do-f"><span>강도</span><div class="do-note">가벼운 두 번째 훈련</div></div>`}
+        </div></div>` : ""}</div>`;
       }).join("")}
       <p class="hint">'자동'으로 두면 80/20 원칙에 맞춰 강한 날과 쉬운 날을 띄워서 배치해요. 시간이 가장 많은 날이 롱 세션이 돼요.<br>
       하루 두 번이면 오후는 쉬운 강도로 넣어요 (철인3종은 오전과 다른 종목). 노르웨이 방식이면 오전·오후 모두 역치 바로 아래(더블 역치)로 짜요.</p></div>`;
@@ -509,7 +511,18 @@
       </div></div>`;
   }
 
+  // 🔁 같은 기록을 두 번 묻지 않게: 앞에서 적은 기록을 뒤 단계에 자동으로 채워요 (반대 방향도)
+  const SAME_REC = [["run5k", "run.5km"], ["run10k", "run.10km"], ["ftp", "bike.ftp"], ["css400", "swim.자유형.400"], ["css200", "swim.자유형.200"]];
+  function shareRecords() {
+    draft.tests = draft.tests || {}; draft.records = draft.records || {};
+    SAME_REC.forEach(([t, r]) => {
+      const tv = String(draft.tests[t] || "").trim(), rv = String((draft.records[r] || {}).pr || "").trim();
+      if (tv && !rv) draft.records[r] = Object.assign({}, draft.records[r], { pr: tv });
+      else if (rv && !tv) draft.tests[t] = rv;
+    });
+  }
   function renderStep() {
+    shareRecords();
     const html = [stepSport, stepBody, stepTests, stepSchedule, stepVolume, stepRecords, stepGoal, stepRaces, stepReview][step]();
     $("wzBody").innerHTML = html + '<p class="warn" id="wzErr"></p>';
     $("wzBar").style.width = `${((step + 1) / STEPS.length) * 100}%`;

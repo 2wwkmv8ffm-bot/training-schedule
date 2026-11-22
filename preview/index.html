@@ -492,6 +492,17 @@
     .vpick .vn { font-size: 12px; color: var(--muted); }
     .rec-group { font-weight: 800; font-size: 14px; margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid var(--line); }
     .rec-group:first-of-type { margin-top: 4px; padding-top: 0; border-top: 0; }
+    /* 📅 요일별 설정 카드 */
+    .do-card { border: 1px solid var(--line); border-radius: 14px; padding: 12px 12px 14px; margin-bottom: 10px; background: var(--bg, #f8fafc); }
+    .do-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .do-day { width: 34px; height: 34px; border-radius: 50%; background: var(--accent, #2563eb); color: #fff; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; }
+    .do-sum { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .do-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 10px; }
+    .do-f { display: grid; gap: 5px; font-size: 12px; color: var(--muted); font-weight: 600; min-width: 0; }
+    .do-f select { width: 100%; min-width: 0; padding: 10px 8px; font-size: 15px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--text); }
+    .do-note { padding: 10px 8px; font-size: 14px; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; }
+    .do-sub { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+    .do-sub-t { font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
     .dayopt { display: grid; grid-template-columns: 28px 1fr 1fr; gap: 6px; align-items: center; margin-bottom: 8px; }
     .dayopt:has(select:nth-of-type(3)) { grid-template-columns: 28px 1fr 1fr 1fr; }
     .dayopt:has(select:nth-of-type(4)) { grid-template-columns: 28px 1fr 1fr 1fr 1fr; }
@@ -637,6 +648,20 @@
     .post.ig .post-act { gap: 2px; padding-top: 4px; }
     .post.ig .post-act button.ic { border: 0; background: none; font-size: 24px; padding: 4px 8px; }
     .post.ig .post-act button.ic.on { background: none; }
+    .post.ig .post-act button.ic-send { color: var(--text); display: inline-flex; align-items: center; }
+    .car-n { font-weight: 700; letter-spacing: .02em; }
+    /* 💬 댓글 창: 아래에서 화면 2/3 높이로 올라와요 (인스타그램처럼) */
+    dialog.cm-sheet { margin: auto 0 0; width: 100%; max-width: 640px; margin-left: auto; margin-right: auto; height: 66vh; max-height: 66vh; padding: 0; border: 0; border-radius: 18px 18px 0 0; background: var(--card, #fff); color: var(--text); display: none; flex-direction: column; animation: cmUp .22s ease-out; }
+    dialog.cm-sheet[open] { display: flex; }
+    dialog.cm-sheet::backdrop { background: rgba(0,0,0,.45); }
+    @keyframes cmUp { from { transform: translateY(40%); opacity: .4; } to { transform: none; opacity: 1; } }
+    .cm-grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line, #d1d5db); margin: 8px auto 2px; flex: none; }
+    .cm-head { display: flex; align-items: center; justify-content: center; position: relative; padding: 6px 16px 10px; border-bottom: 1px solid var(--line); flex: none; font-size: 16px; }
+    .cm-x { position: absolute; right: 10px; top: 0; border: 0; background: none; font-size: 20px; padding: 4px 8px; color: var(--muted, #6b7280); }
+    .cm-sheet .cm-list { flex: 1; overflow-y: auto; margin: 0; border: 0; padding: 12px 16px calc(10px + env(safe-area-inset-bottom)); gap: 14px; align-content: start; }
+    .cm-sheet .emo-row, .cm-sheet .cmt-form { position: sticky; background: var(--card, #fff); }
+    .cm-sheet .emo-row { bottom: 52px; padding-top: 8px; }
+    .cm-sheet .cmt-form { bottom: 0; padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); }
     .post-act button.pop { animation: lp .35s ease; }
     @keyframes lp { 50% { transform: scale(1.35); } }
     .post-likes { font-size: 14px; margin: 2px 0 4px; }
