@@ -171,6 +171,7 @@
   // 오늘부터 대회(+회복)까지 (4~16주) 앞으로의 자동 계획을 새 계획으로 바꿔요
   async function applyPlanToCalendar() {
     clearTimeout(syncTimer);
+    if (!(TS.auth && TS.auth.user)) return 0; // 로그인 전에는 서버 일정표를 건드리지 않아요 (권한 오류 방지)
     const VS = makeVariants(profile), P = VS[pickIdx(VS)].plan; // 고른 안(A·B) 그대로
     const today = iso(new Date());
     const up = (profile.races || []).filter((r) => r.date >= today).map((r) => r.date).sort();
