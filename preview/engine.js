@@ -896,13 +896,14 @@
   }
   function swimDistSteps(type, D, o) {
     const { prog, ctx, goal } = o;
-    const wuM = D >= 2500 ? 400 : D >= 1200 ? 300 : 200;
-    const drill = D >= 1200 ? 200 : 100;
-    const cdM = D >= 2500 ? 200 : 100;
+    const wuM = D >= 4000 ? 800 : D >= 3000 ? 600 : D >= 2500 ? 400 : D >= 1200 ? 300 : 200;
+    const drill = D >= 3000 ? 400 : D >= 1200 ? 200 : 100;
+    const cdM = D >= 3000 ? 400 : D >= 2500 ? 200 : 100;
     let main = Math.max(100, D - wuM - drill - cdM);
     const sets = [];
     const add = (text, m) => { sets.push(text); main = Math.max(0, main - m); };
     const fill = () => { // 남은 거리는 지구력 반복으로
+      if (D >= 3000 && main >= 800) { const pm = Math.min(800, Math.floor((main * 0.5) / 200) * 200); if (pm >= 400) add(`패들 풀 ${pm}m (${pm / 200} × 200m 또는 연속) — 부드럽고 일정하게, 호흡 3-5-3-7 (100m마다 호흡 간격 바꾸기)`, pm); }
       if (main >= 100) {
         const vv = (o.v || 0) % 3;
         const len = main >= 1600 ? [400, 300, 500][vv] : main >= 400 ? [200, 300, 200][vv] : 100;
@@ -936,7 +937,16 @@
         break;
       }
       case "CSS": {
-        const vv = (o.v || 0) % 3;
+        const vv = (o.v || 0) % 4;
+        if (vv === 3 && main >= 1700) { // 브로큰 100 + 다이빙 스피드
+          const n = clamp(Math.floor((main * 0.55) / 100), 8, 15);
+          add("킥 3 × 100m (오리발·킥판 없이, 점점 빠르게)", 300);
+          add("편하게 100m", 100);
+          add(`메인: 100m × ${n}회 브로큰 (첫 번째만 다이빙 스타트), CSS 페이스 — 사이클 CSS + 10초`, 100 * n);
+          add("편하게 100m", 100);
+          if (main >= 300) add("다이빙 스피드 50m × 6: 25m 전력 + 25m 편하게 (모두 다이빙 스타트)", 300);
+          fill(); break;
+        }
         if (vv === 1 && main >= 1100) { // 피라미드
           const k = clamp(Math.floor((main * 0.7) / 900), 1, 3);
           add(`피라미드 100-200-300-200-100m CSS 페이스, 휴식 15~20초${k > 1 ? ` × ${k}회 (세트 사이 1분)` : ""}`, 900 * k);
@@ -952,6 +962,14 @@
         break;
       }
       case "CSS_long": {
+        if ((o.v || 0) % 2 && main >= 1800) { // 쇼트 서킷 디센딩
+          add("킥 2 × 200m (오리발·킥판 없이): 1번 50m 접영 + 50m 자유형, 2번 50m 배영 + 50m 자유형, 휴식 10초", 400);
+          add("킥 50m × 6: 홀수 25m 강하게 + 편하게, 짝수 25m 편하게 + 강하게", 300);
+          add("메인 쇼트 서킷: 100m × 4 × 4세트, 세트 사이 20초 — 홀수 세트는 '빠르게-느리게' 번갈아, 짝수 세트는 1·2·3번째로 갈수록 빠르게 (CSS −2 ~ +5초)", 1600);
+          add("편하게 100m", 100);
+          if (main >= 400) add("스프린트 50m × 8: 홀수 편하게, 짝수 빠르게", 400);
+          fill(); break;
+        }
         const len = [400, 500, 800][prog] || 400;
         const n = clamp(Math.floor((main * 0.7) / len), 1, 6);
         add(`${len}m × ${n}회 (CSS +1~3초), 휴식 20~30초`, len * n);
@@ -966,6 +984,14 @@
         break;
       }
       case "Speed": {
+        if ((o.v || 0) % 2 && main >= 1800) { // 목표 세트 (모두 최대)
+          add("(휴식 10초) 100m × 4: 홀수 개인혼영, 짝수 자유형", 400);
+          add("KPS 100m × 4 × 3세트 (1세트 킥 / 2세트 풀 / 3세트 수영): 홀수 부드럽게, 짝수 25m 강하게 + 편하게", 1200);
+          const n = clamp(Math.floor((main - 400) / 200), 3, 7);
+          add(`목표 세트: 200m × ${n}회 모두 다이빙·모두 최대, 사이클 5:00 + 마지막 100m 최대`, n * 200 + 100);
+          if (main >= 400) add("편하게 400m", 400);
+          fill(); break;
+        }
         const n = [8, 10, 12][prog] || 8;
         add(`25m × ${n}회 전력, 휴식 40초`, 25 * n);
         add("50m × 6회 레이스 페이스, 휴식 1분", 300);
@@ -973,6 +999,14 @@
         break;
       }
       case "OW": {
+        if (tri && (o.v || 0) % 2 && main >= 1800) { // 레이스 시뮬레이션
+          add("레이스 시뮬레이션: 다이빙 400m (첫 100m 최대 → 나머지 레이스 페이스)", 400);
+          add("킥 600m — 100m마다 점점 강하게", 600);
+          add("풀 400m × 2: 1번 풀부이, 2번 패들 풀 (휴식 15초, 일정하게, 홀수 호흡)", 800);
+          const n = clamp(Math.floor((main - 1800) / 200), 3, 6);
+          add(`메인: 200m × ${n}회 (CSS +2~5초) — 홀수 다이빙 스타트 → 옆 사람과 나란히, 짝수 드래프팅·100m마다 선두 교대`, n * 200);
+          fill(); break;
+        }
         const c = Math.floor(main / 100) * 100;
         add(`${c}m 연속 (CSS +2~4초) — 6~8스트로크마다 사이팅`, c);
         fill();
@@ -987,6 +1021,7 @@
       default: fill();
     }
     void ctx;
+    if (D >= 3000) return [`워밍업: ${wuM}m SKPS (수영·킥·풀·수영 순서로 나눠서)`, `드릴(풀) ${drill / 50} × 50m — 25m 스컬링 + 25m 부드럽게, 휴식 10초`, ...sets, `쿨다운: ${cdM}m 편하게`];
     return [`워밍업: ${wuM}m 편하게 + 드릴 ${drill / 50} × 50m`, ...sets, `쿨다운: ${cdM}m 편하게`];
   }
   function swimTime(type, o) {
