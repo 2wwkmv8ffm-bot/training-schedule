@@ -178,9 +178,17 @@
     const lastRace = up.length ? new Date(up[up.length - 1] + "T00:00:00") : null;
     const nW = savedCalWeeks() || (lastRace ? Math.min(16, Math.max(8, Math.ceil((lastRace - P.week(0).start) / (7 * 864e5)) + 2)) : 8); // 달력에 넣은 기간 그대로 (처음엔 8주, 대회가 있으면 대회까지)
     const end = iso(addDays(P.week(0).start, 7 * nW - 1));
-    const { data: old } = await TS.mine(db.from(TS.TABLE).select("id,date,notes,completed")).gte("date", today).like("notes", "[자동 계획]%");
-    const keep = new Set((old || []).filter((s) => s.completed || /🧑‍🏫 코치:/.test(s.notes || "")).map((s) => s.date));
-    const del = (old || []).filter((s) => !keep.has(s.date));
+    // 🏷️ 문진표 종목에 맞는 일정만 남겨요 (육상이면 달리기만, 수영이면 수영만, 자전거면 자전거만, 철인3종이면 셋 + 브릭)
+    const okCat = new Set(discsOf(profile.sport).map((d) => DISC[d].cat).concat(discsOf(profile.sport).length > 1 ? ["브릭"] : []));
+    const SPORT_CATS = ["수영", "사이클", "러닝", "브릭"];
+    const wrongSport = (s) => SPORT_CATS.includes(s.category) && !okCat.has(s.category);
+    const { data: old } = await TS.mine(db.from(TS.TABLE).select("id,date,notes,completed,category")).like("notes", "[자동 계획]%"); // 지나간 날까지 모두 확인
+    const all = old || [];
+    // 종목이 바뀌었으면: 아직 안 한(완료 안 된) 예전 종목 자동 일정은 지나간 날까지 모두 지워요 (완료한 기록은 그대로)
+    const stale = all.filter((s) => !s.completed && wrongSport(s));
+    const future = all.filter((s) => s.date >= today && !stale.includes(s));
+    const keep = new Set(future.filter((s) => s.completed || /🧑‍🏫 코치:/.test(s.notes || "")).map((s) => s.date));
+    const del = stale.concat(future.filter((s) => !keep.has(s.date)));
     if (del.length) await db.from(TS.TABLE).delete().in("id", del.map((x) => x.id));
     const rows = [];
     for (let i = 0; i < nW; i++) { const W = P.week(i); W.sessions.forEach((s) => { const dd = iso(addDays(W.start, s.day)); if (dd >= today && dd <= end && !keep.has(dd)) rows.push(rowOf(s, dd)); }); }
