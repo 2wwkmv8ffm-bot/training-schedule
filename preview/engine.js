@@ -580,6 +580,15 @@
         return { lvl: 3, tag: "Z3", name: "템포", point: "꾸준한 Z3. 말은 짧게 할 수 있는 정도.",
           steps: [wu, [`Z3 ${m}분 지속`, `Z3 ${m}분 지속 — 케이던스 70~75로 낮춰 근지구력`, `Z3 ${Math.round(m / 2)}분 × 2회, 사이 5분 Z1`][(o.v || 0) % 3], cd], targets: t(76, 90, 3), effect: COGGAN[2][5], hiFrac: m / min, used: m }; }
       case "SS": { const len = [12, 15, 20][prog] || 12, n = fitReps(3, len, 5);
+        const sv = (o.v || 0) % 3;
+        if (sv === 1) { const sets = fitReps(2, 12, 5), used = sets * 12 + (sets - 1) * 5, fin = f.main - used >= 16;
+          return { lvl: 3, tag: "SS", name: "스윗스팟 강도 교대 + 순항", point: "파워를 급하게 올리지 말고 부드럽게 전환해요. 케이던스 90~100, 역치(LT)까지 올리지 않기. 끝날 때 '아직 더 할 수 있다'는 여유를 남겨요.",
+            steps: [wu + " · 30초 빠른 페달링 × 3", `(2분 FTP 86~90% / 1분 FTP 90~92%) × 4 = 12분, × ${sets}세트, 세트 사이 5분 Z1`, "2세트째도 같은 파워 유지", fin ? "6분 Z1 회복 → 10분 FTP 86~92% 일정하게 순항 (RPE 6 전후, 다리를 다 쓰지 않기)" : null, cd].filter(Boolean),
+            targets: t(86, 92, 3), effect: "스윗스팟 지구력 유지, 레이스 중 강도 변화에 대응하며 순항하는 능력.", hiFrac: (sets * 12 + (fin ? 10 : 0)) / min, used: used + (fin ? 16 : 0) }; }
+        if (sv === 2) { const sets = fitReps(2, 18, 5), used = sets * 18 + (sets - 1) * 5, cc = f.main - used >= 17;
+          return { lvl: 4, tag: "SS+", name: "스윗스팟 + 15초 버스트", point: "버스트로 끝내지 말고 바로 스윗스팟으로 돌아오는 게 핵심이에요. 높은 파워보다 '세게 밟은 뒤 다시 순항'하는 능력.",
+            steps: [wu + " · 30초 빠른 페달링", `(2분 45초 FTP 86~92% / 15초 버스트 FTP 120~150%) × 6 = 18분, × ${sets}세트, 세트 사이 5분 Z1`, cc ? "5분 Z1 → (2분 템포 FTP 76~85% / 2분 FTP 86~92%) × 3 = 12분 (크리스크로스)" : null, cd].filter(Boolean),
+            targets: [W(86, 92), "버스트 " + W(120, 150), hrText("bike", 4, H, ctx.phil)].filter(Boolean), effect: "가속 후 순항 페이스로 복귀하는 능력 (포인트 레이스·그룹 라이딩 대응).", hiFrac: (sets * 18 + (cc ? 12 : 0)) / min, used: used + (cc ? 17 : 0) }; }
         return { lvl: 3, tag: "SS", name: "스윗스팟", point: "FTP 88~93% — 회복 부담 대비 FTP가 가장 효율적으로 올라요.",
           steps: [wu, `${len}분 × ${n}회 스윗스팟, 사이 5분 Z1`, cd], targets: t(88, 93, 3), effect: "근지구력과 FTP 향상 (하프 아이언맨·그란폰도 핵심).", hiFrac: (n * len) / min, used: n * len + (n - 1) * 5 }; }
       case "Thr": { const [want, len] = [[2, 15], [2, 20], [3, 15]][prog] || [2, 15]; const n = fitReps(want, len, 5);
@@ -590,7 +599,11 @@
         return { lvl: 4, tag: "Z4", name: "역치 인터벌", point: "FTP 근처를 일정하게. 처음 2분에 너무 세게 들어가지 않기.",
           steps: [wu, `${len}분 × ${n}회 Z4, 사이 5분 Z1`, cd], targets: t(91, 105, 4), effect: COGGAN[3][5], hiFrac: (n * len) / min, used: n * len + (n - 1) * 5 }; }
       case "VO2": { const n = fitReps([4, 5, 6][prog] || 4, 4, 4);
-        const vv = (o.v || 0) % 3;
+        const vv = (o.v || 0) % 4;
+        if (vv === 3) { const m = fitReps(6, 2, 6);
+          return { lvl: 5, tag: "Z5", name: "VO2max 2분 반복", point: "2분 앞부분을 너무 빠르게 시작하지 말고 끝까지 유지해요. 회복은 완전히. 파워가 FTP 아래로 떨어지면 그날은 끝내요.",
+            steps: [wu + " · 30초 빠른 페달링 × 3", `2분 FTP 106~120% × ${m}회, 사이 6분 Z1 (완전 회복)`, "기어·케이던스는 편한 대로", cd], targets: t(106, 120, 5),
+            effect: "VO2max·고강도 내성 향상, 레이스 중 짧은 고출력 대응.", hiFrac: (m * 2) / min, used: m * 8 - 6 }; }
         if (vv === 1) { const m = fitReps(n + 1, 3, 3);
           return { lvl: 5, tag: "Z5", name: "VO2max 3분 인터벌", point: "3분을 고르게, 마지막 30초에 처지지 않게.",
             steps: [wu, `3분 × ${m}회 Z5, 사이 3분 Z1`, cd], targets: t(106, 120, 5), effect: COGGAN[4][5], hiFrac: (m * 3) / min, used: m * 6 - 3 }; }
@@ -601,6 +614,10 @@
         return { lvl: 5, tag: "Z5", name: "VO2max 인터벌", point: "4분을 고르게. 마지막 반복도 첫 반복과 같은 파워가 목표.",
           steps: [wu, `4분 × ${n}회 Z5, 사이 4분 Z1`, cd], targets: t(106, 120, 5), effect: COGGAN[4][5], hiFrac: (n * 4) / min, used: n * 8 - 4 }; }
       case "Ana": { const n = [6, 8, 10][prog] || 6;
+        if ((o.v || 0) % 2) { const h = fitReps(4, 4.5, 5);
+          return { lvl: 5, tag: "언덕", name: "언덕 파워 (VO2 → 어택)", point: "VO2에서 무산소(AC)로 바꾸는 능력이 핵심. 앞 3분은 일어서기·앉기 자유, 뒤 90초 중 75초는 앉아서 어택, 마지막 15초는 기어를 한 단 무겁게 해서 한계까지.",
+            steps: [wu, "9분 FTP 88~92% → 1분 FTP 106~120% (호흡 끌어올리기)", "5분 Z1", `(3분 FTP 106~110% / 1분 30초 FTP 120~150%) × ${h}회, 사이 5분 Z1`, "회복 때는 강도를 완전히 낮춰 질을 지켜요", cd],
+            targets: [W(106, 110), "어택 " + W(120, 150), hrText("bike", 5, H, ctx.phil)].filter(Boolean), effect: "오르막 어택·브레이크어웨이·후반 고강도 반복 능력.", hiFrac: (10 + h * 4.5) / min }; }
         return { lvl: 5, tag: "Z6–7", name: "무산소·스프린트", point: "크리테리움처럼 반복 가속. 30초는 정말 세게, 30초는 정말 쉽게.",
           steps: [wu, `(30초 Z6 / 30초 Z1) × ${n} — ${f.main >= 30 ? "2세트, 세트 사이 5분" : "1세트"}`, "10초 최대 스프린트(Z7) × 4~6, 사이 2분 완전 회복", cd],
           targets: [B ? `Z6: ${watt(B.ftp, 121, 150)} · Z7: ${watt(B.ftp, 151)}` : "Z6 FTP 121~150% · Z7 최대", hrText("bike", 5, H, ctx.phil)].filter(Boolean), effect: COGGAN[5][5], hiFrac: 0.25 }; }

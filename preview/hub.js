@@ -812,7 +812,7 @@
         ${p && TS.discsOf && TS.discsOf(p.sport).includes("run") ? `<div class="set-row"><span>🏃 달리기</span><span class="mini-seg">${[["indoor", "🏠 트레드밀"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="${((p.env || {}).run || "outdoor") === k ? " on" : ""}" data-merenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
         <div class="set-row"><span>📖 드릴 가이드 (수영·자전거·달리기)</span><button type="button" class="pill" data-drills="swim">보기</button></div>
         <div class="set-row zone-install"><span>📲 휴대폰에 앱으로 설치 (아이폰·갤럭시)</span><button type="button" class="pill" onclick="window.ZONE_INSTALL && window.ZONE_INSTALL()">설치하기</button></div>
-        <div class="set-row"><span>💪 보강 가이드 (맨몸 10가지)</span><button type="button" class="pill" data-drills="str">보기</button></div>
+        <div class="set-row"><span>💪 보강 가이드 (맨몸 · 서킷)</span><button type="button" class="pill" data-drills="str">보기</button></div>
         <div class="set-row"><span>🚫 차단한 사람</span><button type="button" class="pill" id="meBlocks">보기</button></div>
         <div class="set-row"><span>🔍 두 손가락 확대·축소</span>${(() => { const z = window.ZONE_ZOOM && window.ZONE_ZOOM.get(); return `<button type="button" class="sw${z ? " on" : ""}" id="meZoom" role="switch" aria-checked="${z ? "true" : "false"}" aria-label="화면 확대·축소"><i></i><b>${z ? "ON" : "OFF"}</b></button>`; })()}</div>
         <div class="set-row"><span>📝 훈련 일지 (컨디션·운동 기록·일기)</span><button type="button" class="pill" id="meJournal">모아보기</button></div>
