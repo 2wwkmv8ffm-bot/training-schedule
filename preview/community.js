@@ -5,6 +5,12 @@
   const esc = (s) => TS.escapeHtml(s == null ? "" : s);
   const $ = (id) => document.getElementById(id);
   const SP = TS.ACT_SPORTS;
+  // ✏️ 선 아이콘 (직접 그린 단순한 모양 — 다른 앱의 그림을 쓰지 않아요)
+  const ICON = {
+    heart: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.4C1.4 7.6 3.6 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.4 0 5.6 3.1 4.3 6.6-1.8 4.8-9.3 9.4-9.3 9.4Z"/></svg>',
+    heartOn: '<svg viewBox="0 0 24 24" width="26" height="26" fill="#ef4444" stroke="#ef4444" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.3-9.4C1.4 7.6 3.6 4.5 7 4.5c2 0 3.6 1.1 5 3 1.4-1.9 3-3 5-3 3.4 0 5.6 3.1 4.3 6.6-1.8 4.8-9.3 9.4-9.3 9.4Z"/></svg>',
+    cmt: '<svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 0 1-12.6 7.4L3.5 20.5l1.2-4.2A8.5 8.5 0 1 1 20.5 12Z"/></svg>',
+  };
   const VIS = { public: "🌏 전체 공개", friends: "👥 친구만", private: "🔒 나만" };
   const SCOPE_KEY = "training.feedScope";
   const BUCKET = "media";
@@ -347,8 +353,8 @@
     box.innerHTML = `
       <div class="com-top"><button type="button" class="pill" id="comFriends" title="친구 추가">➕ 친구${nIn ? ` <span class="zb z5">${nIn}</span>` : ""}</button><button type="button" class="pill" id="comMe" title="내 프로필·사진">🖼️ 내 사진</button><button type="button" class="pill" id="comBell">🔔 알림${notif.unread ? ` <span class="zb z5">${notif.unread}</span>` : ""}</button></div>
       <div class="story-bar">
-        <button type="button" class="story me" id="comStoryAdd"><span class="ring add">${avatar(TS.auth && TS.auth.member, 58)}<i>＋</i></span><b>내 스토리</b></button>
-        ${ring.map((u) => { const m = byUser[u][0].members || {}; return `<button type="button" class="story" data-story="${esc(u)}"><span class="ring">${avatar(m, 58)}</span><b>${esc(u === me() ? "나" : m.nickname || "?")}</b></button>`; }).join("")}
+        <button type="button" class="story me" id="comStoryAdd"><span class="ring add">${avatar(TS.auth && TS.auth.member, 66)}<i>＋</i></span><b>내 스토리</b></button>
+        ${ring.map((u) => { const m = byUser[u][0].members || {}; return `<button type="button" class="story" data-story="${esc(u)}"><span class="ring">${avatar(m, 66)}</span><b>${esc(u === me() ? "나" : m.nickname || "?")}</b></button>`; }).join("")}
       </div>
       <div class="com-bar">${(() => { const SC = [["all", "전체"], ["friends", "친구"], ["hot", "인기"]]; const cur = SC.find(([k]) => k === scope) || SC[0];
         return `<details class="scope-pick"><summary><span>${cur[1]}</span><i>▾</i></summary><div class="scope-menu">${SC.map(([k, l]) => `<button type="button" data-scope="${k}" class="${scope === k ? "on" : ""}">${l}${scope === k ? " ✓" : ""}</button>`).join("")}</div></details>`; })()}<button type="button" id="comWrite" class="com-w">✍️ 사진·글 올리기</button></div>
@@ -395,6 +401,7 @@
   function bindPosts(root) {
     root.querySelectorAll("[data-like]").forEach((b) => { b.onclick = () => toggleLike(b.dataset.like); });
     root.querySelectorAll("[data-wholikes]").forEach((b) => { b.onclick = () => showLikers(b.dataset.wholikes); });
+    root.querySelectorAll(".post-body").forEach((el) => { el.onclick = (e) => { if (e.target.closest("button, a")) return; el.classList.toggle("open"); }; }); // 긴 글은 2줄만 → 누르면 펼치기
     root.querySelectorAll("[data-cmt]").forEach((b) => { b.onclick = () => toggleComments(b.dataset.cmt); });
     root.querySelectorAll("[data-delpost]").forEach((b) => { b.onclick = () => deletePost(b.dataset.delpost); });
     root.querySelectorAll("[data-pin]").forEach((b) => { b.onclick = () => togglePin(b.dataset.pin); });
@@ -417,7 +424,7 @@
           e.preventDefault();
           const p = findPost(el.dataset.dbl);
           if (p && !(p.post_likes || []).some((l) => l.user_id === me())) toggleLike(el.dataset.dbl);
-          const h = document.createElement("span"); h.className = "heart-pop"; h.textContent = "❤️"; el.appendChild(h); setTimeout(() => h.remove(), 800);
+          const h = document.createElement("span"); h.className = "heart-pop"; h.innerHTML = ICON.heartOn; el.appendChild(h); setTimeout(() => h.remove(), 800);
         }
         last = now;
       });
@@ -708,8 +715,8 @@
         ${a.route && a.route.length > 1 ? `<div class="post-map" data-map="${id}"></div>` : ""}</div>` : ""}
       ${!photos.length && !a && p.body ? `<div class="txt-post" data-dbl="${id}">${withTags(p.body.slice(0, 200))}</div>` : ""}
       <div class="post-act">
-        <button type="button" data-like="${id}" class="ic${liked ? " on" : ""}" aria-label="좋아요">${liked ? "❤️" : "🤍"}</button>
-        <button type="button" data-cmt="${id}" class="ic" aria-label="댓글">💬</button>
+        <button type="button" data-like="${id}" class="ic ic-svg${liked ? " on" : ""}" aria-label="좋아요">${liked ? ICON.heartOn : ICON.heart}</button>
+        <button type="button" data-cmt="${id}" class="ic ic-svg" aria-label="댓글">${ICON.cmt}</button>
         <button type="button" data-share="${id}" class="ic ic-send" aria-label="보내기"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M22 3 9.2 10.1M22 3l-6.6 18-3.2-8.9L3 9.4 22 3Z"/></svg></button></div>
       <div class="post-likes" data-likes="${id}">${nLikes ? (p.user_id === me() ? `<button type="button" class="link" data-wholikes="${id}">좋아요 <b>${nLikes}</b>개 · 누가 눌렀는지 보기</button>` : `좋아요 <b>${nLikes}</b>개`) : "가장 먼저 좋아요를 눌러 보세요"}</div>
       ${p.body && (photos.length || a) ? `<div class="post-body"><button type="button" class="link nm" data-prof="${esc(p.user_id)}">${esc(m.nickname || "")}</button> ${withTags(p.body)}</div>` : ""}
@@ -755,7 +762,7 @@
   }
   function paintLike(id, p) {
     const on = (p.post_likes || []).some((l) => l.user_id === me()), n = (p.post_likes || []).length;
-    document.querySelectorAll(`[data-like="${CSS.escape(String(id))}"]`).forEach((b) => { b.classList.toggle("on", on); b.textContent = on ? "❤️" : "🤍"; if (on) { b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); } });
+    document.querySelectorAll(`[data-like="${CSS.escape(String(id))}"]`).forEach((b) => { b.classList.toggle("on", on); if (b.classList.contains("ic-svg")) b.innerHTML = on ? ICON.heartOn : ICON.heart; else b.textContent = on ? "❤️" : "🤍"; if (on) { b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); } });
     document.querySelectorAll(`[data-likes="${CSS.escape(String(id))}"]`).forEach((el) => { el.innerHTML = n ? `좋아요 <b>${n}</b>개` : "가장 먼저 좋아요를 눌러 보세요"; });
   }
 
