@@ -1,0 +1,633 @@
+(function () {
+  const TABLE = "training_sessions";
+  const DAYS = ["월", "화", "수", "목", "금", "토", "일"];
+  const COLORS = {
+    러닝: "#2563eb", 수영: "#0891b2", 근력: "#dc2626", 사이클: "#d97706",
+    유연성: "#7c3aed", 구기: "#16a34a", 휴식: "#9ca3af", 기타: "#64748b",
+    브릭: "#db2777",
+  };
+  // 종목별로 고를 수 있는 훈련 종류 (첫 번째가 기본값)
+  const SPORTS = {
+    수영:    { icon: "🏊", desc: "수영 중심 훈련",       cats: ["수영", "근력", "유연성", "휴식", "기타"] },
+    자전거:  { icon: "🚴", desc: "사이클 중심 훈련",     cats: ["사이클", "근력", "유연성", "휴식", "기타"] },
+    육상:    { icon: "🏃", desc: "러닝·트랙 중심 훈련",  cats: ["러닝", "근력", "유연성", "휴식", "기타"] },
+    철인3종: { icon: "🏅", desc: "수영 + 자전거 + 러닝", cats: ["수영", "사이클", "러닝", "브릭", "근력", "유연성", "휴식", "기타"] },
+  };
+  const $ = (id) => document.getElementById(id);
+  const cfg = window.SUPABASE_CONFIG;
+  const db = window.supabase.createClient(cfg.url, cfg.publishableKey);
+
+  // 로그인한 사람 (auth.js가 정해줌) — 훈련 일정·활동을 사람별로 나눠요
+  const session = { user: null, scoped: false, probed: false };
+  async function probeScope() { // schema_community.sql을 실행해 user_id 칸이 있는지
+    if (session.probed) return;
+    session.probed = true;
+    const { error } = await db.from(TABLE).select("user_id").limit(1);
+    session.scoped = !error;
+  }
+  function mine(q) {
+    if (!session.user) return q.eq("user_id", "00000000-0000-0000-0000-000000000000"); // 로그인 전에는 아무 일정도 안 보여요
+    // 🔒 어떤 경우에도 내 일정만 (예전엔 확인이 실패하면 모든 사람 일정이 보일 수 있었어요)
+    return session.user ? q.eq("user_id", session.user.id) : q.eq("user_id", "00000000-0000-0000-0000-000000000000"); // 로그인 전에는 아무 일정도 안 보여요 (손님 일정 공유 방지)
+  }
+
+  let weekStart = mondayOf(new Date());
+  let sessions = [];
+  let editingId = null;
+  let sport = null; // profile.js 가 프로필을 읽고 정해줌
+
+  function sportCats() {
+    return sport ? SPORTS[sport].cats : Object.keys(COLORS);
+  }
+
+  // ---------- 날짜 유틸 ----------
+  function mondayOf(d) {
+    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diff = (x.getDay() + 6) % 7; // 월=0
+    x.setDate(x.getDate() - diff);
+    return x;
+  }
+  function addDays(d, n) {
+    const x = new Date(d);
+    x.setDate(x.getDate() + n);
+    return x;
+  }
+  function iso(d) {
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${m}-${day}`;
+  }
+  function label(d) {
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
+
+  // ---------- 상태 표시 ----------
+  function setStatus(ok, text) {
+    $("dot").className = "dot " + (ok ? "ok" : "err");
+    $("statusText").textContent = text;
+  }
+  function showBanner(html) {
+    $("banner").innerHTML = html;
+    $("banner").classList.toggle("show", !!html);
+  }
+  function explainError(err) {
+    const msg = (err && err.message) || String(err);
+    // 사용자에게는 쉬운 말로 (자세한 원인은 개발자 도구 콘솔에 남겨요)
+    try { console.warn("[ZONE] 저장소 오류:", err); } catch (e) { /* 무시 */ }
+    if (err && (err.code === "42P01" || err.code === "PGRST205" || /does not exist|schema cache/i.test(msg))) {
+      return "서버가 아직 준비되지 않았어요. 잠시 뒤 다시 열어 주세요. 계속되면 앱 관리자에게 알려 주세요.";
+    }
+    if (err && err.code === "42501") return "이 작업을 할 권한이 없어요. 로그인했는지 확인해 주세요.";
+    if (/Failed to fetch|NetworkError|network/i.test(msg)) return "인터넷 연결을 확인해 주세요. 연결되면 자동으로 다시 불러와요.";
+    return "저장 중 문제가 생겼어요. 잠시 뒤 다시 시도해 주세요.";
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // ---------- 주간 / 월간(캘린더) 보기 ----------
+  const VIEW_KEY = "training.planView";
+  let view = "month"; // 계획 탭은 언제나 월간부터 보여요
+  let monthCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  let selDay = null;
+  function monthGrid() {
+    const y = monthCursor.getFullYear(), m = monthCursor.getMonth();
+    const start = mondayOf(monthCursor);
+    const end = addDays(mondayOf(new Date(y, m + 1, 0)), 6);
+    return { y, m, start, end };
+  }
+  function setView(v) {
+    view = v;
+    try { localStorage.setItem(VIEW_KEY, v); } catch (e) { /* 무시 */ }
+    if (v === "month") monthCursor = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
+    else if (selDay) weekStart = mondayOf(new Date(selDay + "T00:00:00"));
+    load();
+  }
+  document.querySelectorAll("#viewSeg [data-view]").forEach((b) => { b.onclick = () => setView(b.dataset.view); });
+  setTimeout(() => { window.TS.planMonth = () => { if (view !== "month") setView("month"); }; }, 0); // 계획 탭에 들어가면 월간부터
+
+  // ---------- 데이터 ----------
+  async function load() {
+    const g = view === "month" ? monthGrid() : null;
+    const from = iso(g ? g.start : weekStart);
+    const to = iso(g ? g.end : addDays(weekStart, 6));
+    if (!session.user) { sessions = []; render(); return; } // 로그인 전에는 서버의 손님 일정을 불러오지 않아요
+    await probeScope();
+    const { data, error } = await mine(db
+      .from(TABLE)
+      .select("*"))
+      .gte("date", from)
+      .lte("date", to)
+      .order("date")
+      .order("start_time", { nullsFirst: true });
+    if (error) {
+      setStatus(false, "연결 오류");
+      showBanner(explainError(error));
+      sessions = [];
+    } else {
+      setStatus(true, "저장됨");
+      showBanner("");
+      sessions = data;
+    }
+    render();
+    window.dispatchEvent(new Event("ts:sessions"));
+  }
+
+  async function save(row) {
+    const q = editingId
+      ? db.from(TABLE).update(row).eq("id", editingId)
+      : db.from(TABLE).insert(row);
+    const { error } = await q;
+    if (error) { alert(explainError(error).replace(/<[^>]+>/g, "")); return false; }
+    return true;
+  }
+
+  async function remove(id) {
+    const { error } = await db.from(TABLE).delete().eq("id", id);
+    if (error) { alert(explainError(error).replace(/<[^>]+>/g, "")); return false; }
+    return true;
+  }
+
+  async function toggleDone(s) {
+    const { error } = await db.from(TABLE).update({ completed: !s.completed }).eq("id", s.id);
+    if (error) alert(explainError(error).replace(/<[^>]+>/g, ""));
+    load();
+  }
+
+  // ---------- 화면 ----------
+  // 🏁 대회·조정기 정보 (문진표의 대회 일정에서)
+  function raceCtx() {
+    const races = ((TS.getProfile && TS.getProfile() && TS.getProfile().races) || []).filter((r) => r.date);
+    const raceOn = {}, taperOn = {};
+    races.forEach((r) => {
+      raceOn[r.date] = r;
+      if (r.priority === "C") return;
+      const rd = new Date(r.date + "T00:00:00");
+      for (let k = 1; k <= 14; k++) { const t = iso(addDays(rd, -k)); if (!taperOn[t] || taperOn[t].k > k) taperOn[t] = { r, k }; }
+    });
+    const today = iso(new Date());
+    const next = races.filter((r) => r.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0] || null;
+    return { races, raceOn, taperOn, next, dd: next ? Math.round((new Date(next.date + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5) : null };
+  }
+  // 달력 위 대회 카운트다운 (D-14부터는 조정기 안내를 크게)
+  function renderRaceBanner() {
+    const box = $("raceBanner");
+    if (!box) return;
+    const { next, dd } = raceCtx();
+    if (!next || dd > 60) { box.innerHTML = ""; return; }
+    const nm = escapeHtml(next.name || next.event || "대회"), dt = next.date.slice(5).replace("-", "/");
+    if (dd === 0) { box.innerHTML = `<div class="race-banner today"><div class="rb-big">🏁 오늘은 ${nm}!</div><div>준비한 대로, 처음은 천천히 — 후반에 올리기. 화이팅! 💪</div></div>`; return; }
+    if (dd > 14) { box.innerHTML = `<div class="race-banner soft"><b>🏁 다음 대회 ${nm}</b> · ${dt} · <b>D-${dd}</b><span class="hint"> — ${dd - 14}일 뒤부터 2주 조정기가 시작돼요</span></div>`; return; }
+    const sk = TS.E && TS.E.sportKey ? TS.E.sportKey((TS.getProfile() || {}).sport) : "run";
+    const a = TS.E && TS.E.prepAdvice ? TS.E.prepAdvice(next, dd, sk) : null;
+    box.innerHTML = `<div class="race-banner hot">
+      <div class="spread"><div class="rb-big">🏁 ${nm} D-${dd}</div><span class="rb-stage">${escapeHtml(a ? a.stage : "조정기")}</span></div>
+      <div class="rb-sub">대회까지 ${dd < 7 ? "일주일도 안" : dd === 7 ? "딱 일주일" : "2주도 안"} 남았어요 — 지금은 <b>대회 준비기간(조정기)</b>이에요. ${dt} 대회에 맞춰 훈련량을 줄이고 컨디션을 끌어올려요.</div>
+      <div class="rb-bar"><i style="width:${Math.round(((14 - dd) / 14) * 100)}%"></i><span>조정기 ${15 - dd}/14일째</span></div>
+      ${a ? `<details><summary>코치 안내 보기 (${a.lines.length}가지)</summary><ul>${a.lines.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul></details>` : ""}</div>`;
+  }
+  function render() {
+    document.querySelectorAll("#viewSeg [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
+    renderRaceBanner();
+    { // 📅 월간은 캘린더를 먼저, 이번 달 훈련·완료·총 시간은 캘린더 아래로 (주간은 위에)
+      const sum = document.querySelector("#tab-plan .summary"), wk = $("week"), rb = $("raceBanner");
+      if (sum && wk && rb) { if (view === "month") wk.after(sum); else rb.before(sum); }
+    }
+    if (view === "month") { renderMonth(); return; }
+    const end = addDays(weekStart, 6);
+    $("range").textContent = `${weekStart.getFullYear()}. ${label(weekStart)} – ${label(end)}`;
+
+    const todayIso = iso(new Date());
+    const cats = sportCats();
+    const visible = sessions.slice(); void cats; // 홈과 똑같이: 종목을 바꿔도 달력의 일정은 모두 보여요
+    const week = $("week");
+    week.className = "week";
+    week.innerHTML = "";
+
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(weekStart, i);
+      const dIso = iso(d);
+      const col = document.createElement("section");
+      const RC = raceCtx(), rc = RC.raceOn[dIso], tp = !rc && RC.taperOn[dIso];
+      col.className = "day" + (dIso === todayIso ? " today" : "") + (rc ? " race" : tp ? " taper" : "");
+      const cls = i === 6 ? "sun" : i === 5 ? "sat" : "";
+      col.innerHTML = `<div class="day-head"><span class="${cls}">${DAYS[i]} ${label(d)}${rc ? ` <b class="rtag">🏁 ${escapeHtml(rc.name || "대회")} D-DAY</b>` : tp ? ` <b class="ttag">조정기 D-${tp.k}</b>` : ""}</span><span class="dh-btns"><button type="button" class="jn-b" title="일지" data-jn="${dIso}">${TS.journal && TS.journal.mark(dIso) ? TS.journal.mark(dIso) : "📝"}</button><button title="이 날에 추가">+</button></span></div><div class="items"></div>`;
+      col.querySelector("button[title=\"이 날에 추가\"]").onclick = () => openForm(null, dIso);
+      if (TS.journal) TS.journal.bind(col);
+
+      const list = col.querySelector(".items");
+      const items = visible.filter((s) => s.date === dIso);
+      if (!items.length) list.innerHTML = `<div class="empty">일정 없음</div>`;
+      for (const s of items) list.appendChild(itemEl(s));
+      week.appendChild(col);
+    }
+
+    const done = visible.filter((s) => s.completed);
+    $("sCount").nextElementSibling.textContent = "이번 주 훈련";
+    $("sCount").textContent = visible.length;
+    $("sDone").textContent = done.length;
+    $("sMin").textContent = visible.reduce((a, s) => a + (s.duration_min || 0), 0) + "분";
+  }
+
+  // 월간 캘린더: 한 달을 칸으로, 날짜를 누르면 아래에 그날 훈련이 보여요
+  // 강도(존) 색: Z1 파랑 · Z2 초록 · Z3 노랑 · Z4 주황 · Z5 빨강
+  const ZCOL = window.ZONE ? window.ZONE.colors : ["#60a5fa", "#22c55e", "#eab308", "#f97316", "#ef4444"];
+  const zoneOf = (s) => (window.ZONE ? window.ZONE.zoneOfSession(s) : null);
+  // 종목 표시 (철인3종은 한 주에 세 종목이 섞여서 아이콘·테두리로 바로 구분돼요)
+  const SICON = { 수영: "🏊", 사이클: "🚴", 러닝: "🏃", 브릭: "🚴🏃" };
+  const SKEY = { 수영: "swim", 사이클: "bike", 러닝: "run", 브릭: "brick" };
+  function renderMonth() {
+    const { y, m, start, end } = monthGrid();
+    $("range").textContent = `${y}년 ${m + 1}월`;
+    const todayIso = iso(new Date());
+    const cats = sportCats();
+    const visible = sessions.slice(); void cats;
+    if (!selDay || selDay.slice(0, 7) !== `${y}-${String(m + 1).padStart(2, "0")}`) {
+      selDay = todayIso.slice(0, 7) === `${y}-${String(m + 1).padStart(2, "0")}` ? todayIso : iso(monthCursor);
+    }
+    const week = $("week");
+    week.className = "mcal-wrap";
+    let cells = "";
+    // 🏁 대회 날·조정기(대회 2주 전) 표시
+    const races = ((TS.getProfile && TS.getProfile() && TS.getProfile().races) || []).filter((r) => r.date);
+    const raceOn = {}, taperOn = {};
+    races.forEach((r) => { raceOn[r.date] = r; const rd = new Date(r.date + "T00:00:00"); if (r.priority !== "C") for (let k = 1; k <= 14; k++) { const t = iso(addDays(rd, -k)); if (!taperOn[t] || taperOn[t].k > k) taperOn[t] = { r, k }; } });
+    for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
+      const dIso = iso(d);
+      const items = visible.filter((s) => s.date === dIso);
+      const wd = (d.getDay() + 6) % 7;
+      const rc = raceOn[dIso], tp = !rc && taperOn[dIso];
+      cells += `<button type="button" class="mc${d.getMonth() !== m ? " out" : ""}${dIso === todayIso ? " today" : ""}${dIso === selDay ? " sel" : ""}${rc ? " race" : tp ? " taper" : ""}" data-day="${dIso}" title="${rc ? escapeHtml("🏁 " + (rc.name || "대회")) : tp ? `${escapeHtml(tp.r.name || "대회")} D-${tp.k}` : ""}">
+        <span class="mn ${wd === 6 ? "sun" : wd === 5 ? "sat" : ""}">${d.getDate()}</span>${TS.journal && TS.journal.mark(dIso) ? `<span class="jm">${TS.journal.mark(dIso)}</span>` : ""}${rc ? `<span class="rflag">🏁</span><span class="rc">${escapeHtml(rc.name || rc.event || "대회")}</span>` : tp ? `<span class="dd">D-${tp.k}</span>` : ""}
+        ${items.slice(0, 3).map((s) => { const z = zoneOf(s); return `<i class="${s.completed ? "dn" : ""}" data-sp="${SKEY[s.category] || ""}" style="background:${s.completed ? "#cbd5e1" : z ? ZCOL[z - 1] : COLORS[s.category] || COLORS.기타};color:${s.completed ? "#475569" : z === 3 ? "#422006" : "#fff"}"><span class="si">${SICON[s.category] || ""}</span>${z ? `<b>Z${z}</b> ` : ""}${escapeHtml(s.title.replace(/^[^\wㄱ-힣]+/, "").replace(/^(달리기|자전거|수영|브릭)\s*·\s*/, ""))}</i>`; }).join("")}
+        ${items.length > 3 ? `<em>+${items.length - 3}</em>` : ""}</button>`;
+    }
+    const dayItems = visible.filter((s) => s.date === selDay);
+    const sd = new Date(selDay + "T00:00:00");
+    week.innerHTML = `${window.ZONE ? window.ZONE.legend() : ""}${sport === "철인3종" ? `<div class="race-legend sp-legend"><span class="sp-k" data-sp="swim">🏊 수영</span><span class="sp-k" data-sp="bike">🚴 자전거</span><span class="sp-k" data-sp="run">🏃 달리기</span><span class="sp-k" data-sp="brick">🚴🏃 브릭</span></div>` : ""}${races.length ? `<div class="race-legend"><span><i style="background:linear-gradient(160deg,#ef4444,#facc15)"></i>🏁 대회 날</span><span><i style="background:#ffedd5"></i>조정기 (대회 2주 전)</span></div>` : ""}<div class="mcal">${DAYS.map((x, i) => `<div class="mh ${i === 6 ? "sun" : i === 5 ? "sat" : ""}">${x}</div>`).join("")}${cells}</div>
+      <section class="day mday"><div class="day-head"><span>${sd.getMonth() + 1}월 ${sd.getDate()}일 ${DAYS[(sd.getDay() + 6) % 7]}요일</span><button title="이 날에 추가">+</button></div><div class="items"></div></section>`;
+    week.querySelectorAll(".mc").forEach((b) => { b.onclick = () => { selDay = b.dataset.day; renderMonth(); }; });
+    week.querySelector(".mday .day-head button").onclick = () => openForm(null, selDay);
+    const list = week.querySelector(".mday .items");
+    if (!dayItems.length) list.innerHTML = `<div class="empty">일정 없음 — + 를 눌러 추가하세요</div>`;
+    dayItems.forEach((s) => list.appendChild(itemEl(s)));
+    if (TS.journal) { const jd = document.createElement("div"); jd.innerHTML = TS.journal.dayCard(selDay); week.querySelector(".mday").appendChild(jd.firstElementChild); TS.journal.bind(week.querySelector(".mday")); }
+
+    const inMonth = visible.filter((s) => s.date.slice(0, 7) === `${y}-${String(m + 1).padStart(2, "0")}`);
+    $("sCount").textContent = inMonth.length;
+    $("sDone").textContent = inMonth.filter((s) => s.completed).length;
+    const mins = inMonth.reduce((a, s) => a + (s.duration_min || 0), 0);
+    $("sMin").textContent = mins >= 60 ? `${Math.floor(mins / 60)}시간${mins % 60 ? ` ${mins % 60}분` : ""}` : mins + "분";
+    $("sCount").nextElementSibling.textContent = "이번 달 훈련";
+  }
+
+  function itemEl(s) {
+    const el = document.createElement("div");
+    el.className = "item" + (s.completed ? " done" : "");
+    if (!s.completed) { const z = zoneOf(s); el.style.borderLeftColor = z ? ZCOL[z - 1] : COLORS[s.category] || COLORS.기타; }
+    const distLine = (s.notes || "").split("\n").find((l) => l.startsWith("목표: 권장 거리 "));
+    const meta = [
+      s.start_time ? s.start_time.slice(0, 5) : null,
+      s.category,
+      distLine ? distLine.replace("목표: 권장 거리 ", "").replace(/(수영|자전거|달리기)\s*/g, "").replace(/\s*\(.*?\)/g, "") : null,
+      s.duration_min ? s.duration_min + "분" : null,
+      s.intensity ? "강도 " + s.intensity : null,
+    ].filter(Boolean).join(" · ");
+    el.innerHTML = `<div class="row"><input type="checkbox" ${s.completed ? "checked" : ""} title="완료 표시" />` +
+      `<div>${SKEY[s.category] ? `<span class="sp-tag" data-sp="${SKEY[s.category]}">${SICON[s.category]} ${{ swim: "수영", bike: "자전거", run: "달리기", brick: "브릭" }[SKEY[s.category]]}</span>` : ""}<div class="t">${escapeHtml(SKEY[s.category] ? s.title.replace(/^((?:🌅 오전|🌇 오후) · )?\S+ (?:수영|자전거|달리기) · /, "$1") : s.title)}</div><div class="meta">${escapeHtml(meta)}</div></div></div>`;
+    const cb = el.querySelector("input");
+    cb.onclick = (e) => { e.stopPropagation(); toggleDone(s); };
+    el.onclick = () => (TS.sessHtml ? openView(s) : openForm(s));
+    return el;
+  }
+
+  // ---------- 📤 스케줄 공유 · 🔍 한눈에 보기 (지금 보고 있는 주/달) ----------
+  function shownList() {
+    const cats = sportCats();
+    let from, to;
+    if (view === "month") { const g = monthGrid(); from = iso(new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1)); to = iso(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0)); void g; }
+    else { from = iso(weekStart); to = iso(addDays(weekStart, 6)); }
+    return { from, to, list: sessions.filter((s) => s.date >= from && s.date <= to).sort((a, b) => (a.date + (a.start_time || "")).localeCompare(b.date + (b.start_time || ""))) };
+  }
+  const dayLab = (d) => { const t = new Date(d + "T00:00:00"); return `${t.getMonth() + 1}/${t.getDate()}(${"일월화수목금토"[t.getDay()]})`; };
+  const lineOf = (s) => { const z = zoneOf(s); return `${SICON[s.category] || "•"} ${s.title}${s.duration_min ? ` · ${s.duration_min}분` : ""}${z ? ` · Z${z}` : ""}${s.completed ? " ✅" : ""}`; };
+  async function shareSchedule() {
+    const { from, to, list } = shownList();
+    const byDay = {}; list.forEach((s) => { (byDay[s.date] = byDay[s.date] || []).push(s); });
+    const days = Object.keys(byDay).sort();
+    const title = `📅 ZONE 훈련 스케줄 ${dayLab(from)} ~ ${dayLab(to)}`;
+    const text = [title, ...days.map((d) => `\n${dayLab(d)}\n${byDay[d].map((s) => "  " + lineOf(s)).join("\n")}`), "\n🏊🚴🏃 ZONE에서 같이 훈련해요", "https://2wwkmv8ffm-bot.github.io/training-schedule/"].join("\n");
+    if (!list.length) { alert("이 기간에 공유할 훈련이 없어요."); return; }
+    if (navigator.share) { try { await navigator.share({ title: "ZONE 훈련 스케줄", text }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+    try { await navigator.clipboard.writeText(text); alert("스케줄을 복사했어요! 카톡·문자 창에 붙여넣기 해 주세요."); } catch (e) { prompt("아래 내용을 복사해 주세요", text); }
+  }
+  function openWide() {
+    const { from, to, list } = shownList();
+    let d = document.getElementById("wideDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "wideDlg"; d.className = "wide-dlg"; document.body.appendChild(d); }
+    const days = []; for (let t = new Date(from + "T00:00:00"); iso(t) <= to; t = addDays(t, 1)) days.push(iso(t));
+    const today = iso(new Date());
+    d.innerHTML = `<div class="wide-hd"><b>🔍 ${view === "month" ? "이번 달" : "이번 주"} 한눈에 보기</b><span class="hint">${dayLab(from)} ~ ${dayLab(to)}</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
+      <div class="wide-body">${days.map((dd) => { const its = list.filter((s) => s.date === dd);
+        return `<div class="wide-row${dd === today ? " today" : ""}"><div class="wide-day">${dayLab(dd)}</div><div class="wide-items">${its.length ? its.map((s) => { const z = zoneOf(s); return `<span class="wide-it${s.completed ? " dn" : ""}" style="border-left-color:${z ? ZCOL[z - 1] : COLORS[s.category] || COLORS.기타}">${escapeHtml(lineOf(s))}</span>`; }).join("") : '<span class="hint">휴식</span>'}</div></div>`; }).join("")}</div>`;
+    d.querySelector(".wide-x").onclick = () => d.close();
+    if (!d.open) d.showModal();
+  }
+  // 📤 하루 훈련 공유 (그날의 모든 훈련)
+  async function shareDay(date) {
+    const list = sessions.filter((x) => x.date === date).sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+    if (!list.length) return;
+    const text = [`📅 ${dayLab(date)} 훈련 — ZONE`, ...list.map((x) => `${lineOf(x)}${x.notes ? `\n${String(x.notes).split("\n").filter((l) => l && !/^\[자동 계획\]/.test(l)).slice(0, 6).map((l) => "  · " + l.replace(/^[·•-]\s*/, "")).join("\n")}` : ""}`), "", "🏊🚴🏃 ZONE에서 같이 훈련해요", "https://2wwkmv8ffm-bot.github.io/training-schedule/"].join("\n");
+    if (navigator.share) { try { await navigator.share({ title: "ZONE 훈련", text }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+    try { await navigator.clipboard.writeText(text); alert("이날 훈련을 복사했어요! 카톡·문자 창에 붙여넣기 해 주세요."); } catch (e) { prompt("아래 내용을 복사해 주세요", text); }
+  }
+  // ⛶ 훈련 하나를 화면 가득 크게 (구성·강도·대안을 모두 펼쳐서)
+  function openBig(s, isToday) {
+    let d = document.getElementById("bigDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "bigDlg"; d.className = "wide-dlg"; document.body.appendChild(d); }
+    d.innerHTML = `<div class="wide-hd"><b>${escapeHtml(s.title || "훈련")}</b><span class="hint">${dayLab(s.date)}</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
+      <div class="wide-body big-body">${TS.sessHtml(s, isToday, true)}</div>`;
+    d.querySelectorAll("details").forEach((x) => { x.open = true; });
+    d.querySelector(".wide-x").onclick = () => d.close();
+    if (!d.open) d.showModal();
+  }
+  setTimeout(() => { window.TS.shareSchedule = shareSchedule; window.TS.openWide = openWide; }, 0); // 앱 준비(window.TS)가 끝난 뒤에 연결
+
+  // ---------- 훈련 보기 (홈처럼 깔끔하게: 거리·시간·강도·RPE → 구성 → 포인트) ----------
+  function openView(s) {
+    let d = document.getElementById("viewDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "viewDlg"; document.body.appendChild(d); }
+    if (d.open) d.close();
+    const dt = new Date(s.date + "T00:00:00");
+    const isToday = s.date === iso(new Date());
+    const when = `${dt.getMonth() + 1}/${dt.getDate()} (${"일월화수목금토"[dt.getDay()]})${s.start_time ? " · " + s.start_time.slice(0, 5) : ""}`;
+    d.innerHTML = `<div style="padding:18px 18px 16px;max-height:85vh;overflow:auto">
+      <div class="spread" style="margin-bottom:4px"><span class="eyebrow" style="margin:0">${isToday ? "오늘 · " : ""}${escapeHtml(when)}</span>
+        <span class="view-tools"><button type="button" data-v="share" aria-label="이날 훈련 공유" title="이날 훈련 공유">📤</button><button type="button" data-v="big" aria-label="크게 보기" title="크게 보기">⛶</button>
+        <button type="button" class="link" data-v="x" aria-label="닫기" style="font-size:20px;line-height:1">✕</button></span></div>
+      ${TS.sessHtml(s, isToday, true)}
+      <div class="view-acts">
+        <button type="button" data-v="edit">✏️ 수정</button>
+        ${TS.coach && !s.completed ? '<button type="button" data-v="ai">🧑‍🏫 컨디션 맞춤</button>' : ""}
+        <button type="button" class="${s.completed ? "" : "primary"}" data-v="done">${s.completed ? "완료 취소" : "✓ 완료"}</button></div>
+    </div>`;
+    d.querySelector('[data-v="x"]').onclick = () => d.close();
+    d.querySelector('[data-v="share"]').onclick = () => shareDay(s.date); // 📤 이날 훈련만 공유
+    d.querySelector('[data-v="big"]').onclick = () => openBig(s, isToday); // ⛶ 구성·강도·대안까지 화면 가득
+    d.querySelector('[data-v="edit"]').onclick = () => { d.close(); openForm(s); };
+    d.querySelector('[data-v="done"]').onclick = () => { d.close(); toggleDone(s); };
+    const ai = d.querySelector('[data-v="ai"]');
+    if (ai) ai.onclick = () => { d.close(); TS.coach.openAdjust(s.date, s); };
+    const st = d.querySelector("[data-start]");
+    if (st) st.onclick = () => { d.close(); TS.startSession(s); };
+    d.onclick = (e) => { if (e.target === d) d.close(); };
+    d.showModal();
+  }
+
+  // ---------- 입력 폼 ----------
+  function openForm(s, dateIso) {
+    const f = $("form");
+    f.reset();
+    editingId = s ? s.id : null;
+    $("formTitle").textContent = s ? "훈련 수정" : "훈련 추가";
+    $("del").style.visibility = s ? "visible" : "hidden";
+    f.title.value = s ? s.title : "";
+    f.date.value = s ? s.date : dateIso || iso(new Date());
+    f.start_time.value = s && s.start_time ? s.start_time.slice(0, 5) : "";
+    const cats = sportCats().slice();
+    if (s && !cats.includes(s.category)) cats.push(s.category);
+    f.category.innerHTML = cats.map((c) => `<option>${escapeHtml(c)}</option>`).join("");
+    f.category.value = s ? s.category : cats[0];
+    f.duration_min.value = s && s.duration_min != null ? s.duration_min : "";
+    f.intensity.value = s && s.intensity ? s.intensity : "";
+    f.notes.value = s && s.notes ? s.notes : "";
+    f.completed.checked = !!(s && s.completed);
+    $("dlg").showModal();
+    f.title.focus();
+  }
+
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const row = {
+      title: f.title.value.trim(),
+      date: f.date.value,
+      start_time: f.start_time.value || null,
+      category: f.category.value,
+      duration_min: f.duration_min.value === "" ? null : Number(f.duration_min.value),
+      intensity: f.intensity.value || null,
+      notes: f.notes.value.trim() || null,
+      completed: f.completed.checked,
+    };
+    if (!row.title || !row.date) return;
+    $("save").disabled = true;
+    const ok = await save(row);
+    $("save").disabled = false;
+    if (ok) {
+      $("dlg").close();
+      weekStart = mondayOf(new Date(row.date + "T00:00:00"));
+      monthCursor = new Date(+row.date.slice(0, 4), +row.date.slice(5, 7) - 1, 1);
+      selDay = row.date;
+      load();
+    }
+  });
+
+  $("del").onclick = async () => {
+    if (!editingId || !await ask("이 훈련을 삭제할까요?")) return;
+    if (await remove(editingId)) { $("dlg").close(); load(); }
+  };
+  $("cancel").onclick = () => $("dlg").close();
+  $("add").onclick = () => openForm(null);
+  const shiftMonth = (k) => { monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + k, 1); selDay = null; };
+  $("prev").onclick = () => { if (view === "month") shiftMonth(-1); else weekStart = addDays(weekStart, -7); load(); };
+  $("next").onclick = () => { if (view === "month") shiftMonth(1); else weekStart = addDays(weekStart, 7); load(); };
+  $("today").onclick = () => { weekStart = mondayOf(new Date()); monthCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1); selDay = iso(new Date()); load(); };
+
+  // ---------- 활동 기록 저장소 (Supabase, 테이블이 없으면 이 기기에 저장) ----------
+  const ACT = "activities";
+  const LS_ACT = "training.activities";
+  const ACT_SPORTS = {
+    run:  { name: "달리기", icon: "🏃", cat: "러닝" },
+    bike: { name: "자전거", icon: "🚴", cat: "사이클" },
+    swim: { name: "수영",   icon: "🏊", cat: "수영" },
+    walk: { name: "걷기",   icon: "🚶", cat: "기타" },
+    tri:  { name: "철인3종", icon: "🏅", cat: "브릭" },
+  };
+  // cloud: 로그인 + schema_community.sql 실행 시 Supabase에 저장 / reason: 왜 이 기기에만 저장되는지
+  const store = { cloud: false, reason: "login" };
+  function lsActs() { try { return JSON.parse(localStorage.getItem(LS_ACT) || "[]"); } catch (e) { return []; } }
+  function lsSaveActs(a) { try { localStorage.setItem(LS_ACT, JSON.stringify(a)); } catch (e) { /* 저장 공간 없음 */ } }
+  function notifyActs() { window.dispatchEvent(new Event("ts:activities")); }
+
+  // 공개 설정 (기본: 친구만 · 출발/도착 200m 가리기)
+  const PRIV_KEY = "training.privacy";
+  function privacy() {
+    try { return Object.assign({ visibility: "friends" }, JSON.parse(localStorage.getItem(PRIV_KEY) || "{}"), { hideEnds: false }); }
+    catch (e) { return { visibility: "friends", hideEnds: false }; }
+  }
+  function setPrivacy(p) { try { localStorage.setItem(PRIV_KEY, JSON.stringify(Object.assign(privacy(), p))); } catch (e) { /* 무시 */ } }
+  // 출발·도착 근처 m미터를 잘라 집 위치가 드러나지 않게
+  function trimRoute(route, m = 200) {
+    if (!route || route.length < 3) return route;
+    const cum = [0];
+    for (let i = 1; i < route.length; i++) cum.push(cum[i - 1] + hav(route[i - 1][0], route[i - 1][1], route[i][0], route[i][1]));
+    const tot = cum[cum.length - 1];
+    if (tot < m * 3) return null;
+    return route.filter((_, i) => cum[i] >= m && cum[i] <= tot - m);
+  }
+
+  const fullRoute = (a) => { const r = a.activity_routes; const x = Array.isArray(r) ? r[0] : r; return x && x.route; };
+  async function listActivities() {
+    const local = lsActs().map((x) => ({ ...x, local: true }));
+    let cloud = [];
+    if (!session.user) { store.cloud = false; store.reason = "login"; }
+    else {
+      const { data, error } = await db.from(ACT).select("*, activity_routes(route)").eq("user_id", session.user.id)
+        .order("started_at", { ascending: false }).limit(2000);
+      if (error) { store.cloud = false; store.reason = "sql"; }
+      else {
+        store.cloud = true;
+        cloud = data.map((a) => { const full = fullRoute(a); const { activity_routes, ...rest } = a; void activity_routes; return full ? { ...rest, route: full } : rest; });
+      }
+    }
+    const all = [...cloud, ...local];
+    all.sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)));
+    return all;
+  }
+  async function cloudInsert(a) {
+    const u = session.user;
+    const pv = privacy();
+    const full = a.route && a.route.length > 1 ? a.route : null;
+    const pub = full && pv.hideEnds ? trimRoute(full) : full;
+    const { local, id, created_at, ...clean } = a;
+    void local; void id; void created_at;
+    // 스트라바 약관: 스트라바에서 받은 기록은 본인만 볼 수 있게 항상 '나만'
+    const vis = a.source === "strava" ? "private" : a.visibility || pv.visibility;
+    let row = { ...clean, visibility: vis, route: pub && pub.length > 1 ? pub : null, user_id: u.id };
+    let { data, error } = await db.from(ACT).insert(row).select().single();
+    // 아직 SQL을 안 돌려서 없는 칸(심박, external_id 등)이 있으면 그 칸만 빼고 다시 저장
+    for (let i = 0; i < 6 && error && error.code === "PGRST204"; i++) {
+      const m = /'([a-z_]+)' column/.exec(error.message || "");
+      if (!m || !(m[1] in row)) break;
+      if (/hr|device/.test(m[1])) store.missingHrCols = true;
+      const { [m[1]]: _drop, ...rest } = row;
+      void _drop;
+      row = rest;
+      ({ data, error } = await db.from(ACT).insert(row).select().single());
+    }
+    if (error) return { error };
+    if (full) await db.from("activity_routes").insert({ activity_id: data.id, user_id: u.id, route: full });
+    // 기록은 저장만 해요 — 커뮤니티에는 내가 ✍️ 올리기로 직접 올릴 때만 올라가요
+    void vis;
+    return { data: { ...data, route: full || data.route } };
+  }
+  async function addActivity(a) {
+    if (session.user) {
+      const { data, error } = await cloudInsert(a);
+      if (!error) { store.cloud = true; notifyActs(); return data; }
+      store.cloud = false; store.reason = "sql";
+    }
+    const row = { ...a, id: "local-" + Date.now(), created_at: new Date().toISOString(), local: true };
+    const all = lsActs(); all.unshift(row); lsSaveActs(all);
+    notifyActs();
+    return row;
+  }
+  // 이 기기에만 있던 기록을 로그인한 계정으로 올리기
+  async function uploadLocal() {
+    if (!session.user) return { ok: 0, fail: 0 };
+    let ok = 0, fail = 0;
+    const left = [];
+    for (const a of lsActs()) {
+      const { error } = await cloudInsert(a);
+      if (error) { fail++; left.push(a); } else ok++;
+    }
+    lsSaveActs(left);
+    notifyActs();
+    return { ok, fail };
+  }
+  async function deleteActivity(a) {
+    if (a.local) lsSaveActs(lsActs().filter((x) => x.id !== a.id));
+    else {
+      const { error } = await db.from(ACT).delete().eq("id", a.id);
+      if (error) { alert(explainError(error).replace(/<[^>]+>/g, "")); return false; }
+    }
+    notifyActs();
+    return true;
+  }
+  async function setVisibility(a, v) {
+    if (a.local) return false;
+    if (a.source === "strava" && v !== "private") { alert("스트라바에서 가져온 기록은 스트라바 약관상 본인만 볼 수 있어요."); return false; }
+    const { error } = await db.from(ACT).update({ visibility: v }).eq("id", a.id);
+    if (error) { alert(explainError(error).replace(/<[^>]+>/g, "")); return false; }
+    // 커뮤니티 글도 같은 공개 범위로 (없으면 새로 올리기)
+    const { data: posts } = await db.from("posts").select("id").eq("activity_id", a.id);
+    if (posts && posts.length) await db.from("posts").update({ visibility: v }).eq("activity_id", a.id);
+    // (활동에서는 커뮤니티 글을 새로 만들지 않아요)
+    a.visibility = v;
+    notifyActs();
+    return true;
+  }
+
+  // ---------- 숫자 표시 ----------
+  const pad = (n) => String(n).padStart(2, "0");
+  function fmtDur(sec) {
+    sec = Math.max(0, Math.round(sec || 0));
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  }
+  function fmtPace(spk) { // 1km당 초 → 5'10"
+    if (!spk || !isFinite(spk) || spk <= 0 || spk >= 3600) return "-'--\"";
+    let m = Math.floor(spk / 60), s = Math.round(spk % 60);
+    if (s === 60) { m += 1; s = 0; }
+    return `${m}'${pad(s)}"`;
+  }
+  const fmtKm = (m) => ((m || 0) / 1000).toFixed(2);
+  function hav(lat1, lng1, lat2, lng2) { // 두 지점 사이 거리(m)
+    const R = 6371000, r = (x) => (x * Math.PI) / 180;
+    const dLat = r(lat2 - lat1), dLng = r(lng2 - lng1);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  // ---------- 앱 안 확인창 ----------
+  // 브라우저 기본 confirm/alert 창은 일부 브라우저·앱 안 브라우저에서 막혀서(바로 '취소'로 처리됨) 앱이 직접 띄워요.
+  function ask(msg, okLabel = "확인", cancelLabel = "취소") {
+    return new Promise((resolve) => {
+      let d = document.getElementById("askDlg");
+      if (!d) { d = document.createElement("dialog"); d.id = "askDlg"; document.body.appendChild(d); }
+      if (d.open) d.close();
+      d.innerHTML = `<div style="padding:20px;display:grid;gap:16px"><p style="margin:0;white-space:pre-line;line-height:1.6;font-size:15px">${escapeHtml(msg)}</p>
+        <div class="actions"><div class="right">${cancelLabel ? `<button type="button" data-a="0">${cancelLabel}</button>` : ""}
+        <button type="button" class="primary" data-a="1">${okLabel}</button></div></div></div>`;
+      const done = (v) => { d.close(); resolve(v); };
+      d.querySelectorAll("[data-a]").forEach((b) => { b.onclick = () => done(b.dataset.a === "1"); });
+      d.oncancel = (e) => { e.preventDefault(); done(false); };
+      d.showModal();
+    });
+  }
+  window.alert = (m) => { ask(String(m), "확인", null); };
+
+  // 다른 파일(profile.js, tracker.js, hub.js)에서 쓰는 공용 도구
+  window.TS = {
+    db, SPORTS, COLORS, DAYS, TABLE, ACT_SPORTS, store,
+    iso, addDays, mondayOf, escapeHtml, explainError,
+    fmtDur, fmtPace, fmtKm, hav, pad,
+    ask,
+    listActivities, addActivity, deleteActivity, uploadLocal, setVisibility, privacy, setPrivacy, trimRoute, mine, session,
+    lsLocalCount: () => lsActs().length,
+    async setUser(u) { // auth.js가 로그인 상태가 바뀔 때 불러요
+      session.user = u || null;
+      session.probed = false;
+      await load();
+      notifyActs();
+    },
+    getWeekStart: () => weekStart,
+    setWeek(d) { weekStart = mondayOf(d); monthCursor = new Date(d.getFullYear(), d.getMonth(), 1); selDay = iso(d); load(); },
+    reload: load,
+    getSessions: () => sessions,
+    setSport(name) { sport = SPORTS[name] ? name : null; render(); },
+  };
+
+  window.addEventListener("ts:journal", () => render()); // 일지를 쓰면 달력 표시(📝·컨디션)도 바로
+  load();
+})();
