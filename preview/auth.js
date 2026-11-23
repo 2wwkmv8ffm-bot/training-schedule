@@ -174,6 +174,20 @@
     if (BAD_NICK.some((w) => flat.includes(w.toLowerCase()))) return "이 닉네임은 쓸 수 없어요. 욕설·성적 표현·정치 표현·운영자 사칭은 안 돼요.";
     return null;
   };
+  // 🚫 글·댓글 금지어: 욕설·성적 표현·혐오 표현·도박·불법 광고 (띄어쓰기·특수문자를 섞어도 찾아요)
+  //   운동 이야기에 자주 나오는 말은 일부러 뺐어요 (예: '새끼발가락', '미친 듯이', '잠자지', '보지 마')
+  const BAD_TEXT = ["시발","씨발","씨바","ㅅㅂ","ㅆㅂ","병신","ㅂㅅ","개새끼","개색","좆","존나","졸라","ㅈㄴ","지랄","염병","썅","니미","느금","엠창","fuck","shit","bitch","motherf",
+    "섹스","sex","야동","강간","몸캠","porn","자위","성매매","조건만남","오피방","풀싸롱","노콘",
+    "한남충","김치녀","틀딱","급식충","장애인새","병자새",
+    "토토","카지노","바카라","슬롯사이트","도박","대출문의","작업대출","텔레그램@","open.kakao.com/o"];
+  TS.badText = (t) => {
+    const flat = String(t || "").toLowerCase().replace(/[\s\d._\-~!@#$%^&*()+=|\\/?<>,;:'"`\[\]{}·•ㆍ]/g, "");
+    const keepUrl = String(t || "").toLowerCase();
+    const OK = /시발점|시발역|시발택시|병신년|토토로/g; // 금지어가 들어 있지만 평범한 말
+    const flat2 = flat.replace(OK, "");
+    const hit = BAD_TEXT.find((w) => (w.includes("/") || w.includes("@") ? keepUrl.includes(w) : flat2.includes(w)));
+    return hit ? "욕설·성적 표현·혐오 표현·도박·불법 광고가 들어 있어서 올릴 수 없어요. 내용을 고쳐 주세요." : null;
+  };
   const backUrl = () => location.origin + location.pathname; // 메일 링크를 누르면 이 앱으로 돌아와요
   function render(why = "") {
     if (mode === "reset" || mode === "find" || mode === "newpw") { renderHelp(why); return; }

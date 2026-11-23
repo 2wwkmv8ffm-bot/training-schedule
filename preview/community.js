@@ -126,7 +126,10 @@
   // ---------- 🚩 신고 · 🚫 차단 (schema_report.sql 실행 후) ----------
   const blocked = new Set();
   let blockOk = true;
-  const notBlocked = (x) => !blocked.has(x.user_id);
+  const notBlocked = (x) => !blocked.has(x.user_id) && (!hiddenP.has(String(x.id)) || x.user_id === me() || (TS.isOwner && TS.isOwner(me())));
+  // 🙈 신고가 5명 이상 쌓인 글은 운영자가 확인할 때까지 자동으로 숨겨요 (글쓴이·운영자에게는 보여요)
+  const hiddenP = new Set();
+  async function loadHidden() { try { const { data, error } = await db.from("hidden_posts").select("post_id"); if (error) return; hiddenP.clear(); (data || []).forEach((r) => hiddenP.add(String(r.post_id))); } catch (e) { /* 표 없음 */ } }
   async function loadBlocks() {
     if (!blockOk || !me()) return;
     const { data, error } = await db.from("user_blocks").select("blocked").eq("blocker", me());
@@ -197,11 +200,12 @@
     if (!open.length) { draw('<div class="note">✅ 처리할 신고가 없어요.</div>'); return; }
     const byPost = {}; open.forEach((r) => { (byPost[r.post_id] = byPost[r.post_id] || []).push(r); });
     const ids = Object.keys(byPost);
+    await loadHidden();
     const { data: ps } = await db.from("posts").select("id,body,media,user_id,created_at,members(nickname)").in("id", ids);
     const pmap = {}; (ps || []).forEach((p) => { pmap[p.id] = p; });
     const card = (id) => { const rs = byPost[id], p = pmap[id]; const why = {}; rs.forEach((r) => { why[r.reason] = (why[r.reason] || 0) + 1; });
       return `<div class="card rep-card" data-pid="${esc(id)}">
-        <div class="spread"><b>${p ? esc((p.members && p.members.nickname) || "알 수 없음") : "지워진 글"}</b><span class="rep-n">신고 ${rs.length}건</span></div>
+        <div class="spread"><b>${p ? esc((p.members && p.members.nickname) || "알 수 없음") : "지워진 글"}</b><span class="rep-n">신고 ${rs.length}건${hiddenP.has(String(id)) ? " · 🙈 자동 숨김 중" : ""}</span></div>
         <div class="rep-why">${Object.entries(why).map(([k, v]) => `<span class="chip">${esc(k)}${v > 1 ? ` ×${v}` : ""}</span>`).join("")}</div>
         <p class="rep-text">${p ? esc(String(p.body || "(사진·영상만 있는 글)").slice(0, 300)) : "이미 지워진 글이에요."}</p>
         ${p && p.media && p.media.length ? `<div class="rep-media">${p.media.slice(0, 4).map((m) => mediaTag(m, "rep-th")).join("")}</div>` : ""}
@@ -210,7 +214,7 @@
     draw(`<p class="hint" style="margin:0 0 10px">처리할 신고 ${open.length}건 · 글 ${ids.length}개. 지우거나 '처리 완료'를 누르면 목록에서 빠져요.</p>${ids.map(card).join("")}`);
     d.querySelectorAll(".rep-card").forEach((c) => {
       const pid = c.dataset.pid, repIds = byPost[pid].map((r) => r.id);
-      const done = async () => { await db.from("post_reports").update({ handled: true }).in("id", repIds); c.remove(); if (!d.querySelector(".rep-card")) draw('<div class="note">✅ 처리할 신고가 없어요.</div>'); };
+      const done = async () => { await db.from("post_reports").update({ handled: true }).in("id", repIds); await db.from("hidden_posts").delete().eq("post_id", String(pid)); hiddenP.delete(String(pid)); c.remove(); if (!d.querySelector(".rep-card")) draw('<div class="note">✅ 처리할 신고가 없어요.</div>'); };
       const del = c.querySelector('[data-r="del"]');
       if (del) del.onclick = async () => { if (!await TS.ask("이 글을 지울까요? 되돌릴 수 없어요.", "삭제")) return; const { error: e1 } = await db.from("posts").delete().eq("id", pid); if (e1) { toast("지우지 못했어요 (서버 설정 확인)"); return; } await done(); toast("🛡️ 글을 지웠어요"); render(); };
       c.querySelector('[data-r="ok"]').onclick = async () => { await done(); toast("✓ 처리 완료"); };
@@ -391,7 +395,7 @@
     stories = clean(st.data).filter(isStoryPost); // 스토리로 올린 것만
     board = rank(bd.data || []);
     await loadFollows([...feed, ...stories].map((p) => p.user_id).concat(board.map((o) => o.id)));
-    await loadBlocks(); // 🚫 내가 차단한 사람 글은 빼요
+    await Promise.all([loadBlocks(), loadHidden()]); // 🚫 내가 차단한 사람 글 · 신고로 숨겨진 글은 빼요
     feed = feed.filter(notBlocked); stories = stories.filter(notBlocked); board = board.filter((o) => !blocked.has(o.id));
     paint(box, main.error);
   }
@@ -875,6 +879,7 @@
       e.preventDefault();
       const body = form.querySelector("input").value.trim();
       if (!body) return;
+      const bad = TS.badText && TS.badText(body); if (bad) { toast(bad); return; }
       const { error: e2 } = await db.from("post_comments").insert({ post_id: id, user_id: me(), body });
       if (e2) { toast("댓글을 올리지 못했어요. 인터넷 연결을 확인해 주세요"); return; }
       bumpCount(id, 1);
@@ -998,6 +1003,7 @@
   async function submitPost() {
     const vis = $("pcVis").value, text = $("pcText").value.trim(), actId = null;
     const msg = $("pcMsg"), btn = $("pcGo");
+    const bad = TS.badText && TS.badText(text); if (bad) { msg.textContent = bad; return; }
     if (pcKind === "story" && !picked.length) { msg.textContent = "스토리는 사진이나 동영상이 있어야 해요."; return; }
     if (!text && !picked.length) { msg.textContent = "글이나 사진 중 하나는 있어야 해요."; return; }
     btn.disabled = true; msg.textContent = "";
