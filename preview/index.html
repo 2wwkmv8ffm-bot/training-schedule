@@ -205,6 +205,11 @@
     .term-tip b { display: block; margin-bottom: 4px; font-size: 14px; } .term-tip p { margin: 0; }
     .explain-pick { display: inline-flex; gap: 6px; flex-wrap: nowrap; } .explain-pick .chip { padding: 6px 12px; font-size: 13px; white-space: nowrap; }
     .offline-bar { position: fixed; left: 0; right: 0; top: 0; z-index: 9998; background: #334155; color: #fff; font-size: 13px; text-align: center; padding: calc(env(safe-area-inset-top, 0px) + 6px) 12px 6px; }
+    .qpick { margin-bottom: 16px; } .qpick-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .qopt { display: grid; gap: 3px; text-align: left; padding: 12px 10px; min-width: 0; border-radius: 14px; border: 2px solid var(--line, #d8e0ec); background: var(--card, #fff); color: inherit; font: inherit; cursor: pointer; }
+    .qopt.on { border-color: var(--accent, #1d6bf3); background: color-mix(in srgb, var(--accent, #1d6bf3) 8%, transparent); }
+    .qopt .qt { font-weight: 800; font-size: 14.5px; white-space: nowrap; } .qopt .qd, .qopt .qm { white-space: nowrap; } .qopt .qm { font-weight: 700; font-size: 13px; color: var(--accent, #1d6bf3); } .qopt .qd { font-size: 12.5px; color: var(--muted, #5b6577); }
+    .detail-nudge { border: 2px solid var(--accent, #1d6bf3); }
     input.bad { border-color: var(--danger) !important; background: color-mix(in srgb, var(--danger) 7%, transparent); }
     .note { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; margin-top: 10px; }
     .note code, .banner code { background: rgba(15, 23, 42, .06); padding: 1px 5px; border-radius: 4px; }

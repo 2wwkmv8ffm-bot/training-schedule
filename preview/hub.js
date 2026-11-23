@@ -429,6 +429,9 @@
     $("homeBody").innerHTML = `
       <div style="margin-bottom:14px"><div class="eyebrow">${now.getMonth() + 1}월 ${now.getDate()}일 ${DAY[(now.getDay() + 6) % 7]}요일</div>
         <h1 class="big">${name}${greet}</h1></div>
+      ${p && p.detail === "quick" ? `<div class="card detail-nudge"><b>📋 계획을 더 정확하게 만들어 볼까요?</b>
+        <p class="hint" style="margin:6px 0 10px">지금은 '빨리 끝내기'로 만든 기본 계획이에요. 자세히 작성하면 내 기록·주간 거리·대회에 맞춰 <b>더욱 디테일한 연습 스케줄</b>을 짜 드려요.</p>
+        <button type="button" class="primary" data-detail-go="1" style="width:100%">자세히 작성하기 (약 5분) ›</button></div>` : ""}
       ${(() => { // 🏁 대회 2주 전부터: 조정기 안내
         if (!race || !TS.E || !TS.E.prepAdvice) return "";
         const dd = Math.round((new Date(race.date + "T00:00:00") - today0) / 864e5);
