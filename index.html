@@ -213,6 +213,23 @@
     .chips.grid5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
     .chips.grid5 .chip { padding: 8px 0; min-width: 0; text-align: center; font-size: 13.5px; line-height: 1.2; display: grid; justify-items: center; align-content: center; }
     .chips.grid5 .chip small { font-size: 10.5px; font-weight: 700; opacity: .85; }
+    dialog.act-sheet { margin: auto auto 0; width: 100%; max-width: 640px; padding: 0 0 calc(8px + env(safe-area-inset-bottom, 0px)); border: 0; border-radius: 18px 18px 0 0; background: var(--card, #fff); color: var(--text); animation: cmUp .2s ease-out; max-height: 80vh; overflow-y: auto; }
+    dialog.act-sheet::backdrop { background: rgba(0,0,0,.45); }
+    .as-list { display: grid; padding: 4px 12px 0; }
+    .as-row { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 15px 6px; font-size: 16px; color: var(--text); font-weight: 600; border-radius: 0; }
+    .as-row:last-child { border-bottom: 0; color: var(--muted); font-weight: 500; justify-content: center; }
+    .as-row.danger { color: #dc2626; } .as-row span { color: var(--muted); font-size: 20px; line-height: 1; }
+    .as-head { display: flex; align-items: center; justify-content: center; position: relative; padding: 4px 12px 8px; border-bottom: 1px solid var(--line); font-size: 16px; }
+    .as-back { position: absolute; left: 8px; top: -2px; border: 0; background: none; font-size: 26px; color: var(--muted); padding: 0 10px; }
+    .as-head + .as-list .as-row:last-child { color: var(--text); font-weight: 600; justify-content: space-between; }
+    .as-note { margin: 8px 18px 0; font-size: 12.5px; } .as-msg { margin: 4px 18px 0; min-height: 0; }
+    .rep-body { padding: 12px 16px 30px; max-width: 680px; margin: 0 auto; display: grid; gap: 10px; }
+    .rep-card { display: grid; gap: 8px; margin: 0; } .rep-n { color: #dc2626; font-weight: 800; font-size: 13px; }
+    .rep-why { display: flex; flex-wrap: wrap; gap: 6px; } .rep-why .chip { font-size: 12.5px; padding: 4px 10px; }
+    .rep-text { margin: 0; white-space: pre-wrap; line-height: 1.55; font-size: 14px; background: var(--bg); border-radius: 10px; padding: 10px; }
+    .rep-media { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .rep-th { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: var(--bg); max-width: 100%; }
+    .rep-why .chip { background: rgba(220,38,38,.08); color: #b91c1c; border: 0; }
+    .rep-act { display: flex; flex-wrap: wrap; gap: 8px; } .danger-pill { color: #dc2626; }
     input.bad { border-color: var(--danger) !important; background: color-mix(in srgb, var(--danger) 7%, transparent); }
     .note { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; margin-top: 10px; }
     .note code, .banner code { background: rgba(15, 23, 42, .06); padding: 1px 5px; border-radius: 4px; }
@@ -1041,23 +1058,23 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="config.js?v=202611231600"></script>
-  <script src="zones.js?v=202611231600"></script>
-  <script src="app.js?v=202611231600"></script>
-  <script src="engine.js?v=202611231600"></script>
-  <script src="profile.js?v=202611231600"></script>
-  <script src="garmin.js?v=202611231600"></script>
-  <script src="tracker.js?v=202611231600"></script>
-  <script src="hub.js?v=202611231600"></script>
-  <script src="auth.js?v=202611231600"></script>
-  <script src="community.js?v=202611231600"></script>
-  <script src="strava.js?v=202611231600"></script>
-  <script src="coach.js?v=202611231600"></script>
-  <script src="predict.js?v=202611231600"></script>
-  <script src="feedback.js?v=202611231600"></script>
-  <script src="drills.js?v=202611231600"></script>
-  <script src="journal.js?v=202611231600"></script>
-  <script src="easy.js?v=202611231600"></script>
+  <script src="config.js?v=202611231900"></script>
+  <script src="zones.js?v=202611231900"></script>
+  <script src="app.js?v=202611231900"></script>
+  <script src="engine.js?v=202611231900"></script>
+  <script src="profile.js?v=202611231900"></script>
+  <script src="garmin.js?v=202611231900"></script>
+  <script src="tracker.js?v=202611231900"></script>
+  <script src="hub.js?v=202611231900"></script>
+  <script src="auth.js?v=202611231900"></script>
+  <script src="community.js?v=202611231900"></script>
+  <script src="strava.js?v=202611231900"></script>
+  <script src="coach.js?v=202611231900"></script>
+  <script src="predict.js?v=202611231900"></script>
+  <script src="feedback.js?v=202611231900"></script>
+  <script src="drills.js?v=202611231900"></script>
+  <script src="journal.js?v=202611231900"></script>
+  <script src="easy.js?v=202611231900"></script>
   <script>
     // 📶 인터넷이 끊기면 위에 알려 줘요 (마지막으로 본 화면은 그대로 볼 수 있어요)
     (function () {
@@ -1131,6 +1148,6 @@
       document.addEventListener("scroll", onScroll, true);
     })();
   </script>
-  <script src="nav.js?v=202611231600"></script>
+  <script src="nav.js?v=202611231900"></script>
 </body>
 </html>

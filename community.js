@@ -61,8 +61,8 @@
   }
   // 사진인지 확인 (안드로이드 파일 앱은 형식이 비어 있을 때가 있어서 확장자도 봐요)
   function isImg(f) { return /^image\//.test(f.type) || /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i.test(f.name || ""); }
-  // 🎬 동영상 (1개, 60초·50MB까지)
-  const VID_MAX_MB = 50, VID_MAX_SEC = 60;
+  // 🎬 동영상 (1개, 30초·20MB까지 — 무료 저장 공간 1GB를 아끼려고)
+  const VID_MAX_MB = 20, VID_MAX_SEC = 30;
   function isVid(f) { return /^video\//.test(f.type) || /\.(mp4|mov|m4v|webm)$/i.test(f.name || ""); }
   const isVidPath = (ph) => /\.(mp4|mov|m4v|webm)$/i.test(String(ph || ""));
   const vidLen = (f) => new Promise((res) => { const v = document.createElement("video"); v.preload = "metadata"; v.onloadedmetadata = () => { res(v.duration || 0); URL.revokeObjectURL(v.src); }; v.onerror = () => res(0); v.src = URL.createObjectURL(f); });
@@ -126,7 +126,10 @@
   // ---------- 🚩 신고 · 🚫 차단 (schema_report.sql 실행 후) ----------
   const blocked = new Set();
   let blockOk = true;
-  const notBlocked = (x) => !blocked.has(x.user_id);
+  const notBlocked = (x) => !blocked.has(x.user_id) && (!hiddenP.has(String(x.id)) || x.user_id === me() || (TS.isOwner && TS.isOwner(me())));
+  // 🙈 신고가 5명 이상 쌓인 글은 운영자가 확인할 때까지 자동으로 숨겨요 (글쓴이·운영자에게는 보여요)
+  const hiddenP = new Set();
+  async function loadHidden() { try { const { data, error } = await db.from("hidden_posts").select("post_id"); if (error) return; hiddenP.clear(); (data || []).forEach((r) => hiddenP.add(String(r.post_id))); } catch (e) { /* 표 없음 */ } }
   async function loadBlocks() {
     if (!blockOk || !me()) return;
     const { data, error } = await db.from("user_blocks").select("blocked").eq("blocker", me());
@@ -136,38 +139,88 @@
   const REASONS = ["스팸·광고", "욕설·괴롭힘", "음란·부적절한 사진", "개인정보 노출", "거짓 정보", "기타"];
   function openMore(postId, uid) {
     let d = $("moreDlg");
-    if (!d) { d = document.createElement("dialog"); d.id = "moreDlg"; document.body.appendChild(d); d.onclick = (e) => { if (e.target === d) d.close(); }; }
+    if (!d) { d = document.createElement("dialog"); d.id = "moreDlg"; d.className = "act-sheet"; document.body.appendChild(d); d.onclick = (e) => { if (e.target === d) d.close(); }; }
     const owner = TS.isOwner && TS.isOwner(me());
-    d.innerHTML = `<div style="padding:18px;display:grid;gap:12px;max-width:360px">
-      <div class="spread"><b>이 글에 대해</b><button type="button" class="link" data-m="x" style="font-size:20px">✕</button></div>
-      <div class="eyebrow" style="margin:0">🚩 신고하기 — 이유를 골라 주세요</div>
-      <div class="chips">${REASONS.map((r) => `<button type="button" class="chip" data-rep="${esc(r)}">${esc(r)}</button>`).join("")}</div>
-      <button type="button" class="pill" data-m="block" style="color:#dc2626">🚫 이 사람 차단 — 서로의 글이 안 보여요</button>
-      ${owner ? '<button type="button" class="pill" data-m="adel" style="color:#dc2626">🛡️ (운영자) 이 글 지우기</button>' : ""}
-      <p class="hint" style="margin:0">신고는 운영자에게만 전달되고, 신고한 사람은 알려지지 않아요. 24시간 안에 확인해요.</p>
-      <p class="warn" id="moreMsg" style="margin:0"></p></div>`;
-    const msg = (t) => { d.querySelector("#moreMsg").textContent = t; };
-    d.querySelector('[data-m="x"]').onclick = () => d.close();
-    d.querySelectorAll("[data-rep]").forEach((b) => { b.onclick = async () => {
-      const { error } = await db.from("post_reports").insert({ post_id: postId, reporter: me(), reason: b.dataset.rep });
-      if (error) { msg(/relation|schema cache/i.test(error.message) ? "신고 기능은 서버 설정 후에 쓸 수 있어요." : "신고하지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
-      d.close(); toast("🚩 신고했어요. 운영자가 확인할게요");
-    }; });
-    d.querySelector('[data-m="block"]').onclick = async () => {
-      if (!await TS.ask("이 사람을 차단할까요? 이 사람의 글과 댓글이 더 이상 보이지 않아요. (나 탭 → 차단 목록에서 풀 수 있어요)", "차단")) return;
-      const { error } = await db.from("user_blocks").insert({ blocker: me(), blocked: uid });
-      if (error && !/duplicate/i.test(error.message)) { msg(/relation|schema cache/i.test(error.message) ? "차단 기능은 서버 설정 후에 쓸 수 있어요." : "차단하지 못했어요."); return; }
-      blocked.add(uid); d.close(); toast("🚫 차단했어요"); render();
+    const mineP = uid === me();
+    // 인스타처럼 아래에서 올라오는 짧은 메뉴: 첫 화면은 줄 몇 개, '신고하기'를 누르면 이유 목록으로 바뀌어요
+    const main = () => `<div class="cm-grab"></div>
+      <div class="as-list">
+        ${mineP ? "" : `<button type="button" class="as-row danger" data-m="rep">🚩 신고하기<span>›</span></button>
+        <button type="button" class="as-row danger" data-m="block">🚫 이 사람 차단</button>`}
+        ${owner ? '<button type="button" class="as-row danger" data-m="adel">🛡️ (운영자) 이 글 지우기</button>' : ""}
+        <button type="button" class="as-row" data-m="x">취소</button>
+      </div><p class="warn as-msg" id="moreMsg"></p>`;
+    const reasons = () => `<div class="cm-grab"></div>
+      <div class="as-head"><button type="button" class="as-back" data-m="back" aria-label="뒤로">‹</button><b>신고 이유</b></div>
+      <div class="as-list">${REASONS.map((r) => `<button type="button" class="as-row" data-rep="${esc(r)}">${esc(r)}</button>`).join("")}</div>
+      <p class="hint as-note">신고는 운영자에게만 전달되고, 누가 신고했는지는 알려지지 않아요. 24시간 안에 확인해요.</p>
+      <p class="warn as-msg" id="moreMsg"></p>`;
+    const msg = (t) => { const m = d.querySelector("#moreMsg"); if (m) m.textContent = t; };
+    const bind = () => {
+      d.querySelectorAll('[data-m="x"]').forEach((b) => { b.onclick = () => d.close(); });
+      const rep = d.querySelector('[data-m="rep"]'); if (rep) rep.onclick = () => { d.innerHTML = reasons(); bind(); };
+      const back = d.querySelector('[data-m="back"]'); if (back) back.onclick = () => { d.innerHTML = main(); bind(); };
+      d.querySelectorAll("[data-rep]").forEach((b) => { b.onclick = async () => {
+        b.disabled = true;
+        const { error } = await db.from("post_reports").insert({ post_id: postId, reporter: me(), reason: b.dataset.rep });
+        b.disabled = false;
+        if (error && !/duplicate/i.test(error.message)) { msg(/relation|schema cache/i.test(error.message) ? "신고 기능은 서버 설정 후에 쓸 수 있어요." : "신고하지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
+        // 🛡️ 운영자에게 바로 메일 (누가 신고했는지는 빼고, 어떤 글인지만)
+        try { const P = findPost(postId) || {}; TS.notifyOwner && TS.notifyOwner("[ZONE] 신고 접수", { 이유: b.dataset.rep, 글쓴이: (P.members && P.members.nickname) || "-", 글: String(P.body || "(사진만 있는 글)").slice(0, 200), 글번호: postId, 시간: new Date().toLocaleString("ko-KR"), 확인: "앱 → 나 탭 → 🛡️ 신고된 글" }); } catch (e) { /* 무시 */ }
+        d.close(); toast("🚩 신고했어요. 운영자가 확인할게요");
+      }; });
+      const bl = d.querySelector('[data-m="block"]');
+      if (bl) bl.onclick = async () => {
+        if (!await TS.ask("이 사람을 차단할까요? 이 사람의 글과 댓글이 더 이상 보이지 않아요. (나 탭 → 차단 목록에서 풀 수 있어요)", "차단")) return;
+        const { error } = await db.from("user_blocks").insert({ blocker: me(), blocked: uid });
+        if (error && !/duplicate/i.test(error.message)) { msg(/relation|schema cache/i.test(error.message) ? "차단 기능은 서버 설정 후에 쓸 수 있어요." : "차단하지 못했어요."); return; }
+        blocked.add(uid); d.close(); toast("🚫 차단했어요"); render();
+      };
+      const ad = d.querySelector('[data-m="adel"]');
+      if (ad) ad.onclick = async () => {
+        if (!await TS.ask("운영자 권한으로 이 글을 지울까요?", "삭제")) return;
+        const { error } = await db.from("posts").delete().eq("id", postId);
+        if (error) { msg("지우지 못했어요 (서버 설정 확인)"); return; }
+        d.close(); toast("🛡️ 글을 지웠어요"); render();
+      };
     };
-    const ad = d.querySelector('[data-m="adel"]');
-    if (ad) ad.onclick = async () => {
-      if (!await TS.ask("운영자 권한으로 이 글을 지울까요?", "삭제")) return;
-      const { error } = await db.from("posts").delete().eq("id", postId);
-      if (error) { msg("지우지 못했어요 (서버 설정 확인)"); return; }
-      d.close(); toast("🛡️ 글을 지웠어요"); render();
-    };
+    d.innerHTML = main(); bind();
     if (!d.open) d.showModal();
   }
+  // 🛡️ 운영자: 신고된 글 모아 보기 (나 탭) — 글마다 신고 이유·횟수, 지우기·처리 완료
+  TS.openReports = async () => {
+    if (!(TS.isOwner && TS.isOwner(me()))) return;
+    let d = $("repDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "repDlg"; d.className = "wide-dlg"; document.body.appendChild(d); }
+    const draw = (body) => { d.innerHTML = `<div class="wide-hd"><b>🛡️ 신고된 글</b><span class="hint">운영자만 보여요</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div><div class="rep-body">${body}</div>`; d.querySelector(".wide-x").onclick = () => d.close(); };
+    draw('<p class="hint">불러오는 중…</p>'); if (!d.open) d.showModal();
+    const { data: reps, error } = await db.from("post_reports").select("*").order("created_at", { ascending: false }).limit(500);
+    if (error) { draw(`<div class="note">신고 목록을 읽을 권한이 아직 없어요. 수파베이스에서 <b>운영자 신고 보기 설정</b>(SQL 한 번 실행)을 해 주세요.<br><span class="hint">${esc(error.message)}</span></div>`); return; }
+    const open = (reps || []).filter((r) => !r.handled);
+    if (!open.length) { draw('<div class="note">✅ 처리할 신고가 없어요.</div>'); return; }
+    const byPost = {}; open.forEach((r) => { (byPost[r.post_id] = byPost[r.post_id] || []).push(r); });
+    const ids = Object.keys(byPost);
+    await loadHidden();
+    const { data: ps } = await db.from("posts").select("id,body,media,user_id,created_at,members(nickname)").in("id", ids);
+    const pmap = {}; (ps || []).forEach((p) => { pmap[p.id] = p; });
+    const card = (id) => { const rs = byPost[id], p = pmap[id]; const why = {}; rs.forEach((r) => { why[r.reason] = (why[r.reason] || 0) + 1; });
+      return `<div class="card rep-card" data-pid="${esc(id)}">
+        <div class="spread"><b>${p ? esc((p.members && p.members.nickname) || "알 수 없음") : "지워진 글"}</b><span class="rep-n">신고 ${rs.length}건${hiddenP.has(String(id)) ? " · 🙈 자동 숨김 중" : ""}</span></div>
+        <div class="rep-why">${Object.entries(why).map(([k, v]) => `<span class="chip">${esc(k)}${v > 1 ? ` ×${v}` : ""}</span>`).join("")}</div>
+        <p class="rep-text">${p ? esc(String(p.body || "(사진·영상만 있는 글)").slice(0, 300)) : "이미 지워진 글이에요."}</p>
+        ${p && p.media && p.media.length ? `<div class="rep-media">${p.media.slice(0, 4).map((m) => mediaTag(m, "rep-th")).join("")}</div>` : ""}
+        <p class="hint" style="margin:0">마지막 신고 ${new Date(rs[0].created_at || Date.now()).toLocaleString("ko-KR")}</p>
+        <div class="rep-act">${p ? '<button type="button" class="pill danger-pill" data-r="del">🗑 글 지우기</button>' : ""}<button type="button" class="pill" data-r="ok">✓ 문제없음 · 처리 완료</button></div></div>`; };
+    draw(`<p class="hint" style="margin:0 0 10px">처리할 신고 ${open.length}건 · 글 ${ids.length}개. 지우거나 '처리 완료'를 누르면 목록에서 빠져요.</p>${ids.map(card).join("")}`);
+    d.querySelectorAll(".rep-card").forEach((c) => {
+      const pid = c.dataset.pid, repIds = byPost[pid].map((r) => r.id);
+      const done = async () => { await db.from("post_reports").update({ handled: true }).in("id", repIds); await db.from("hidden_posts").delete().eq("post_id", String(pid)); hiddenP.delete(String(pid)); c.remove(); if (!d.querySelector(".rep-card")) draw('<div class="note">✅ 처리할 신고가 없어요.</div>'); };
+      const del = c.querySelector('[data-r="del"]');
+      if (del) del.onclick = async () => { if (!await TS.ask("이 글을 지울까요? 되돌릴 수 없어요.", "삭제")) return; const { error: e1 } = await db.from("posts").delete().eq("id", pid); if (e1) { toast("지우지 못했어요 (서버 설정 확인)"); return; } await done(); toast("🛡️ 글을 지웠어요"); render(); };
+      c.querySelector('[data-r="ok"]').onclick = async () => { await done(); toast("✓ 처리 완료"); };
+    });
+  };
+  TS.reportCount = async () => { const { data, error } = await db.from("post_reports").select("id,handled").limit(1000); if (error) return null; return (data || []).filter((r) => !r.handled).length; };
   TS.blocks = { list: async () => { const { data } = await db.from("user_blocks").select("blocked").eq("blocker", me()); const ids = (data || []).map((r) => r.blocked); if (!ids.length) return []; const { data: ms } = await db.from("members").select("id,nickname").in("id", ids); return ids.map((id) => ({ id, nickname: ((ms || []).find((m) => m.id === id) || {}).nickname || "?" })); },
     unblock: async (uid) => { await db.from("user_blocks").delete().eq("blocker", me()).eq("blocked", uid); blocked.delete(uid); } };
 
@@ -342,7 +395,7 @@
     stories = clean(st.data).filter(isStoryPost); // 스토리로 올린 것만
     board = rank(bd.data || []);
     await loadFollows([...feed, ...stories].map((p) => p.user_id).concat(board.map((o) => o.id)));
-    await loadBlocks(); // 🚫 내가 차단한 사람 글은 빼요
+    await Promise.all([loadBlocks(), loadHidden()]); // 🚫 내가 차단한 사람 글 · 신고로 숨겨진 글은 빼요
     feed = feed.filter(notBlocked); stories = stories.filter(notBlocked); board = board.filter((o) => !blocked.has(o.id));
     paint(box, main.error);
   }
@@ -826,6 +879,7 @@
       e.preventDefault();
       const body = form.querySelector("input").value.trim();
       if (!body) return;
+      const bad = TS.badText && TS.badText(body); if (bad) { toast(bad); return; }
       const { error: e2 } = await db.from("post_comments").insert({ post_id: id, user_id: me(), body });
       if (e2) { toast("댓글을 올리지 못했어요. 인터넷 연결을 확인해 주세요"); return; }
       bumpCount(id, 1);
@@ -949,6 +1003,7 @@
   async function submitPost() {
     const vis = $("pcVis").value, text = $("pcText").value.trim(), actId = null;
     const msg = $("pcMsg"), btn = $("pcGo");
+    const bad = TS.badText && TS.badText(text); if (bad) { msg.textContent = bad; return; }
     if (pcKind === "story" && !picked.length) { msg.textContent = "스토리는 사진이나 동영상이 있어야 해요."; return; }
     if (!text && !picked.length) { msg.textContent = "글이나 사진 중 하나는 있어야 해요."; return; }
     btn.disabled = true; msg.textContent = "";

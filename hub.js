@@ -690,7 +690,7 @@
     if (!$("dMedia")) return;
     if (error) { msg.textContent = /not found|bucket/i.test(error.message) ? MEDIA_HELP : "불러오기 실패: " + error.message; return; }
     const files = (data || []).filter((f) => f.name && !f.name.startsWith("."));
-    msg.textContent = files.length ? `${files.length}개` : "아직 없어요. 운동 사진이나 영상을 올려 보세요. (파일 1개 최대 50MB)";
+    msg.textContent = files.length ? `${files.length}개` : "아직 없어요. 운동 사진이나 영상을 올려 보세요. (파일 1개 최대 20MB)";
     box.innerHTML = files.map((f) => {
       const path = `${folder}/${f.name}`;
       const url = db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
@@ -712,7 +712,7 @@
     const msg = $("dMediaMsg");
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      if (f.size > 50 * 1024 * 1024) { alert(`${f.name}: 50MB보다 커서 올릴 수 없어요.`); continue; }
+      if (f.size > 20 * 1024 * 1024) { alert(`${f.name}: 20MB보다 커서 올릴 수 없어요. (저장 공간을 아끼려고 20MB까지만 받아요)`); continue; }
       msg.textContent = `올리는 중… (${i + 1}/${files.length}) ${f.name}`;
       const ext = (f.name.match(/\.[a-z0-9]+$/i) || [""])[0].toLowerCase();
       const path = `${a.id}/${Date.now()}-${i}${ext}`;
@@ -923,6 +923,7 @@
          <form class="set-row" id="acNickForm" hidden style="gap:6px"><input id="acNickIn" maxlength="20" placeholder="새 닉네임 (20자 이내)" value="${esc((A.member && A.member.nickname) || "")}" style="flex:1" /><button type="submit" class="primary pill">저장</button><button type="button" class="pill" id="acNickX">취소</button></form>
          ${nLocal ? `<div class="set-row"><span>이 기기에만 있는 기록 ${nLocal}개</span><button type="button" class="pill" id="acUp">계정에 올리기</button></div>` : ""}
          ${TS.isOwner && TS.isOwner() ? `<div class="set-row"><span>🛡️ 운영자 · 가입한 회원 수</span><b id="adminCount">세는 중…</b></div>` : ""}
+         ${TS.isOwner && TS.isOwner() ? `<div class="set-row"><span>🛡️ 운영자 · 신고된 글 <b id="adminRep" style="color:#dc2626"></b></span><button type="button" class="pill" onclick="TS.openReports && TS.openReports()">보기</button></div>` : ""}
          <div class="set-row"><span>로그아웃</span><button type="button" class="pill" id="acOut">로그아웃</button></div>
          <div class="set-row"><span class="hint">회원 탈퇴 — 계정과 모든 기록·글·일지가 지워져요</span><button type="button" class="link" id="acDel" style="color:#dc2626">회원 탈퇴</button></div>
          <div class="set-row"><span>🔔 좋아요·댓글 알림</span><button type="button" class="pill" id="acNotify">${A.member && A.member.notify_on === false ? "🔕 꺼짐 — 켜기" : "🔔 켜짐 — 끄기"}</button></div>`;
@@ -966,6 +967,7 @@
       if (error) { alert(/notify_on|column/i.test(error.message) ? "알림 기능은 서버 설정(SQL 실행) 후에 쓸 수 있어요." : "저장하지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
       A.member = data; renderMe();
     };
+    if ($("adminRep") && TS.reportCount) TS.reportCount().then((n) => { if ($("adminRep")) $("adminRep").textContent = n == null ? "" : n ? `${n}건` : "0건"; });
     if ($("adminCount")) db.from("members").select("id", { count: "exact", head: true }).then(({ count, error }) => { // 운영자만 보여요
       if ($("adminCount")) $("adminCount").textContent = error || count == null ? "불러오지 못했어요" : `${count}명`;
     });

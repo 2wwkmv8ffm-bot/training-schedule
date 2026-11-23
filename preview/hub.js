@@ -690,7 +690,7 @@
     if (!$("dMedia")) return;
     if (error) { msg.textContent = /not found|bucket/i.test(error.message) ? MEDIA_HELP : "불러오기 실패: " + error.message; return; }
     const files = (data || []).filter((f) => f.name && !f.name.startsWith("."));
-    msg.textContent = files.length ? `${files.length}개` : "아직 없어요. 운동 사진이나 영상을 올려 보세요. (파일 1개 최대 50MB)";
+    msg.textContent = files.length ? `${files.length}개` : "아직 없어요. 운동 사진이나 영상을 올려 보세요. (파일 1개 최대 20MB)";
     box.innerHTML = files.map((f) => {
       const path = `${folder}/${f.name}`;
       const url = db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
@@ -712,7 +712,7 @@
     const msg = $("dMediaMsg");
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      if (f.size > 50 * 1024 * 1024) { alert(`${f.name}: 50MB보다 커서 올릴 수 없어요.`); continue; }
+      if (f.size > 20 * 1024 * 1024) { alert(`${f.name}: 20MB보다 커서 올릴 수 없어요. (저장 공간을 아끼려고 20MB까지만 받아요)`); continue; }
       msg.textContent = `올리는 중… (${i + 1}/${files.length}) ${f.name}`;
       const ext = (f.name.match(/\.[a-z0-9]+$/i) || [""])[0].toLowerCase();
       const path = `${a.id}/${Date.now()}-${i}${ext}`;

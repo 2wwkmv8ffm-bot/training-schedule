@@ -61,8 +61,8 @@
   }
   // 사진인지 확인 (안드로이드 파일 앱은 형식이 비어 있을 때가 있어서 확장자도 봐요)
   function isImg(f) { return /^image\//.test(f.type) || /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i.test(f.name || ""); }
-  // 🎬 동영상 (1개, 60초·50MB까지)
-  const VID_MAX_MB = 50, VID_MAX_SEC = 60;
+  // 🎬 동영상 (1개, 30초·20MB까지 — 무료 저장 공간 1GB를 아끼려고)
+  const VID_MAX_MB = 20, VID_MAX_SEC = 30;
   function isVid(f) { return /^video\//.test(f.type) || /\.(mp4|mov|m4v|webm)$/i.test(f.name || ""); }
   const isVidPath = (ph) => /\.(mp4|mov|m4v|webm)$/i.test(String(ph || ""));
   const vidLen = (f) => new Promise((res) => { const v = document.createElement("video"); v.preload = "metadata"; v.onloadedmetadata = () => { res(v.duration || 0); URL.revokeObjectURL(v.src); }; v.onerror = () => res(0); v.src = URL.createObjectURL(f); });
