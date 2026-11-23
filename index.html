@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <script>
     // 🔍 화면 확대: 두 번 탭 확대는 항상 끄고, 두 손가락 확대(핀치)는 나 탭에서 켜고 끌 수 있어요 (기본: 끔)
+    // 📱 앱(아이폰·안드로이드)으로 열렸는지 알아내요 → 앱 안에서는 "앱으로 설치하는 법" 안내를 숨겨요
+    (function () {
+      var app = false;
+      try {
+        var C = window.Capacitor;
+        if (C && (C.isNativePlatform ? C.isNativePlatform() : C.platform && C.platform !== "web")) app = true;
+        if ((document.referrer || "").indexOf("android-app://") === 0) app = true;
+        if (app) sessionStorage.setItem("zone.inApp", "1");
+        else if (sessionStorage.getItem("zone.inApp") === "1") app = true;
+      } catch (e) {}
+      window.ZONE_IN_APP = app;
+      if (app) document.documentElement.classList.add("in-app");
+    })();
     (function () {
       var on = false;
       try { on = localStorage.getItem("training.zoom") === "1"; } catch (e) {}
@@ -73,6 +86,7 @@
     /* 📱 스크롤바는 숨겨요 (스크롤은 그대로 돼요) — 스크롤바 자리만큼 화면이 왼쪽으로 밀리지 않게 */
     html, body, * { scrollbar-width: none; -ms-overflow-style: none; } *::-webkit-scrollbar { display: none; width: 0; height: 0; }
     button, a, input, select, textarea, label { touch-action: manipulation; }
+    .in-app .zone-install { display: none !important; }
     body { font-family: "Noto Sans KR", system-ui, sans-serif; font-size: 15px; -webkit-tap-highlight-color: transparent; }
     /* 🔒 앱 안의 글·기록은 복사하지 못하게 (길게 눌러도 선택·복사 메뉴가 안 떠요). 입력칸에는 다른 곳에서 복사한 글을 붙여넣을 수 있어요 */
     body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -184,6 +198,22 @@
     .hint { font-size: 12px; color: var(--muted); line-height: 1.6; }
     .sub { color: var(--muted); margin: 0 0 18px; font-size: 14px; line-height: 1.6; }
     .warn { color: var(--danger); font-size: 14px; min-height: 1em; }
+    .chips.grid7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+    .chips.grid7 .chip { padding-left: 0; padding-right: 0; min-width: 0; text-align: center; justify-content: center; }
+    .term { text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--accent, #1d6bf3); cursor: help; }
+    .term-tip { position: fixed; z-index: 9999; display: none; background: var(--card, #fff); color: inherit; border: 1px solid var(--line, #d8e0ec); border-radius: 12px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(15,23,42,.18); font-size: 13.5px; line-height: 1.55; }
+    .term-tip b { display: block; margin-bottom: 4px; font-size: 14px; } .term-tip p { margin: 0; }
+    .explain-pick { display: inline-flex; gap: 6px; flex-wrap: nowrap; } .explain-pick .chip { padding: 6px 12px; font-size: 13px; white-space: nowrap; }
+    .offline-bar { position: fixed; left: 0; right: 0; top: 0; z-index: 9998; background: #334155; color: #fff; font-size: 13px; text-align: center; padding: calc(env(safe-area-inset-top, 0px) + 6px) 12px 6px; }
+    .qpick { margin-bottom: 16px; } .qpick-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .qopt { display: grid; gap: 3px; text-align: left; padding: 12px 10px; min-width: 0; border-radius: 14px; border: 2px solid var(--line, #d8e0ec); background: var(--card, #fff); color: inherit; font: inherit; cursor: pointer; }
+    .qopt.on { border-color: var(--accent, #1d6bf3); background: color-mix(in srgb, var(--accent, #1d6bf3) 8%, transparent); }
+    .qopt .qt { font-weight: 800; font-size: 14.5px; white-space: nowrap; } .qopt .qd, .qopt .qm { white-space: nowrap; } .qopt .qm { font-weight: 700; font-size: 13px; color: var(--accent, #1d6bf3); } .qopt .qd { font-size: 12.5px; color: var(--muted, #5b6577); }
+    .detail-nudge { border: 2px solid var(--accent, #1d6bf3); }
+    .chips.grid5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+    .chips.grid5 .chip { padding: 8px 0; min-width: 0; text-align: center; font-size: 13.5px; line-height: 1.2; display: grid; justify-items: center; align-content: center; }
+    .chips.grid5 .chip small { font-size: 10.5px; font-weight: 700; opacity: .85; }
+    input.bad { border-color: var(--danger) !important; background: color-mix(in srgb, var(--danger) 7%, transparent); }
     .note { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; margin-top: 10px; }
     .note code, .banner code { background: rgba(15, 23, 42, .06); padding: 1px 5px; border-radius: 4px; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -274,6 +304,7 @@
     dialog textarea { max-height: 40dvh; }
     .two input[type="date"], .two input[type="time"] { padding-left: 8px; padding-right: 6px; font-size: 15px; } /* 날짜가 칸 안에 다 보이게 */
     .check { display: flex; gap: 8px; align-items: center; color: var(--text); }
+    #auForm label.check { flex-wrap: wrap; row-gap: 2px; } #auForm label.check .hint { flex-basis: 100%; padding-left: 28px; } /* 좁은 화면(갤럭시)에서 글자가 끊기지 않게 */
     .check input { width: auto; accent-color: var(--accent); }
     .actions { display: flex; gap: 8px; justify-content: space-between; }
     .actions .right { display: flex; gap: 8px; margin-left: auto; }
@@ -309,11 +340,12 @@
     .sport-card .ico { font-size: 44px; line-height: 1; }
     .sport-card .nm { font-size: 19px; font-weight: 900; }
     .sport-card .ds { font-size: 12px; color: var(--muted); }
-    .rec-head, .rec-row { display: grid; grid-template-columns: minmax(64px, 96px) repeat(3, minmax(0, 1fr)); gap: 6px; align-items: center; }
+    .rec-head, .rec-row { display: grid; grid-template-columns: minmax(52px, 84px) repeat(3, minmax(0, 1fr)); gap: 6px; align-items: center; }
     .rec-head { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
     .rec-row { margin-bottom: 6px; }
     .rec-lbl { font-size: 13px; font-weight: 500; }
-    .rec-row input { padding: 7px; font-size: 14px; min-width: 0; }
+    .rec-row input { padding: 7px 2px; font-size: 13.5px; min-width: 0; text-align: center; font-variant-numeric: tabular-nums; letter-spacing: -0.2px; }
+    .rec-head span { text-align: center; }
     details.card summary { cursor: pointer; font-weight: 700; }
     details.card[open] summary { margin-bottom: 10px; }
     .race-row { display: grid; grid-template-columns: 2fr 1.4fr 1.6fr 1.1fr auto; gap: 6px; margin-bottom: 8px; align-items: center; }
@@ -348,7 +380,7 @@
     /* 홈: 종목(문진표)·심박 존·레벨 기준표 — 조금 작게, ZONE 글자와 가운데 맞춤 */
     #tab-home > .top { align-items: center; }
     body.guest .home-tools { visibility: hidden; }
-    .home-tools { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; margin-top: 8px; }
+    .home-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 4px; min-width: 0; } /* 가로로 한 줄, 좁은 폰에서만 두 줄 */
     .home-tools .pill { font-size: 12px; padding: 5px 11px; margin: 0; line-height: 1.25; }
     .pw-wrap { position: relative; display: block; }
     .pw-wrap input { padding-right: 44px; }
@@ -478,6 +510,17 @@
     .vpick .vn { font-size: 12px; color: var(--muted); }
     .rec-group { font-weight: 800; font-size: 14px; margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid var(--line); }
     .rec-group:first-of-type { margin-top: 4px; padding-top: 0; border-top: 0; }
+    /* 📅 요일별 설정 카드 */
+    .do-card { border: 1px solid var(--line); border-radius: 14px; padding: 12px 12px 14px; margin-bottom: 10px; background: var(--bg, #f8fafc); }
+    .do-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .do-day { width: 34px; height: 34px; border-radius: 50%; background: var(--accent, #2563eb); color: #fff; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; }
+    .do-sum { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .do-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 10px; }
+    .do-f { display: grid; gap: 5px; font-size: 12px; color: var(--muted); font-weight: 600; min-width: 0; }
+    .do-f select { width: 100%; min-width: 0; padding: 10px 8px; font-size: 15px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--text); }
+    .do-note { padding: 10px 8px; font-size: 14px; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; }
+    .do-sub { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+    .do-sub-t { font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
     .dayopt { display: grid; grid-template-columns: 28px 1fr 1fr; gap: 6px; align-items: center; margin-bottom: 8px; }
     .dayopt:has(select:nth-of-type(3)) { grid-template-columns: 28px 1fr 1fr 1fr; }
     .dayopt:has(select:nth-of-type(4)) { grid-template-columns: 28px 1fr 1fr 1fr 1fr; }
@@ -545,8 +588,12 @@
     .post-act button { border-radius: 999px; padding: 6px 14px; font-size: 14px; }
     .post-act button.on { background: #ffe4e6; border-color: #fecdd3; }
     .post-cmts { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
-    .cmt { font-size: 14px; line-height: 1.5; word-break: break-word; display: flex; gap: 8px; align-items: flex-start; }
+    .cmt { font-size: 16px; line-height: 1.55; word-break: break-word; display: flex; gap: 8px; align-items: flex-start; }
     .cmt .av { font-size: 12px; }
+    .cmt .hint { font-size: 13px; }
+    .cmt-form input { font-size: 16px; }
+    .mail-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -4px; }
+    .mail-chips .pill { font-size: 13px; padding: 6px 10px; }
     .post-body { font-size: 15px; line-height: 1.6; white-space: pre-line; word-break: break-word; margin-bottom: 10px; }
     .post-photos { display: grid; gap: 4px; border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
     .post-photos.n2, .post-photos.n4 { grid-template-columns: 1fr 1fr; }
@@ -586,12 +633,12 @@
     /* 📸 커뮤니티 (인스타그램 스타일) */
     .story-bar { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 12px; scrollbar-width: none; }
     .story-bar::-webkit-scrollbar { display: none; }
-    .story { flex: none; display: grid; justify-items: center; gap: 4px; background: none; border: 0; padding: 0; width: 70px; }
-    .story b { font-size: 11.5px; font-weight: 600; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .story .ring { position: relative; padding: 3px; border-radius: 50%; background: linear-gradient(45deg, #f58529, #dd2a7b, #8134af, #515bd4); }
+    .story { flex: none; display: grid; justify-items: center; gap: 5px; background: none; border: 0; padding: 0; width: 82px; }
+    .story b { font-size: 12px; font-weight: 600; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .story .ring { position: relative; padding: 3px; border-radius: 50%; background: linear-gradient(45deg, #1d6bf3, #22c3ee); } /* ZONE 색 (다른 앱 고유 색 조합 안 씀) */
     .story .ring .av { border: 3px solid var(--panel); }
     .story .ring.add { background: var(--line); }
-    .story .ring.add i { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-style: normal; font-weight: 900; display: grid; place-items: center; border: 2px solid var(--panel); }
+    .story .ring.add i { position: absolute; right: 1px; bottom: 1px; width: 24px; height: 24px; line-height: 1; font-size: 16px; padding-bottom: 1px; box-sizing: border-box; border-radius: 50%; background: var(--accent); color: #fff; font-style: normal; font-weight: 900; display: grid; place-items: center; border: 2px solid var(--panel); }
     .com-seg button { padding: 8px 4px; font-size: 13px; }
     .tag-bar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-radius: 12px; background: var(--accent-soft); margin-bottom: 10px; }
     .tag-bar .link { margin-left: auto; }
@@ -606,11 +653,20 @@
     .car-wrap { position: relative; margin-bottom: 4px; user-select: none; }
     .car { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; background: #000; }
     .car::-webkit-scrollbar { display: none; }
-    .car img { flex: none; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; scroll-snap-align: center; display: block; }
+    .car img, .car video { flex: none; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; scroll-snap-align: center; display: block; background: #000; }
+    .ex-cell { position: relative; } .ex-cell video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .vid-ic { position: absolute; top: 6px; right: 6px; color: #fff; font-size: 13px; text-shadow: 0 1px 3px rgba(0,0,0,.6); pointer-events: none; }
+    .sv-media video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+    .media .m video { width: 100%; height: 100%; object-fit: cover; display: block; }
     .car-dots { display: flex; justify-content: center; gap: 4px; padding: 6px 0 0; }
     .car-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
     .car-dots i.on { background: var(--accent); }
     .car-n { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,.55); color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+    .heart-pop svg { width: 96px; height: 96px; filter: drop-shadow(0 4px 12px rgba(0,0,0,.35)); }
+    .post.ig .post-act button.ic-svg { color: var(--text); display: inline-flex; align-items: center; padding: 4px 6px; }
+    .post.ig .post-act { gap: 4px; align-items: center; }
+    .post-body { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+    .post-body.open { display: block; -webkit-line-clamp: unset; }
     .heart-pop { position: absolute; left: 50%; top: 45%; font-size: 90px; transform: translate(-50%, -50%) scale(.3); animation: hp .8s ease-out forwards; pointer-events: none; z-index: 3; }
     @keyframes hp { 30% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
     .post-act-card, .txt-post { position: relative; }
@@ -619,6 +675,20 @@
     .post.ig .post-act { gap: 2px; padding-top: 4px; }
     .post.ig .post-act button.ic { border: 0; background: none; font-size: 24px; padding: 4px 8px; }
     .post.ig .post-act button.ic.on { background: none; }
+    .post.ig .post-act button.ic-send { color: var(--text); display: inline-flex; align-items: center; }
+    .car-n { font-weight: 700; letter-spacing: .02em; }
+    /* 💬 댓글 창: 아래에서 화면 2/3 높이로 올라와요 (인스타그램처럼) */
+    dialog.cm-sheet { margin: auto 0 0; width: 100%; max-width: 640px; margin-left: auto; margin-right: auto; height: 66vh; max-height: 66vh; padding: 0; border: 0; border-radius: 18px 18px 0 0; background: var(--card, #fff); color: var(--text); display: none; flex-direction: column; animation: cmUp .22s ease-out; }
+    dialog.cm-sheet[open] { display: flex; }
+    dialog.cm-sheet::backdrop { background: rgba(0,0,0,.45); }
+    @keyframes cmUp { from { transform: translateY(40%); opacity: .4; } to { transform: none; opacity: 1; } }
+    .cm-grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line, #d1d5db); margin: 8px auto 2px; flex: none; }
+    .cm-head { display: flex; align-items: center; justify-content: center; position: relative; padding: 6px 16px 10px; border-bottom: 1px solid var(--line); flex: none; font-size: 16px; }
+    .cm-x { position: absolute; right: 10px; top: 0; border: 0; background: none; font-size: 20px; padding: 4px 8px; color: var(--muted, #6b7280); }
+    .cm-sheet .cm-list { flex: 1; overflow-y: auto; margin: 0; border: 0; padding: 12px 16px calc(10px + env(safe-area-inset-bottom)); gap: 14px; align-content: start; }
+    .cm-sheet .emo-row, .cm-sheet .cmt-form { position: sticky; background: var(--card, #fff); }
+    .cm-sheet .emo-row { bottom: 52px; padding-top: 8px; }
+    .cm-sheet .cmt-form { bottom: 0; padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); }
     .post-act button.pop { animation: lp .35s ease; }
     @keyframes lp { 50% { transform: scale(1.35); } }
     .post-likes { font-size: 14px; margin: 2px 0 4px; }
@@ -824,7 +894,7 @@
     <section class="tab" id="tab-activity">
       <header class="top top-slim">
         <div style="display:flex;gap:6px">
-        <button class="pill" id="manualBtn">+ 직접 기록</button><button type="button" class="primary act-go" onclick="window.TS && TS.openTracker && TS.openTracker()">▶ 운동 시작</button></div>
+        <button class="pill" id="manualBtn">+ 직접 기록</button><button type="button" class="pill" id="importBtn">⌚ 시계 기록</button><button type="button" class="primary act-go" onclick="window.TS && TS.openTracker && TS.openTracker()">▶ 운동 시작</button></div>
         <input type="file" id="importFile" accept=".fit,.gpx,.tcx,.zip" multiple hidden />
       </header>
       <button type="button" class="pred-btn" data-predict="1">🔮 내 훈련으로 대회 기록 예측하기 <span>›</span></button>
@@ -971,22 +1041,39 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="config.js?v=202611162200"></script>
-  <script src="zones.js?v=202611162200"></script>
-  <script src="app.js?v=202611162200"></script>
-  <script src="engine.js?v=202611162200"></script>
-  <script src="profile.js?v=202611162200"></script>
-  <script src="garmin.js?v=202611162200"></script>
-  <script src="tracker.js?v=202611162200"></script>
-  <script src="hub.js?v=202611162200"></script>
-  <script src="auth.js?v=202611162200"></script>
-  <script src="community.js?v=202611162200"></script>
-  <script src="strava.js?v=202611162200"></script>
-  <script src="coach.js?v=202611162200"></script>
-  <script src="predict.js?v=202611162200"></script>
-  <script src="feedback.js?v=202611162200"></script>
-  <script src="drills.js?v=202611162200"></script>
-  <script src="journal.js?v=202611162200"></script>
+  <script src="config.js?v=202611231600"></script>
+  <script src="zones.js?v=202611231600"></script>
+  <script src="app.js?v=202611231600"></script>
+  <script src="engine.js?v=202611231600"></script>
+  <script src="profile.js?v=202611231600"></script>
+  <script src="garmin.js?v=202611231600"></script>
+  <script src="tracker.js?v=202611231600"></script>
+  <script src="hub.js?v=202611231600"></script>
+  <script src="auth.js?v=202611231600"></script>
+  <script src="community.js?v=202611231600"></script>
+  <script src="strava.js?v=202611231600"></script>
+  <script src="coach.js?v=202611231600"></script>
+  <script src="predict.js?v=202611231600"></script>
+  <script src="feedback.js?v=202611231600"></script>
+  <script src="drills.js?v=202611231600"></script>
+  <script src="journal.js?v=202611231600"></script>
+  <script src="easy.js?v=202611231600"></script>
+  <script>
+    // 📶 인터넷이 끊기면 위에 알려 줘요 (마지막으로 본 화면은 그대로 볼 수 있어요)
+    (function () {
+      var bar = null;
+      function upd() {
+        if (navigator.onLine) { if (bar) bar.remove(); bar = null; return; }
+        if (bar) return;
+        bar = document.createElement("div"); bar.className = "offline-bar"; bar.setAttribute("role", "status");
+        bar.textContent = "📶 인터넷이 끊겼어요. 마지막으로 본 화면이에요 — 연결되면 자동으로 새로 불러와요.";
+        document.body.appendChild(bar);
+      }
+      window.addEventListener("offline", upd);
+      window.addEventListener("online", function () { upd(); if (window.TS && TS.reload) TS.reload(); });
+      upd();
+    })();
+  </script>
   <script>
     // 🔒 창(팝업·전체 화면)이 열려 있는 동안 뒤 화면은 고정 — 안쪽만 스크롤돼요. 모두 닫히면 자동으로 풀려요.
     (function () {
@@ -1044,6 +1131,6 @@
       document.addEventListener("scroll", onScroll, true);
     })();
   </script>
-  <script src="nav.js?v=202611162200"></script>
+  <script src="nav.js?v=202611231600"></script>
 </body>
 </html>

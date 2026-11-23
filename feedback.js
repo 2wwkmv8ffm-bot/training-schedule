@@ -26,6 +26,14 @@
         분류: row.category, 내용: row.body, 보낸사람: row.nickname || "익명", 기기: row.device || "", 앱버전: row.app_version || "" }),
     }).catch(() => {}); // 메일이 실패해도 건의는 서버(받은 건의)에 저장돼 있어요
   }
+  // 🆕 새 회원이 가입하면 운영자 메일로 알려요 (닉네임 + 가린 이메일)
+  TS.notifyOwner = (subject, fields) => {
+    if (!MAIL_TO) return;
+    fetch(`https://formsubmit.co/ajax/${MAIL_TO}`, {
+      method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(Object.assign({ _subject: subject, _template: "table", _captcha: "false" }, fields)),
+    }).catch(() => {});
+  };
   async function send(row) {
     const { error } = await TS.db.from("feedback").insert(row);
     if (!error) mailOwner(row);

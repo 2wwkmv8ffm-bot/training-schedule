@@ -93,13 +93,31 @@
       if (other) { location.reload(); return true; } // 메모리에 남은 이전 사람 기록까지 비우려고 새로 열어요
     } catch (e) { /* 무시 */ }
   }
+  // 🛟 가입·로그인 직후 화면이 텅 비거나 까맣게 남으면: 홈으로 되돌리고, 원인을 찾을 수 있게 운영자에게 상황만 알려요 (개인정보 없이)
+  function blankGuard() {
+    setTimeout(() => {
+      try {
+        const ov = [...document.querySelectorAll("dialog[open], #wizard.show, #planOv.show, #detailOv.show, #authOv.show, #trackerOv.show")];
+        const el = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+        const emptyOv = ov.find((x) => !(x.innerText || "").trim());
+        const blank = !el || el === document.body || el === document.documentElement || !!emptyOv;
+        if (!blank) return;
+        const info = { 화면: el ? el.tagName + (el.id ? "#" + el.id : "") : "없음", 빈창: emptyOv ? emptyOv.tagName + (emptyOv.id ? "#" + emptyOv.id : "") : "-",
+          앱: window.ZONE_IN_APP ? "앱" : "웹", 기기: navigator.userAgent.slice(0, 120), 시간: new Date().toLocaleString("ko-KR") };
+        if (emptyOv) { if (emptyOv.tagName === "DIALOG") emptyOv.close(); else emptyOv.classList.remove("show"); }
+        document.body.style.overflow = "";
+        if (TS.showTab) TS.showTab("home");
+        if (TS.notifyOwner) TS.notifyOwner("[ZONE] 로그인 후 빈 화면 감지", info);
+      } catch (e) { /* 무시 */ }
+    }, 2500);
+  }
   async function setUser(u) {
     const changed = (A.user && A.user.id) !== (u && u.id);
     if (A.user && !u) { // 🚪 로그아웃: 이 기기에 남은 내 기록을 모두 지우고, 처음 온 사람처럼 홈에서 빈 화면으로
       try {
         PERSONAL.concat(["zone.coachChat", "zone.maxHr", "training.feedScope", "training.planView", "training.privacy"]).forEach((k) => localStorage.removeItem(k));
         Object.keys(localStorage).filter((k) => /^zone\.(planSig|likeWins)\./.test(k)).forEach((k) => localStorage.removeItem(k));
-        sessionStorage.setItem("zone.afterLogout", "1");
+        if (sessionStorage.getItem("zone.deleted") !== "1" && localStorage.getItem("zone.deleted") !== "1") sessionStorage.setItem("zone.afterLogout", "1"); // 탈퇴했으면 빈 홈 대신 회원가입 화면으로
         history.replaceState(null, "", location.pathname);
       } catch (e) { /* 무시 */ }
       location.reload();
@@ -114,6 +132,7 @@
     if (changed) await TS.setUser(A.user);
     window.dispatchEvent(new Event("ts:auth"));
     if (A.user && $("authOv").classList.contains("show") && !/newpw/.test(mode)) close(); // 로그인되면 로그인 화면 닫기
+    if (changed && A.user) blankGuard();
   }
 
   // ---------- 화면 ----------
@@ -142,6 +161,19 @@
       wrap.appendChild(b);
     });
   }
+  // 🚫 닉네임 금지어: 욕설·성적 표현·정치 표현·운영자 사칭 (띄어쓰기·특수문자·숫자를 섞어도 찾아요)
+  const BAD_NICK = ["시발","씨발","ㅅㅂ","ㅆㅂ","병신","ㅂㅅ","개새","새끼","좆","존나","ㅈㄴ","미친","닥쳐","꺼져","지랄","염병","썅","fuck","shit","bitch",
+    "섹스","sex","야동","보지","자지","성기","유두","강간","몸캠","porn","야한","av배우",
+    "윤석열","이재명","문재인","박근혜","이명박","한동훈","조국","국민의힘","민주당","정의당","개혁신당","좌파","우파","빨갱이","토착왜구","일베","메갈","한남","김치녀","탄핵",
+    "운영자","관리자","admin","zone공식","공식계정"];
+  TS.badNick = (n) => {
+    const raw = String(n || "").trim();
+    if (raw.length < 2) return "닉네임은 2자 이상으로 지어 주세요.";
+    if (raw.length > 20) return "닉네임은 20자까지 쓸 수 있어요.";
+    const flat = raw.toLowerCase().replace(/[\s\d._\-~!@#$%^&*()+=|\\/?<>,;:'"`\[\]{}·•ㆍ]/g, "");
+    if (BAD_NICK.some((w) => flat.includes(w.toLowerCase()))) return "이 닉네임은 쓸 수 없어요. 욕설·성적 표현·정치 표현·운영자 사칭은 안 돼요.";
+    return null;
+  };
   const backUrl = () => location.origin + location.pathname; // 메일 링크를 누르면 이 앱으로 돌아와요
   function render(why = "") {
     if (mode === "reset" || mode === "find" || mode === "newpw") { renderHelp(why); return; }
@@ -149,7 +181,7 @@
       ${!A.user ? `<div style="text-align:center;margin:8px 0 14px"><img src="icon-192.png?v=3" width="64" height="64" alt="ZONE" style="border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.12)" />
         <div style="font-size:15px;font-weight:700;margin-top:8px">내 기록에 맞춘 수영·자전거·러닝·철인3종 훈련</div>
         <div class="hint" style="margin-top:4px">⏱️ 가입하는 데 5분도 안 걸려요</div>
-        <button type="button" class="link" style="font-size:13px" onclick="window.ZONE_INSTALL && window.ZONE_INSTALL()">📲 휴대폰에 앱으로 설치하는 법</button></div>` : ""}
+        <button type="button" class="link zone-install" style="font-size:13px" onclick="window.ZONE_INSTALL && window.ZONE_INSTALL()">📲 휴대폰에 앱으로 설치하는 법</button></div>` : ""}
       <div class="wz-top"><h2 style="margin:0;flex:1">${mode === "login" ? "로그인" : "회원가입"}</h2>
         ${A.user ? '<button type="button" class="pill" data-home="1">🏠 홈</button><button type="button" id="auClose">닫기</button>' : ""}</div>
       ${why ? `<div class="note" style="margin:0 0 12px">${esc(why)}</div>` : ""}
@@ -157,8 +189,10 @@
         <button type="button" data-mode="signup" class="${mode === "signup" ? "on" : ""}">회원가입</button></div>
       <form id="auForm" class="card" style="display:grid;gap:12px">
         ${mode === "signup" ? `<label>닉네임 (커뮤니티에 보여요)<input name="nick" maxlength="20" required placeholder="예: 찬욱" /></label>` : ""}
-        <label>이메일<input name="email" type="email" autocomplete="email" required /></label>
-        <label>비밀번호 ${mode === "signup" ? "(6자 이상)" : ""}<input name="pw" type="password" minlength="6" autocomplete="${mode === "signup" ? "new-password" : "current-password"}" required /></label>
+        <label>이메일<input name="email" type="email" autocomplete="email" inputmode="email" autocapitalize="off" required /></label>
+        <div class="mail-chips" role="group" aria-label="이메일 주소 빨리 쓰기">${MAIL_DOMAINS.map((d) => `<button type="button" class="pill" data-dom="${d}">@${d}</button>`).join("")}<button type="button" class="pill" data-dom="">직접 입력</button></div>
+        <label>비밀번호 ${mode === "signup" ? "(8자 이상 · 영문과 숫자 섞기)" : ""}<input name="pw" type="password" minlength="${mode === "signup" ? 8 : 6}" autocomplete="${mode === "signup" ? "new-password" : "current-password"}" required /></label>
+        ${mode === "signup" ? `<label>비밀번호 한 번 더<input name="pw2" type="password" minlength="8" autocomplete="new-password" required /></label>` : ""}
         <label class="check" style="font-size:14px"><input type="checkbox" name="keep" ${keepOn() ? "checked" : ""} /> 로그인 상태 유지 <span class="hint">(다음에 앱을 켜면 바로 들어와요)</span></label>
         ${mode === "signup" ? `<label class="check" style="font-size:13px;line-height:1.5"><input type="checkbox" name="agree" required /> 만 14세 이상이며, <a href="terms.html" target="_blank" rel="noopener">이용약관</a>과 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 동의해요 (필수)</label>` : ""}
         <button type="submit" class="primary" style="padding:13px">${mode === "login" ? "로그인" : "가입하기"}</button>
@@ -169,6 +203,7 @@
     if ($("auClose")) $("auClose").onclick = close;
     $("authBody").querySelectorAll("[data-mode]").forEach((b) => { b.onclick = () => { mode = b.dataset.mode; render(why); }; });
     $("auForm").onsubmit = submit;
+    bindMailChips($("auForm"));
     addEyes();
   }
   function toastMsg(t) { const m = $("auMsg"); if (m) { m.style.color = "var(--text)"; m.textContent = t; } }
@@ -190,6 +225,8 @@
     $("authBody").innerHTML = `
       <div class="wz-top"><h2 style="margin:0;flex:1">${title}</h2>${A.user ? '<button type="button" id="auClose">닫기</button>' : ""}</div>
       ${why ? `<div class="note" style="margin:0 0 12px">${esc(why)}</div>` : ""}
+      ${mode === "signup" ? `<div class="card" style="margin:0 0 12px;padding:12px 14px"><b>🏊🚴🏃 수영·자전거·달리기를 계획 하나로</b>
+        <p class="hint" style="margin:6px 0 0">요일·시간만 알려 주면 이번 주 할 운동을 거리·속도까지 짜 드려요. 철인3종도 한 번에. 무료예요.</p></div>` : ""}
       <form id="auForm" class="card" style="display:grid;gap:12px">${body}<p class="warn" id="auMsg" style="margin:0"></p>
         ${mode !== "newpw" ? `<div style="text-align:center;font-size:13px"><button type="button" class="link" data-mode="login">‹ 로그인으로</button></div>` : ""}</form>`;
     if ($("auClose")) $("auClose").onclick = close;
@@ -225,6 +262,40 @@
       btn.disabled = false;
     };
   }
+  // 📧 이메일 빨리 쓰기: @naver.com 등을 누르면 아이디 뒤에 붙어요 (직접 입력도 돼요)
+  const MAIL_DOMAINS = ["naver.com", "gmail.com", "hanmail.net", "daum.net", "kakao.com"];
+  function bindMailChips(f) {
+    if (!f || !f.email) return;
+    f.querySelectorAll("[data-dom]").forEach((b) => {
+      b.onclick = () => {
+        const id = f.email.value.split("@")[0].trim();
+        if (!b.dataset.dom) { f.email.focus(); return; }
+        if (!id) { f.email.placeholder = `아이디를 먼저 적고 눌러 주세요 (예: zone@${b.dataset.dom})`; f.email.focus(); return; } // 이메일 칸은 커서 위치를 못 바꿔서, 아이디부터 받아요
+        f.email.value = id + "@" + b.dataset.dom;
+      };
+    });
+  }
+  // ✍️ 자주 틀리는 이메일 주소를 찾아서 "혹시 ○○ 아닌가요?"라고 물어봐요
+  const MAIL_FIX = { "hanmil.com": "hanmail.net", "hamil.com": "hanmail.net", "hanmail.com": "hanmail.net", "hanmial.net": "hanmail.net", "hanmail.ne": "hanmail.net", "hanmali.net": "hanmail.net",
+    "naver.co": "naver.com", "naver.con": "naver.com", "naver.cm": "naver.com", "naver.om": "naver.com", "navr.com": "naver.com", "nave.com": "naver.com", "naber.com": "naver.com",
+    "gmail.co": "gmail.com", "gmail.con": "gmail.com", "gmial.com": "gmail.com", "gamil.com": "gmail.com", "gmali.com": "gmail.com", "gmai.com": "gmail.com", "gmail.cm": "gmail.com",
+    "daum.com": "daum.net", "daum.ne": "daum.net", "kakao.co": "kakao.com", "kakao.con": "kakao.com" };
+  function mailTypo(email) { const d = (email.split("@")[1] || "").toLowerCase(); return MAIL_FIX[d] ? email.split("@")[0] + "@" + MAIL_FIX[d] : null; }
+  // 🔒 비밀번호: 8자 이상, 영문과 숫자를 섞어요
+  function weakPw(pw) { return pw.length < 8 || !/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw); }
+  // ⏳ 가입 확인 메일을 누르면, 앱이 알아서 로그인해요 (5초마다 확인, 최대 20분)
+  let waitT = null;
+  function waitForConfirm(email, pw) {
+    clearInterval(waitT);
+    const until = Date.now() + 20 * 60 * 1000;
+    const tryIn = async () => {
+      if (Date.now() > until || A.user) { clearInterval(waitT); return; }
+      const { error } = await db.auth.signInWithPassword({ email, password: pw });
+      if (!error) { clearInterval(waitT); rememberChoice($("auForm") || { keep: { checked: true } }); close(); }
+    };
+    waitT = setInterval(tryIn, 5000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) tryIn(); }); // 메일 앱에서 돌아오면 바로 확인
+  }
   async function submit(e) {
     e.preventDefault();
     const f = e.target, msg = $("auMsg");
@@ -233,16 +304,24 @@
     try {
       if (mode === "signup") {
         const email = f.email.value.trim();
+        const nickBad = TS.badNick && TS.badNick(f.nick.value);
+        if (nickBad) { msg.textContent = nickBad; btn.disabled = false; return; }
+        if (weakPw(f.pw.value)) { msg.textContent = "비밀번호는 8자 이상, 영문과 숫자를 섞어 주세요."; btn.disabled = false; return; }
+        if (f.pw2 && f.pw.value !== f.pw2.value) { msg.textContent = "비밀번호가 서로 달라요. 한 번 더 확인해 주세요."; btn.disabled = false; return; }
+        const fix = mailTypo(email);
+        if (fix && await TS.ask(`혹시 ${fix} 아닌가요?`, "네, 바꿀게요", "아니요")) { f.email.value = fix; btn.disabled = false; msg.textContent = "이메일을 고쳤어요. 다시 [가입하기]를 눌러 주세요."; return; }
         const { data, error } = await db.auth.signUp({ email, password: f.pw.value, options: { emailRedirectTo: backUrl(), data: { nickname: f.nick.value.trim() } } });
         if (error) throw error;
+        try { const [id, dom] = email.split("@"); TS.notifyOwner && TS.notifyOwner("[ZONE] 새 회원가입", { 닉네임: f.nick.value.trim(), 이메일: id.slice(0, 2) + "***@" + dom, 시간: new Date().toLocaleString("ko-KR") }); } catch (e2) { /* 무시 */ }
         if (!data.session) {
           msg.style.color = "var(--text)";
-          msg.innerHTML = `가입 확인 메일을 보냈어요. 메일의 링크를 누르면 바로 로그인돼요.<br><span class='hint'>메일이 안 보이면 스팸함도 확인해 주세요.</span>
+          msg.innerHTML = `<b>${TS.escapeHtml ? TS.escapeHtml(email) : email}</b>로 가입 확인 메일을 보냈어요.<br>메일의 링크를 누른 뒤 <b>이 앱으로 돌아오면 자동으로 로그인</b>돼요.<br><span class='hint'>메일이 안 보이면 스팸함(네이버는 '스팸메일함')도 확인해 주세요.</span>${/@(naver|hanmail|daum)\./i.test(email) ? "<br><span class='hint'>네이버·다음 메일은 늦게 오거나 안 올 때가 있어요. 5분이 지나도 없으면 <b>지메일</b>로 가입하면 더 빨라요.</span>" : ""}
             <br><button type="button" class="link" id="auResend">📧 확인 메일 다시 보내기</button>`;
           $("auResend").onclick = async () => {
             const { error: e2 } = await db.auth.resend({ type: "signup", email, options: { emailRedirectTo: backUrl() } });
             toastMsg(e2 ? korAuthErr(e2.message) : "확인 메일을 다시 보냈어요.");
           };
+          waitForConfirm(email, f.pw.value);
           btn.disabled = false;
           return;
         }
@@ -289,7 +368,9 @@
     await setUser(s ? s.user : null);
     // 로그인 안 했으면 앱을 열자마자 로그인 · 회원가입 화면
     let afterOut = false; try { afterOut = sessionStorage.getItem("zone.afterLogout") === "1"; sessionStorage.removeItem("zone.afterLogout"); } catch (e) { /* 무시 */ }
-    if (!s && !afterOut && !/error_description=|type=recovery/.test(location.hash + location.search)) open("login"); // 방금 로그아웃했으면 빈 홈부터
+    let deleted = false; try { deleted = sessionStorage.getItem("zone.deleted") === "1" || localStorage.getItem("zone.deleted") === "1"; sessionStorage.removeItem("zone.deleted"); localStorage.removeItem("zone.deleted"); } catch (e) { /* 무시 */ }
+    if (!s && deleted) { open("signup", "탈퇴가 완료됐어요. 다시 시작하려면 새로 가입해 주세요."); } // 🚪 탈퇴 직후 → 바로 회원가입 화면
+    else if (!s && !afterOut && !/error_description=|type=recovery/.test(location.hash + location.search)) open("login"); // 방금 로그아웃했으면 빈 홈부터
   });
   // 메일 링크가 만료됐거나 잘못된 경우 (주소 뒤에 error=… 가 붙어 와요)
   const linkErr = /error_description=([^&]+)/.exec(location.hash + "&" + location.search);

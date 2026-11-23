@@ -521,10 +521,19 @@
     void vis;
     return { data: { ...data, route: full || data.route } };
   }
+  // ✅ 계획 → 기록 연결: 같은 날 같은 종목의 계획 훈련을 자동으로 '완료'로 바꿔요
+  async function autoDone(a) {
+    const sp = ACT_SPORTS[a.sport]; if (!sp || !a.started_at) return;
+    const d = new Date(a.started_at), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const s = (sessions || []).find((x) => x.date === day && !x.completed && (x.category === sp.cat || x.category === "브릭"));
+    if (!s) return;
+    const { error } = await db.from(TABLE).update({ completed: true }).eq("id", s.id);
+    if (!error) { load(); const el = document.createElement("div"); el.className = "toast"; el.textContent = `✅ 오늘 계획 '${s.title}'을(를) 완료로 표시했어요`; document.body.appendChild(el); setTimeout(() => el.remove(), 3500); }
+  }
   async function addActivity(a) {
     if (session.user) {
       const { data, error } = await cloudInsert(a);
-      if (!error) { store.cloud = true; notifyActs(); return data; }
+      if (!error) { store.cloud = true; notifyActs(); autoDone(a).catch(() => {}); return data; }
       store.cloud = false; store.reason = "sql";
     }
     const row = { ...a, id: "local-" + Date.now(), created_at: new Date().toISOString(), local: true };

@@ -10,7 +10,7 @@
 
   // ---------- 1) 블루투스 심박 ----------
   const HR = { device: null, bpm: null, at: 0, status: "off", name: "", error: "", listeners: new Set() };
-  HR.supported = !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
+  HR.supported = false; // 블루투스 심박계 연결 기능은 뺐어요 (아이폰 앱에서 지원되지 않아서). 가민 파일 가져오기는 그대로예요.
   const emit = () => HR.listeners.forEach((f) => { try { f(HR); } catch (e) { /* 무시 */ } });
   function onValue(e) {
     const v = e.target.value;

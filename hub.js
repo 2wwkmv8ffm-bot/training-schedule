@@ -144,6 +144,11 @@
     };
   }
 
+  document.addEventListener("click", async (e) => {
+    if (!e.target.closest("#resetQ")) return;
+    if (!await TS.ask("문진표를 처음부터 다시 쓸까요? 앞으로의 자동 계획은 지워지고, 완료한 기록·활동은 그대로 남아요.", "다시 쓰기")) return;
+    if (!(TS.resetProfile && await TS.resetProfile())) alert("지금은 할 수 없어요. 로그인과 인터넷 연결을 확인해 주세요.");
+  });
   async function refresh() { acts = await TS.listActivities(); renderCurrent(); }
   window.addEventListener("ts:activities", refresh);
   window.addEventListener("ts:profile", renderCurrent);
@@ -429,6 +434,9 @@
     $("homeBody").innerHTML = `
       <div style="margin-bottom:14px"><div class="eyebrow">${now.getMonth() + 1}월 ${now.getDate()}일 ${DAY[(now.getDay() + 6) % 7]}요일</div>
         <h1 class="big">${name}${greet}</h1></div>
+      ${p && p.detail === "quick" ? `<div class="card detail-nudge"><b>📋 계획을 더 정확하게 만들어 볼까요?</b>
+        <p class="hint" style="margin:6px 0 10px">지금은 '빨리 끝내기'로 만든 기본 계획이에요. 자세히 작성하면 내 기록·주간 거리·대회에 맞춰 <b>더욱 디테일한 연습 스케줄</b>을 짜 드려요.</p>
+        <button type="button" class="primary" data-detail-go="1" style="width:100%">자세히 작성하기 (약 5분) ›</button></div>` : ""}
       ${(() => { // 🏁 대회 2주 전부터: 조정기 안내
         if (!race || !TS.E || !TS.E.prepAdvice) return "";
         const dd = Math.round((new Date(race.date + "T00:00:00") - today0) / 864e5);
@@ -811,8 +819,10 @@
         ${p && TS.discsOf && TS.discsOf(p.sport).includes("bike") ? `<div class="set-row"><span>🚴 자전거</span><span class="mini-seg">${[["indoor", "🏠 실내"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="${((p.env || {}).bike || "outdoor") === k ? " on" : ""}" data-mebenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
         ${p && TS.discsOf && TS.discsOf(p.sport).includes("run") ? `<div class="set-row"><span>🏃 달리기</span><span class="mini-seg">${[["indoor", "🏠 트레드밀"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="${((p.env || {}).run || "outdoor") === k ? " on" : ""}" data-merenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
         <div class="set-row"><span>📖 드릴 가이드 (수영·자전거·달리기)</span><button type="button" class="pill" data-drills="swim">보기</button></div>
-        <div class="set-row"><span>📲 휴대폰에 앱으로 설치 (아이폰·갤럭시)</span><button type="button" class="pill" onclick="window.ZONE_INSTALL && window.ZONE_INSTALL()">설치하기</button></div>
-        <div class="set-row"><span>💪 보강 가이드 (맨몸 10가지)</span><button type="button" class="pill" data-drills="str">보기</button></div>
+        <div class="set-row zone-install"><span>📲 휴대폰에 앱으로 설치 (아이폰·갤럭시)</span><button type="button" class="pill" onclick="window.ZONE_INSTALL && window.ZONE_INSTALL()">설치하기</button></div>
+        <div class="set-row"><span>💪 보강 가이드 (맨몸 · 서킷)</span><button type="button" class="pill" data-drills="str">보기</button></div>
+        <div class="set-row"><span>🔄 문진표 처음부터 다시 쓰기 <span class="hint">(완료한 기록은 그대로)</span></span><button type="button" class="pill" id="resetQ">다시 쓰기</button></div>
+        <div class="set-row"><span>🔤 설명 수준 <span class="hint">(초보: 쉬운 말 · 고급: 용어 + 정확한 뜻)</span></span>${TS.explain ? TS.explain.pickerHtml() : ""}</div>
         <div class="set-row"><span>🚫 차단한 사람</span><button type="button" class="pill" id="meBlocks">보기</button></div>
         <div class="set-row"><span>🔍 두 손가락 확대·축소</span>${(() => { const z = window.ZONE_ZOOM && window.ZONE_ZOOM.get(); return `<button type="button" class="sw${z ? " on" : ""}" id="meZoom" role="switch" aria-checked="${z ? "true" : "false"}" aria-label="화면 확대·축소"><i></i><b>${z ? "ON" : "OFF"}</b></button>`; })()}</div>
         <div class="set-row"><span>📝 훈련 일지 (컨디션·운동 기록·일기)</span><button type="button" class="pill" id="meJournal">모아보기</button></div>
@@ -912,6 +922,7 @@
       : `<div class="set-row"><span>👤 <b>${esc((A.member && A.member.nickname) || "")}</b> <span class="hint">${esc(A.user.email || "")}</span></span><button type="button" class="pill" id="acNick">닉네임 변경</button></div>
          <form class="set-row" id="acNickForm" hidden style="gap:6px"><input id="acNickIn" maxlength="20" placeholder="새 닉네임 (20자 이내)" value="${esc((A.member && A.member.nickname) || "")}" style="flex:1" /><button type="submit" class="primary pill">저장</button><button type="button" class="pill" id="acNickX">취소</button></form>
          ${nLocal ? `<div class="set-row"><span>이 기기에만 있는 기록 ${nLocal}개</span><button type="button" class="pill" id="acUp">계정에 올리기</button></div>` : ""}
+         ${TS.isOwner && TS.isOwner() ? `<div class="set-row"><span>🛡️ 운영자 · 가입한 회원 수</span><b id="adminCount">세는 중…</b></div>` : ""}
          <div class="set-row"><span>로그아웃</span><button type="button" class="pill" id="acOut">로그아웃</button></div>
          <div class="set-row"><span class="hint">회원 탈퇴 — 계정과 모든 기록·글·일지가 지워져요</span><button type="button" class="link" id="acDel" style="color:#dc2626">회원 탈퇴</button></div>
          <div class="set-row"><span>🔔 좋아요·댓글 알림</span><button type="button" class="pill" id="acNotify">${A.member && A.member.notify_on === false ? "🔕 꺼짐 — 켜기" : "🔔 켜짐 — 끄기"}</button></div>`;
@@ -955,11 +966,15 @@
       if (error) { alert(/notify_on|column/i.test(error.message) ? "알림 기능은 서버 설정(SQL 실행) 후에 쓸 수 있어요." : "저장하지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
       A.member = data; renderMe();
     };
+    if ($("adminCount")) db.from("members").select("id", { count: "exact", head: true }).then(({ count, error }) => { // 운영자만 보여요
+      if ($("adminCount")) $("adminCount").textContent = error || count == null ? "불러오지 못했어요" : `${count}명`;
+    });
     if ($("acDel")) $("acDel").onclick = async () => { // 회원 탈퇴 (앱스토어·개인정보보호법 필수)
       if (!await TS.ask("정말 탈퇴할까요? 계정과 모든 훈련 기록·글·사진·일지가 지워지고 되돌릴 수 없어요.", "탈퇴", "취소")) return;
       if (!await TS.ask("마지막 확인이에요. 탈퇴하면 같은 계정으로 다시 볼 수 없어요. 탈퇴할까요?", "탈퇴", "취소")) return;
       const { error } = await db.rpc("delete_my_account");
       if (error) { alert("지금은 탈퇴를 처리하지 못했어요. 잠시 뒤 다시 시도하거나 건의사항으로 알려 주세요."); return; }
+      try { sessionStorage.setItem("zone.deleted", "1"); localStorage.setItem("zone.deleted", "1"); } catch (e) { /* 무시 */ } // 다시 열면 회원가입 화면부터 (두 곳에 적어 두어 확실하게)
       try { Object.keys(localStorage).filter((k) => /^training\./.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* 무시 */ }
       try { await db.auth.signOut({ scope: "local" }); } catch (e) { /* 이미 지워진 계정 */ }
       try { Object.keys(localStorage).filter((k) => /^sb-.*-auth-token/.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* 무시 */ } // 로그인 정보까지 확실히 지우기
@@ -972,6 +987,7 @@
       e.preventDefault();
       const n = $("acNickIn").value.trim();
       if (!n) { alert("닉네임을 적어 주세요."); return; }
+      const bad = TS.badNick && TS.badNick(n); if (bad) { alert(bad); return; }
       const err = await A.updateNickname(n);
       if (err) { alert(err); return; }
       const p = TS.getProfile && TS.getProfile(); if (p && TS.saveProfile) { p.nickname = n; TS.saveProfile(p); } // 문진표 이름도 같이
