@@ -153,7 +153,6 @@
   window.addEventListener("ts:activities", refresh);
   window.addEventListener("ts:profile", renderCurrent);
   window.addEventListener("ts:auth", () => { if (current === "me") renderMe(); else if (current === "home") renderHome(); });
-  window.addEventListener("ts:strava", () => { if (current === "me") renderMe(); });
   window.addEventListener("ts:sessions", () => { if (current === "home") renderHome(); });
   window.addEventListener("ts:journal", () => { if (current === "home") renderHome(); });
 
@@ -597,9 +596,6 @@
         <button type="button" class="danger pill" id="dDel">삭제</button></div>
       ${fresh ? `<div class="note" style="margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1">저장했어요! 💪 ${newBadgeText()}</span><button type="button" class="primary" id="dAgain" style="margin:0;padding:8px 14px;border-radius:999px">▶ 다시 시작</button></div>` : ""}
       ${a.route && a.route.length > 1 ? `<div class="map" id="dMap"></div>` : ""}
-      ${a.source === "strava" ? `<div class="card"><div class="spread"><span class="hint">🔒 스트라바 기록은 약관상 본인만 볼 수 있어요</span>
-        ${a.external_id ? `<a class="strava-link" href="https://www.strava.com/activities/${esc(String(a.external_id).replace("strava:", ""))}" target="_blank" rel="noopener">Strava에서 보기 ›</a>` : ""}</div>
-        <div class="hint" style="margin-top:4px">Powered by Strava</div></div>` : ""}
       <div class="card"><div class="stats4">
         <div><b class="num">${distText(a)}</b><span>거리</span></div>
         <div><b class="num">${fmtDur(a.duration_s)}</b><span>시간</span></div>
@@ -928,7 +924,6 @@
          <div class="set-row"><span class="hint">회원 탈퇴 — 계정과 모든 기록·글·일지가 지워져요</span><button type="button" class="link" id="acDel" style="color:#dc2626">회원 탈퇴</button></div>
          <div class="set-row"><span>🔔 좋아요·댓글 알림</span><button type="button" class="pill" id="acNotify">${A.member && A.member.notify_on === false ? "🔕 꺼짐 — 켜기" : "🔔 켜짐 — 끄기"}</button></div>`;
     return `<div class="card"><h3>👤 계정 · 공개 설정</h3>${acct}
-      ${TS.strava && TS.strava.ready() && TS.strava.statusHtml() ? `<div class="set-row"><span>⌚ 스트라바 연결 <span class="hint">(가민·코로스 기록도 스트라바를 거쳐 들어와요)</span></span>${TS.strava.statusHtml()}</div>` : ""}
       <div class="set-row"><span>📤 ZONE 앱 친구에게 공유하기 <span class="hint">(카톡·문자)</span></span><button type="button" class="primary pill" id="acShareApp">공유</button></div>
       <div class="set-row"><span>새 기록 기본 공개 범위</span>
         <select id="acVis" style="width:auto">${[["friends", "👥 친구만"], ["public", "🌏 전체 공개"], ["private", "🔒 나만"]].map(([v, l]) => `<option value="${v}"${pv.visibility === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>

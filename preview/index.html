@@ -230,8 +230,6 @@
     .rep-media { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .rep-th { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: var(--bg); max-width: 100%; }
     .rep-why .chip { background: rgba(220,38,38,.08); color: #b91c1c; border: 0; }
     .rep-act { display: flex; flex-wrap: wrap; gap: 8px; } .danger-pill { color: #dc2626; }
-    .strava-done { position: fixed; inset: 0; z-index: 99999; background: var(--bg); display: grid; place-items: center; padding: 24px; padding-top: calc(24px + var(--safe-top, 0px)); }
-    .sd-box { max-width: 420px; text-align: center; display: grid; gap: 10px; } .sd-ic { font-size: 52px; } .sd-box h2 { margin: 0; font-size: 22px; } .sd-box p { margin: 0; line-height: 1.7; }
     input.bad { border-color: var(--danger) !important; background: color-mix(in srgb, var(--danger) 7%, transparent); }
     .note { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; margin-top: 10px; }
     .note code, .banner code { background: rgba(15, 23, 42, .06); padding: 1px 5px; border-radius: 4px; }
@@ -567,9 +565,6 @@
     }
     .back-fab.show { opacity: .92; transform: none; pointer-events: auto; }
 
-    /* ---- 스트라바 ---- */
-    .strava-btn { background: #fc5200; border-color: #fc5200; color: #fff; }
-    .strava-link { color: #fc5200; font-weight: 700; text-decoration: none; }
     .toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60;
       background: var(--text); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; max-width: calc(100vw - 32px); box-shadow: 0 6px 20px rgba(15, 23, 42, .25); }
 
@@ -1017,8 +1012,6 @@
     </form>
   </dialog>
 
-  <!-- 스트라바 가져오기 -->
-  <dialog id="stravaDlg"><div style="padding:18px;display:grid;gap:12px" id="stravaBody"></div></dialog>
 
   <!-- 커뮤니티 글쓰기 -->
   <dialog id="postDlg"><div style="padding:18px;display:grid;gap:12px" id="postBody"></div></dialog>
@@ -1070,7 +1063,6 @@
   <script src="hub.js?v=202611231900"></script>
   <script src="auth.js?v=202611231900"></script>
   <script src="community.js?v=202611231900"></script>
-  <script src="strava.js?v=202611231900"></script>
   <script src="coach.js?v=202611231900"></script>
   <script src="predict.js?v=202611231900"></script>
   <script src="feedback.js?v=202611231900"></script>
