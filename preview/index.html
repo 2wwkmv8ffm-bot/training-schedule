@@ -380,7 +380,7 @@
     /* 홈: 종목(문진표)·심박 존·레벨 기준표 — 조금 작게, ZONE 글자와 가운데 맞춤 */
     #tab-home > .top { align-items: center; }
     body.guest .home-tools { visibility: hidden; }
-    .home-tools { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; margin-top: 8px; }
+    .home-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 4px; min-width: 0; } /* 가로로 한 줄, 좁은 폰에서만 두 줄 */
     .home-tools .pill { font-size: 12px; padding: 5px 11px; margin: 0; line-height: 1.25; }
     .pw-wrap { position: relative; display: block; }
     .pw-wrap input { padding-right: 44px; }
