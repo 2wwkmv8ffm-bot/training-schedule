@@ -210,6 +210,9 @@
     .qopt.on { border-color: var(--accent, #1d6bf3); background: color-mix(in srgb, var(--accent, #1d6bf3) 8%, transparent); }
     .qopt .qt { font-weight: 800; font-size: 14.5px; white-space: nowrap; } .qopt .qd, .qopt .qm { white-space: nowrap; } .qopt .qm { font-weight: 700; font-size: 13px; color: var(--accent, #1d6bf3); } .qopt .qd { font-size: 12.5px; color: var(--muted, #5b6577); }
     .detail-nudge { border: 2px solid var(--accent, #1d6bf3); }
+    .chips.grid5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+    .chips.grid5 .chip { padding: 8px 0; min-width: 0; text-align: center; font-size: 13.5px; line-height: 1.2; display: grid; justify-items: center; align-content: center; }
+    .chips.grid5 .chip small { font-size: 10.5px; font-weight: 700; opacity: .85; }
     input.bad { border-color: var(--danger) !important; background: color-mix(in srgb, var(--danger) 7%, transparent); }
     .note { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; margin-top: 10px; }
     .note code, .banner code { background: rgba(15, 23, 42, .06); padding: 1px 5px; border-radius: 4px; }

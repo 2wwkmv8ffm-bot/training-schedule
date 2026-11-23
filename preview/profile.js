@@ -1003,7 +1003,7 @@
     return `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
       <div class="spread"><b style="font-size:14px">⚖️ 강도 비율 조절</b><span id="ratioVal" style="font-size:14px">저강도 <b>${v}</b> : 고강도 <b>${100 - v}</b></span></div>
       <input type="range" id="ratioRange" min="50" max="95" step="5" value="${v}" style="width:100%;margin:10px 0 6px;accent-color:var(--accent)" />
-      <div class="chips">${[90, 85, 80, 75, 70].map((x) => `<button type="button" class="chip${x === v ? " on" : ""}" data-ratio="${x}">${x}:${100 - x}${x === recLow(profile) ? " 추천" : ""}</button>`).join("")}</div>
+      <div class="chips grid5">${[90, 85, 80, 75, 70].map((x) => `<button type="button" class="chip${x === v ? " on" : ""}" data-ratio="${x}">${x}:${100 - x}${x === recLow(profile) ? "<small>추천</small>" : ""}</button>`).join("")}</div>
       <button type="button" class="primary" data-ratioapply="1" style="width:100%;padding:12px;border-radius:12px;margin-top:10px" ${v === cur ? "disabled" : ""}>${v === cur ? `지금 비율 ${cur}:${100 - cur}` : `✓ ${v}:${100 - v}로 적용하고 스케줄 바꾸기`}</button>
     </div>`;
   }
@@ -1105,7 +1105,6 @@
         ${paceGuide()}
         ${swimGuide()}
         ${profile.holdSync ? `<div class="note" style="margin:10px 0 0">🏁 새 대회 일정이 아직 달력에 반영되지 않았어요. <button type="button" class="pill" data-syncnow="1">지금 반영</button></div>` : ""}
-        ${ratioCtl(W)}
         ${W.tss && plan.pmc ? (() => { const pw = plan.pmc(weekIdx + 1).weeks[weekIdx]; return `<p class="hint" style="margin:10px 0 0">📈 이번 주 훈련 부하 약 <b>${W.tss} TSS</b> · 주말 예상 체력 CTL <b>${Math.round(pw.ctl)}</b> (${pw.ramp >= 0 ? "+" : ""}${pw.ramp.toFixed(1)}) · 컨디션 TSB <b>${pw.tsb >= 0 ? "+" : ""}${Math.round(pw.tsb)}</b> <span>— 연간 탭에 그래프가 있어요</span></p>`; })() : ""}
       </div>
       ${plan.level && weekIdx === 0 ? `<div class="card">${levelCard(plan.level)}</div>` : ""}
@@ -1337,6 +1336,7 @@
           <span class="v-ratio"><b>${t}</b> : <b>${100 - t}</b><small>저강도 : 고강도</small></span>
           <span class="hint" style="font-size:12px;line-height:1.5">질 훈련 주 ${st.q}회${st.dbl ? ` (더블 ${st.dbl})` : ""} · ${minLabel(st.min)}</span></button>`; }).join("")}</div>
       <p class="hint" style="margin:6px 2px 0;font-size:12px">A안·B안을 누르면 그 안으로 달력(8주)이 바로 바뀌어요.</p>
+      ${ratioCtl(plan.week(weekIdx))}
       ${vCompare()}
       <div class="note">${variants[vSel].rec ? "⭐ 추천 이유: " : ""}${esc(variants[vSel].why)}</div></div>
       <div class="seg">${[["week", "주간"], ["month", "월간"], ["quarter", "3개월"], ["year", "연간"], ["basis", "강도 기준"]].map(([k, l]) => `<button type="button" data-tab="${k}" class="${planTab === k ? "on" : ""}">${l}</button>`).join("")}</div>
