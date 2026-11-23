@@ -144,6 +144,11 @@
     };
   }
 
+  document.addEventListener("click", async (e) => {
+    if (!e.target.closest("#resetQ")) return;
+    if (!await TS.ask("문진표를 처음부터 다시 쓸까요? 앞으로의 자동 계획은 지워지고, 완료한 기록·활동은 그대로 남아요.", "다시 쓰기")) return;
+    if (!(TS.resetProfile && await TS.resetProfile())) alert("지금은 할 수 없어요. 로그인과 인터넷 연결을 확인해 주세요.");
+  });
   async function refresh() { acts = await TS.listActivities(); renderCurrent(); }
   window.addEventListener("ts:activities", refresh);
   window.addEventListener("ts:profile", renderCurrent);
@@ -816,6 +821,7 @@
         <div class="set-row"><span>📖 드릴 가이드 (수영·자전거·달리기)</span><button type="button" class="pill" data-drills="swim">보기</button></div>
         <div class="set-row zone-install"><span>📲 휴대폰에 앱으로 설치 (아이폰·갤럭시)</span><button type="button" class="pill" onclick="window.ZONE_INSTALL && window.ZONE_INSTALL()">설치하기</button></div>
         <div class="set-row"><span>💪 보강 가이드 (맨몸 · 서킷)</span><button type="button" class="pill" data-drills="str">보기</button></div>
+        <div class="set-row"><span>🔄 문진표 처음부터 다시 쓰기 <span class="hint">(완료한 기록은 그대로)</span></span><button type="button" class="pill" id="resetQ">다시 쓰기</button></div>
         <div class="set-row"><span>🔤 설명 수준 <span class="hint">(초보: 쉬운 말 · 고급: 용어 + 정확한 뜻)</span></span>${TS.explain ? TS.explain.pickerHtml() : ""}</div>
         <div class="set-row"><span>🚫 차단한 사람</span><button type="button" class="pill" id="meBlocks">보기</button></div>
         <div class="set-row"><span>🔍 두 손가락 확대·축소</span>${(() => { const z = window.ZONE_ZOOM && window.ZONE_ZOOM.get(); return `<button type="button" class="sw${z ? " on" : ""}" id="meZoom" role="switch" aria-checked="${z ? "true" : "false"}" aria-label="화면 확대·축소"><i></i><b>${z ? "ON" : "OFF"}</b></button>`; })()}</div>

@@ -1436,6 +1436,19 @@
   // 📋 '자세히 작성하기'로 이어서: 기준점 테스트(기록) 장부터, 이미 적은 건 그대로
   TS.openDetail = () => { if ($("planOv").classList.contains("show")) closePlan(); openWizard(1); };
   document.addEventListener("click", (e) => { if (e.target.closest("[data-detail-go]")) { e.preventDefault(); TS.openDetail(); } });
+  // 🔄 문진표 처음부터: 처음 가입한 것처럼 빈 상태로 (완료한 기록·활동·커뮤니티 글은 그대로, 앞으로의 자동 계획만 지워요)
+  TS.resetProfile = async () => {
+    const uid = TS.auth && TS.auth.user ? TS.auth.user.id : "";
+    if (!uid) return false;
+    const { error } = await db.from(PROFILE_TABLE).upsert({ id: uid, data: { owner: uid }, updated_at: new Date().toISOString() });
+    if (error) return false;
+    await TS.mine(db.from(TS.TABLE).delete()).gte("date", iso(new Date())).eq("completed", false).like("notes", "[자동 계획]%");
+    try { localStorage.removeItem(LS_KEY); } catch (e) { /* 무시 */ }
+    setProfile(null); TS.reload && TS.reload();
+    if ($("planOv").classList.contains("show")) closePlan();
+    openWizard(0);
+    return true;
+  };
   TS.refreshPlan = () => { if ($("planOv") && $("planOv").classList.contains("show") && plan) renderPlan(); };
   Object.assign(TS, { getProfile: () => profile, openWizard, openPlan, openGoal, isProfileCloud: () => cloudOk, discsOf, updateProfile, openRaceAdd, removeRace, setBikeEnv, openLevel });
   // 오른쪽 위 종목 버튼: 종목만 바꾸고 바로 스케줄 보기 (문진표는 '설정'에서만)
