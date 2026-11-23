@@ -928,7 +928,7 @@
          <div class="set-row"><span class="hint">회원 탈퇴 — 계정과 모든 기록·글·일지가 지워져요</span><button type="button" class="link" id="acDel" style="color:#dc2626">회원 탈퇴</button></div>
          <div class="set-row"><span>🔔 좋아요·댓글 알림</span><button type="button" class="pill" id="acNotify">${A.member && A.member.notify_on === false ? "🔕 꺼짐 — 켜기" : "🔔 켜짐 — 끄기"}</button></div>`;
     return `<div class="card"><h3>👤 계정 · 공개 설정</h3>${acct}
-      ${""/* 스트라바는 한국에서 서비스가 제한돼서 숨겨요 (strava.js는 그대로 남겨 둬요) */}
+      ${TS.strava && TS.strava.ready() && TS.strava.statusHtml() ? `<div class="set-row"><span>⌚ 스트라바 연결 <span class="hint">(가민·코로스 기록도 스트라바를 거쳐 들어와요)</span></span>${TS.strava.statusHtml()}</div>` : ""}
       <div class="set-row"><span>📤 ZONE 앱 친구에게 공유하기 <span class="hint">(카톡·문자)</span></span><button type="button" class="primary pill" id="acShareApp">공유</button></div>
       <div class="set-row"><span>새 기록 기본 공개 범위</span>
         <select id="acVis" style="width:auto">${[["friends", "👥 친구만"], ["public", "🌏 전체 공개"], ["private", "🔒 나만"]].map(([v, l]) => `<option value="${v}"${pv.visibility === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>

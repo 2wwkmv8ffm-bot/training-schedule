@@ -37,10 +37,10 @@
   async function connect() {
     if (!(TS.auth && TS.auth.user)) { TS.auth.open("login", "스트라바 연동은 로그인한 뒤에 할 수 있어요."); return; }
     try {
-      const { clientId } = await call("config");
-      const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
-      try { sessionStorage.setItem(STATE_KEY, state); } catch (e) { /* 무시 */ }
-      const redirect = location.origin + location.pathname;
+      // 연결 번호(state)는 서버가 만들고 이 계정과 묶어 둬요 → 앱에서 스트라바 로그인이 바깥 브라우저로 열려도 연결돼요
+      const { clientId, state } = await call("start");
+      try { sessionStorage.setItem(STATE_KEY, state); localStorage.setItem("zone.stravaPending", String(Date.now())); } catch (e) { /* 무시 */ }
+      const redirect = "https://2wwkmv8ffm-bot.github.io/training-schedule/";
       location.href = "https://www.strava.com/oauth/authorize?" + new URLSearchParams({
         client_id: clientId, response_type: "code", redirect_uri: redirect, approval_prompt: "auto", scope: "read,activity:read_all", state,
       });
@@ -54,16 +54,35 @@
     history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : ""));
     let saved = null;
     try { saved = sessionStorage.getItem(STATE_KEY); sessionStorage.removeItem(STATE_KEY); } catch (e) { /* 무시 */ }
-    if (err) { toast("스트라바 연결을 취소했어요."); return; }
-    if (!saved || saved !== state) { toast("⚠️ 스트라바 연결 확인에 실패했어요. 다시 시도해 주세요."); return; }
+    const here = saved && saved === state; // 같은 화면(웹)에서 돌아왔는지, 앱 밖 브라우저에서 돌아왔는지
+    if (err) { if (here) toast("스트라바 연결을 취소했어요."); else doneScreen(false, "스트라바 연결을 취소했어요."); return; }
     try {
-      const r = await call("exchange", { code, scope });
+      const r = await call("exchange", { code, scope, state });
+      if (!here) { doneScreen(true, r.athlete); return; } // 앱 밖 브라우저: 앱으로 돌아가라고 안내
       S.connected = true; S.athlete = r.athlete; emit();
       toast(`✅ 스트라바 연결 완료${r.athlete ? ` (${r.athlete})` : ""}`);
       if (TS.showTab) TS.showTab("activity");
       openImport();
-    } catch (e) { toast("⚠️ " + e.message); }
+    } catch (e) { if (here) toast("⚠️ " + e.message); else doneScreen(false, e.message); }
   }
+  // 앱 밖 브라우저에서 연결을 끝냈을 때 보여 주는 화면
+  function doneScreen(ok, info) {
+    const d = document.createElement("div");
+    d.className = "strava-done";
+    d.innerHTML = `<div class="sd-box"><div class="sd-ic">${ok ? "✅" : "⚠️"}</div>
+      <h2>${ok ? "스트라바 연결 완료!" : "연결하지 못했어요"}</h2>
+      <p>${ok ? `${info ? `<b>${esc(info)}</b> 계정이 연결됐어요.<br>` : ""}이제 이 창을 닫고 <b>ZONE 앱으로 돌아가세요.</b><br>앱의 <b>활동 탭 → 스트라바</b>에서 기록을 가져올 수 있어요.` : `${esc(info || "")}<br>ZONE 앱으로 돌아가서 다시 시도해 주세요.`}</p>
+      <p class="hint">Powered by Strava</p></div>`;
+    document.body.appendChild(d);
+  }
+  // 앱으로 돌아왔을 때: 바깥 브라우저에서 연결을 끝냈으면 상태를 다시 확인해요
+  document.addEventListener("visibilitychange", async () => {
+    if (document.hidden) return;
+    let pend = 0; try { pend = +localStorage.getItem("zone.stravaPending") || 0; } catch (e) { /* 무시 */ }
+    if (!pend || Date.now() - pend > 20 * 60e3) return;
+    await refreshStatus();
+    if (S.connected) { try { localStorage.removeItem("zone.stravaPending"); } catch (e) { /* 무시 */ } toast(`✅ 스트라바 연결 완료${S.athlete ? ` (${S.athlete})` : ""}`); openImport(); }
+  });
   async function disconnect() {
     const n = (await TS.listActivities()).filter((a) => a.source === "strava").length;
     if (!await TS.ask(`스트라바 연결을 끊을까요?${n ? `\n스트라바 약관에 따라 가져온 기록 ${n}개도 함께 지워요.` : ""}`)) return;
@@ -187,6 +206,7 @@
   function statusHtml() {
     if (!(TS.auth && TS.auth.user)) return `<button type="button" class="pill" data-strava="login">로그인 후 연결</button>`;
     if (S.checking) return `<span class="hint">확인 중…</span>`;
+    if (fnMissing) return "";
     if (S.connected) return `<span class="row"><span class="hint">✓ ${esc(S.athlete || "연결됨")}</span><button type="button" class="pill" data-strava="import">가져오기</button></span>`;
     return `<button type="button" class="pill strava-btn" data-strava="connect">스트라바 연결</button>`;
   }
@@ -199,10 +219,11 @@
     else if (a === "login") TS.auth.open("login", "스트라바 연동은 로그인한 뒤에 할 수 있어요.");
   });
 
-  TS.strava = { S, connect, openImport, disconnect, statusHtml, refreshStatus, build };
+  TS.strava = { S, connect, openImport, disconnect, statusHtml, refreshStatus, build, ready: () => !fnMissing && S.connected !== null };
+  // 스트라바에서 돌아온 주소면 로그인과 상관없이 먼저 처리해요 (앱 밖 브라우저에서는 로그인이 안 돼 있어요)
+  if (/[?&]state=/.test(location.search) && /[?&](code|error)=/.test(location.search)) handleCallback();
   window.addEventListener("ts:auth", async () => {
     await refreshStatus();
-    await handleCallback();
     autoSync();
   });
 })();
