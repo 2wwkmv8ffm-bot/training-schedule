@@ -1294,7 +1294,7 @@
   // 레벨별: 주당 질 훈련 횟수 [최소, 최대], 질 훈련 1회의 알맞은 고강도 양, 고강도 비중 상한(%)
   const LEVEL_Q = [null, [0, 1], [1, 1], [1, 2], [1, 2], [2, 2], [2, 2], [2, 3], [3, 3], [3, 4], [3, 4]];
   const LEVEL_IDEAL = (lv) => ({ run: [0, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14][lv], bike: [0, 10, 15, 20, 25, 30, 35, 40, 50, 60, 70][lv], swim: [0, 300, 400, 600, 800, 1000, 1200, 1400, 1700, 2000, 2400][lv] });
-  const LEVEL_HI_MAX = [null, 5, 8, 10, 12, 15, 18, 25, 30, 32, 35];
+  const LEVEL_HI_MAX = [null, 5, 8, 10, 10, 12, 15, null, null, null, null]; // 레벨 7~10은 상한 없이 설정한 비율(예: 80:20) 그대로
   const lvCut = (cuts, v, lowerIsBetter) => 1 + cuts.filter((c) => (lowerIsBetter ? v <= c : v >= c)).length;
   // 쉬다가 복귀: 쉰 기간별로 기록을 낮춰 잡고, 처음 몇 주는 양을 줄이고 쉬운 강도로 다시 시작해요
   const COMEBACK = {
@@ -1312,7 +1312,12 @@
       const w = num(v[x]);
       let perf = null, perfTxt = "";
       if (x === "run" && ctx.run) { const vd = ctx.run.vdot + (female ? 5 : 0); perf = lvCut(LV_RUN, vd); perfTxt = `기록 VDOT ${ctx.run.vdot.toFixed(1)}`; }
-      if (x === "bike" && ctx.bike && ctx.bike.wkg) { perf = lvCut(LV_BIKE, ctx.bike.wkg / (female ? 0.85 : 1)); perfTxt = `FTP ${ctx.bike.wkg.toFixed(2)}W/kg`; }
+      if (x === "bike") {
+        const wkgRec = num(rec(p, "bike.wkg")), tt = parseTime(rec(p, "bike.tt40"));
+        const wkg = ctx.bike && ctx.bike.wkg ? ctx.bike.wkg : wkgRec || (ctx.bike ? ctx.bike.ftp / (female ? 58 : 70) : null); // 몸무게를 안 적으면 평균 몸무게(남 70·여 58kg)로
+        if (wkg) { perf = lvCut(LV_BIKE, wkg / (female ? 0.85 : 1)); perfTxt = `FTP ${wkg.toFixed(2)}W/kg${ctx.bike && !ctx.bike.wkg && !wkgRec ? " (몸무게 추정)" : ""}`; }
+        else if (tt) { const kmh = 40 / (tt / 3600); perf = lvCut([26, 28.5, 30.5, 32.5, 34.5, 36.5, 38.5, 41, 44], kmh / (female ? 0.9 : 1)); perfTxt = `40km ${fmt(tt)} (시속 ${kmh.toFixed(1)}km)`; }
+      }
       if (x === "swim" && ctx.swim) { perf = lvCut(LV_SWIM, ctx.swim.css / (female ? 1.08 : 1), true); perfTxt = `CSS ${fmt(Math.round(ctx.swim.css))}/100m`; }
       const vol = w ? lvCut(LV_VOL[x], w) : null;
       if (perf == null && vol == null) return;
@@ -2162,7 +2167,7 @@
       q.map((v, i) => [v - fl[i], i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (rest > 0) { fl[i]++; rest--; } });
       spots.forEach((p, i) => {
         const nv = fl[i] / 10, d = round1(p.v - nv);
-        p.s.steps[p.j] = String(p.s.steps[p.j]).replace(/\(약 [\d.]+km\)/, `(약 ${nv}km)`);
+        p.s.steps[p.j] = String(p.s.steps[p.j]).replace(/(\d+)분 \(약 [\d.]+km\)/, (q, n) => `${Math.max(1, Math.round((+n * nv) / (p.v || nv || 1)))}분 (약 ${nv}km)`).replace(/(^|[^분] )\(약 [\d.]+km\)/, (q, pre) => `${pre}(약 ${nv}km)`); // 거리를 줄이면 시간도 같은 비율로
         const m = /([\d.]+)km/.exec(p.s.dist || ""); if (m) p.s.dist = p.s.dist.replace(/[\d.]+km/, `${round1(+m[1] - d)}km`);
         const lo = /([\d.]+)km$/.exec(p.s.hiText || ""); if (lo) p.s.hiText = p.s.hiText.replace(/[\d.]+km$/, `${round1(Math.max(0, +lo[1] - d))}km`);
       });
@@ -2214,6 +2219,116 @@
       });
       // 그래도 덜어낼 곳이 없으면 이번 주 수영 목표를 실제 합계로 (달력·주간·월간 숫자가 서로 같게)
       if (over >= 50 && targets.swim) targets.swim += over;
+    }
+    // 🏃 달리기: 'N분 (약 Xkm)'의 시간이 내 쉬운 페이스와 크게 다르면(거리를 줄이거나 늘린 날) 시간을 거리에 맞춰요
+    sessions.forEach((s) => {
+      if (s.disc !== "run" || !Array.isArray(s.steps)) return;
+      s.steps = s.steps.map((t) => String(t).replace(/(\d+)분 \(약 ([\d.]+)km\)/g, (q, n, k) => {
+        const want = (+k * ePace) / 60; // 분
+        if (!want || (+n >= want * 0.8 && +n <= want * 1.25)) return q;
+        return `${Math.max(1, Math.round(want))}분 (약 ${k}km)`;
+      }));
+    });
+    // 🚴 자전거 정리: ① 훈련마다 거리를 5km 단위로(주간 합계는 그대로) ② 10분 넘는 시간은 5분 단위, 초는 5초 단위
+    //  ③ 구간 거리는 시간 × 그 강도의 속도로 다시 계산 ④ 남는 거리는 메인(Z2)에, 메인에 못 넣으면 쿨다운에
+    {
+      const V5 = { 1: 22, 2: 26, 3: 30, 4: 32, 5: 33 }; // 강도별 대략 속도 (km/h)
+      const r5 = (m) => (m >= 10 ? Math.max(10, Math.round(m / 5) * 5) : Math.max(1, Math.round(m)));
+      const kmTxt = (k) => (k >= 10 ? `${Math.round(k)}km` : `${round1(k)}km`);
+      const bikeS = sessions.filter((s) => s.disc === "bike" && s.type !== "Race" && typeof s.dist === "string" && /^자전거 (약 )?[\d.]+km$/.test(s.dist) && Array.isArray(s.steps));
+      // ① 5km 단위 나누기 (큰 나머지 순서로 → 합계가 5의 배수로 딱 맞게)
+      const D0 = bikeS.map((s) => +/([\d.]+)km/.exec(s.dist)[1]);
+      const big = D0.map((d) => d >= 10);
+      const sumBig = D0.reduce((a, d, i) => a + (big[i] ? d : 0), 0), want = Math.round(sumBig / 5) * 5;
+      const fl = D0.map((d, i) => (big[i] ? Math.max(10, Math.floor(d / 5) * 5) : d));
+      let rest = want - fl.reduce((a, d, i) => a + (big[i] ? d : 0), 0);
+      D0.map((d, i) => [big[i] ? d - fl[i] : -1, i]).sort((x, y) => y[0] - x[0]).forEach(([f, i]) => { if (rest >= 5 && f >= 0) { fl[i] += 5; rest -= 5; } });
+      const oldSum = D0.reduce((a, d) => a + d, 0), newSum = fl.reduce((a, d) => a + d, 0);
+      const dSum = newSum - oldSum; // 반올림으로 늘거나 준 만큼 주간 목표·강도 비율 총거리도 같이 (브릭 거리는 그대로)
+      if (targets.bike) targets.bike = Math.round((targets.bike + dSum) * 10) / 10;
+      if (ratio && ratio.bike) ratio.bike.total = Math.round((ratio.bike.total + dSum) * 10) / 10;
+      bikeS.forEach((s, si) => {
+        const D = fl[si];
+        let hiKm = null; const hm = /^고강도 \d+% ([\d.]+)km/.exec(s.hiText || ""); if (hm) hiKm = +hm[1];
+        const L = s.steps.map((t) => String(t));
+        // ② 반복 시간 5분 단위 (10분 넘는 것만) → 고강도 거리도 같은 비율로
+        L.forEach((t, j) => {
+          if (!/^메인/.test(t)) return;
+          const m = /(\d+)분 × (\d+)회/.exec(t);
+          if (m && +m[1] > 10 && +m[1] % 5) {
+            const nm = r5(+m[1]), f = nm / +m[1];
+            t = t.replace(m[0], `${nm}분 × ${m[2]}회`).replace(/고강도 합계 약 ([\d.]+)km/, (q, k) => `고강도 합계 약 ${kmTxt(+k * f)}`);
+            if (hiKm != null) hiKm = hiKm * f;
+            L[j] = t;
+          }
+          const c = /(\d+)분 지속/.exec(L[j]); // 한 번에 길게 (예: 12분 지속 템포 → 10분)
+          if (c && +c[1] > 10 && +c[1] % 5) {
+            const nm = r5(+c[1]), f = nm / +c[1];
+            L[j] = L[j].replace(c[0], `${nm}분 지속`).replace(/고강도 합계 약 ([\d.]+)km/, (q, k) => `고강도 합계 약 ${kmTxt(+k * f)}`);
+            if (hiKm != null) hiKm = hiKm * f;
+          }
+          if (/→/.test(L[j])) L[j] = L[j].replace(/Z2 (\d+)분/g, (q, n) => `Z2 ${r5(+n)}분`); // 'Z2 72분 → … → Z2 98분' → 70분 · 100분
+        });
+        L.forEach((t, j) => { L[j] = t.replace(/(\d+)초/g, (q, n) => `${Math.max(5, Math.round(+n / 5) * 5)}초`); });
+        // ③ 줄마다 시간·거리
+        const head = (t) => t.split(" — ")[0];
+        const plainH = (t) => head(t).replace(/\((?!약)[^)]*\)/g, ""); // '(마지막에 1분 빠르게 × 3)' 같은 설명 괄호는 빼고 계산
+        // 줄 안의 'N분 (약 Xkm)'은 그 시간 × 강도 속도로 다시 계산 (예전 값이 틀린 경우가 있어서)
+        L.forEach((t, j) => {
+          if (/^(워밍업|쿨다운|보강|합계)/.test(t)) return;
+          L[j] = t.replace(/(Z([1-5])[^\d(]*?)?(\d+)분 \(약 [\d.]+km\)/g, (q, pre, z, n) => `${pre || ""}${n}분 (약 ${kmTxt((+n * V5[+z || 2]) / 60)})`);
+        });
+        const info = L.map((t) => {
+          const kind = /^워밍업/.test(t) ? "wu" : /^쿨다운/.test(t) ? "cd" : /^메인/.test(t) ? "main" : "etc";
+          if (kind === "etc") return { kind };
+          const h = kind === "main" ? head(t) : plainH(t);
+          const iv = /(\d+)분 × (\d+)회/.exec(h);
+          const cont = /(\d+)분 지속/.exec(h);
+          if (kind === "main" && cont && !iv) { const hk = /고강도 합계 약 ([\d.]+)km/.exec(t); return { kind: "iv", min: +cont[1], km: hk ? +hk[1] : (+cont[1] * V5[3]) / 60 }; }
+          if (kind === "main" && iv) { // 인터벌: 엔진이 적은 고강도·회복 거리 그대로
+            const hk = /고강도 합계 약 ([\d.]+)km/.exec(t), rk = /회복 합계 약 ([\d.]+)km/.exec(t);
+            const rec = /사이 (\d+)분/.exec(h);
+            const min = +iv[1] * +iv[2] + (rec ? +rec[1] * (+iv[2] - 1) : 0);
+            const km = (hk ? +hk[1] : (+iv[1] * +iv[2] * V5[3]) / 60) + (rk ? +rk[1] : rec ? (+rec[1] * (+iv[2] - 1) * V5[1]) / 60 : 0);
+            return { kind: "iv", min, km };
+          }
+          const mins = [...h.matchAll(/(\d+)분(?:\s*×\s*(\d+))?/g)].reduce((a, q) => a + +q[1] * (+q[2] || 1), 0);
+          const z = /Z1/.test(h) && !/Z2/.test(h) ? 1 : 2;
+          const kmOnly = !mins && /([\d.]+)km/.exec(h);
+          if (kmOnly) { const km = +kmOnly[1]; return { kind, min: (km / V5[z]) * 60, km, kmOnly: true }; }
+          return { kind, min: mins, km: (mins * V5[z]) / 60, single: kind === "main" && !/×|→/.test(h) && /Z2 (\d+)분/.test(h) };
+        });
+        // 워밍업은 5분 단위로 다시
+        info.forEach((o, j) => {
+          if (o.kind !== "wu") return;
+          const nm = r5(o.min); o.min = nm; o.km = (nm * V5[1]) / 60;
+          L[j] = o.kmOnly ? L[j].replace(/(\d+(?:\.\d+)?)km/, `${nm}분 (약 ${kmTxt(o.km)})`) : L[j].replace(/^워밍업: (Z[^ ]* )?(\d+)분(?: \(약 [\d.]+km\))?/, (q, z) => `워밍업: ${z || ""}${nm}분 (약 ${kmTxt(o.km)})`);
+        });
+        const absI = info.findIndex((o) => o.single), cdI = info.findIndex((o) => o.kind === "cd");
+        const others = info.reduce((a, o, j) => a + (o.kind !== "etc" && j !== absI && j !== cdI ? o.km : 0), 0);
+        let cdKm = cdI >= 0 ? info[cdI].km : 0;
+        if (absI >= 0) {
+          // ④ 메인(Z2)에 남은 거리를 넣고(5분·5km 단위), 자투리는 쿨다운으로
+          let aKm = Math.max(3, D - others - (cdI >= 0 ? Math.min(cdKm, (10 * V5[1]) / 60) : 0));
+          let aMin = r5((aKm / V5[2]) * 60); aKm = (aMin * V5[2]) / 60;
+          if (aKm >= 10) { aKm = Math.floor(aKm / 5) * 5; aMin = r5((aKm / V5[2]) * 60); }
+          cdKm = D - others - aKm;
+          if (cdKm < 1 && cdI >= 0) { aKm = Math.max(3, aKm - 5 * Math.ceil((1 - cdKm) / 5)); aMin = r5((aKm / V5[2]) * 60); cdKm = D - others - aKm; }
+          L[absI] = L[absI].replace(/Z2 (\d+)분(?: \(약 [\d.]+km\))?/, `Z2 ${aMin}분 (약 ${kmTxt(aKm)})`);
+          info[absI].min = aMin; info[absI].km = aKm;
+        } else cdKm = D - others;
+        cdKm = Math.max(0, cdKm);
+        const cdMin = Math.max(cdKm > 0 ? 3 : 0, Math.round((cdKm / V5[1]) * 60));
+        if (cdI >= 0) L[cdI] = L[cdI].replace(/^쿨다운: (Z1 )?([\d.]+km|\d+분(?: \(약 [\d.]+km\))?)/, `쿨다운: Z1 ${cdMin}분 (약 ${kmTxt(cdKm)})`);
+        else if (cdKm >= 0.5) { const k = L.findIndex((t) => /^(보강|합계)/.test(t)); L.splice(k >= 0 ? k : L.length, 0, `쿨다운: Z1 ${cdMin}분 (약 ${kmTxt(cdKm)}) — 편하게 돌면서 마무리`); }
+        s.steps = L;
+        s.dist = `자전거 ${D}km`;
+        const totMin = info.reduce((a, o) => a + (o.kind !== "etc" && o.kind !== "cd" ? o.min : 0), 0) + cdMin;
+        if (totMin > 0) s.minutes = r5(totMin);
+        if (hiKm != null) { const hk = Math.min(D, hiKm), pc = D ? Math.round((hk / D) * 100) : 0; s.hiText = `고강도 ${pc}% ${kmTxt(hk)} · 저강도 ${100 - pc}% ${kmTxt(Math.max(0, D - hk))}`; }
+        else if (/^리듬/.test(s.hiText || "")) { const fk = /\(약 ([\d.]+)km\)/.exec(s.hiText); if (fk) s.hiText = s.hiText.replace(/[\d.]+km$/, kmTxt(Math.max(0, D - +fk[1]))); }
+        else if (/^고강도 0%/.test(s.hiText || "")) s.hiText = `고강도 0% 0km · 저강도 100% ${kmTxt(D)}`;
+      });
     }
     // 목표 거리 요약 · 시간 확인
     const tkeys = Object.keys(targets);
@@ -2276,8 +2391,10 @@
     });
     const lowTarget0 = clamp(num(p.lowPct) || 80, 50, 100); // 저강도 목표 % (추천 80) = A안(폴라리제드) 비율
     // 레벨이 낮으면(1~5) 고강도 비중 상한을 지켜요 (레벨 1: 5% · 2: 8% · 3: 10% · 4: 12% · 5: 15%). 레벨 6 이상은 설정한 비율 그대로
-    const hiMax = level ? LEVEL_HI_MAX[level.lv] : 35;
-    const baseLow = level && level.lv <= 5 ? Math.max(lowTarget0, 100 - hiMax) : lowTarget0;
+    // 레벨별 강도: 1~3 고강도 5·8·10%까지 (Z3까지만) · 4~6 10·12·15%까지 (본인이 '강도 올리기'를 켜면 설정 비율 그대로) · 7~10 설정 비율 그대로
+    const hiMax = level ? LEVEL_HI_MAX[level.lv] : null;
+    const capOn = !!(level && hiMax != null && (level.lv <= 3 || !p.allowHi));
+    const baseLow = capOn ? Math.max(lowTarget0, 100 - hiMax) : lowTarget0;
     // 노르웨이 방식(B안)은 항상 A안보다 고강도 5% 더 (예: 80:20 → 75:25 · 85:15 → 80:20)
     const lowTarget1 = ctx.phil === "norwegian" ? Math.max(50, baseLow - 5) : baseLow;
     const lowTarget = lowTarget1;
@@ -2334,9 +2451,11 @@
       if (wk.comeback) r.notes.unshift(`🔄 복귀 ${wk.comeback.k}/${wk.comeback.n}주차 (${wk.comeback.name}) — 평소 양의 약 ${wk.comeback.pct}%. ${wk.comeback.easy ? "이번 주는 강한 훈련 없이 쉬운 강도(Z1~Z2)로만 몸을 다시 깨워요." : "가벼운 질 훈련(템포·언덕·파틀렉) 1회만 넣어요. 인터벌은 복귀가 끝나고 시작해요."} 페이스·파워는 쉰 기간만큼 낮춰 잡았고, 4주마다 다시 올라가요.`);
       if (level && level.lv <= 3 && p.allowHi && i === 0) r.notes.push(`⚠️ 레벨 ${level.lv}이지만 본인 선택으로 Z4·Z5 훈련을 넣었어요. 몸이 아직 강한 훈련에 익숙하지 않은 단계라 Z3까지만 하는 걸 적극 추천해요 — 통증·피로가 쌓이면 문진표에서 다시 'Z3까지만'으로 바꿔 주세요.`);
       if (level && level.lv <= 3 && !p.allowHi && i === 0) r.notes.push(`🌱 레벨 ${level.lv}(${level.name})은 Z3까지만 훈련해요 — Z4(역치)·Z5(최대 산소) 훈련은 레벨 4부터 넣어요. 이유: ① 지금 단계에서 실력이 가장 많이 느는 건 쉬운 강도(Z1~Z2)로 쌓는 시간이에요 — 심장·혈관·근육 속 에너지 공장(미토콘드리아)이 이 강도에서 가장 많이 자라요. ② 심폐는 몇 주 만에 좋아지지만 힘줄·인대·뼈는 몇 달이 걸려서, 강한 훈련을 일찍 넣으면 숨은 버텨도 몸이 다치기 쉬워요(정강이·무릎·아킬레스건). ③ Z4·Z5는 회복에 2~3일이 걸려 다음 운동을 망치고, 꾸준함이 무너지기 쉬워요. ④ Z3(말은 짧게 할 수 있는 정도)만으로도 처음 몇 달은 기록이 충분히 좋아져요. 주간 거리를 늘리거나 기록이 좋아져 레벨 4가 되면 강한 훈련이 자동으로 들어가요.`);
-      if (level && lowTarget > lowTarget1 && i === 0) r.notes.push(`🏅 레벨 ${level.lv}(${level.name})이라 고강도 비중을 최대 ${LEVEL_HI_MAX[level.lv]}%까지만 넣어요 — 레벨이 오르면 강도도 같이 올라가요.`);
+      if (level && level.lv >= 4 && level.lv <= 6 && capOn && i === 0) r.notes.push(`🔥 레벨 ${level.lv}(${level.name})이라 고강도를 최대 ${hiMax}%까지만 넣어요 (설정 ${100 - lowTarget0}%보다 적게). 이유: ① 이 단계는 역치·인터벌을 막 시작한 때라, 강도를 한 번에 올리면 심폐보다 늦게 적응하는 힘줄·관절에 부상이 잘 와요. ② 쉬운 날 양을 충분히 쌓아야 강한 훈련의 효과도 커져요. ③ 레벨이 오르면 상한도 자동으로 올라가요. 더 올리고 싶으면 계획 화면의 '강도 올리기'를 켜세요.`);
+      if (level && level.lv >= 4 && level.lv <= 6 && !capOn && i === 0) r.notes.push(`⚠️ 레벨 ${level.lv}이지만 본인 선택으로 설정한 비율(${lowTarget0}:${100 - lowTarget0})대로 강도를 올렸어요. 다음 날까지 피곤하거나 아픈 곳이 있으면 '천천히 올리기'로 돌려 주세요.`);
+      if (level && level.lv >= 7 && i === 0) r.notes.push(`🚀 레벨 ${level.lv}(${level.name}) — 강한 훈련에 적응된 단계라 설정한 비율(${lowTarget0}:${100 - lowTarget0}) 그대로 넣어요.`);
       if (prog && prog.pace && ["r4", "taper", "race", "peak", "build2"].includes(wk.key)) r.notes.push(`🏁 목표 레이스 페이스 ${fmt(prog.pace)}/km — 레이스 특화 시기라 M·T 세션 일부와 오프너를 이 페이스로 연습해요.`);
-      return { ...wk, ...r, sig, hardSigs, total: m.tot, lowPct: m.low, lowTarget: wkLow, planLow: lowTarget, userLow: lowTarget0, levelCap: baseLow > lowTarget0, byDist: m.byDist, vdotWeek: cw.run ? cw.run.vdot : null, tss: r.sessions.reduce((a, s) => a + (s.tss || 0), 0) };
+      return { ...wk, ...r, sig, hardSigs, total: m.tot, lowPct: m.low, lowTarget: wkLow, planLow: lowTarget, userLow: lowTarget0, levelCap: capOn && baseLow > lowTarget0, byDist: m.byDist, vdotWeek: cw.run ? cw.run.vdot : null, tss: r.sessions.reduce((a, s) => a + (s.tss || 0), 0) };
     })());
     // 📈 체력(CTL·42일)·피로(ATL·7일)·컨디션(TSB) 예상 — TrainingPeaks 퍼포먼스 매니지먼트 차트 방식
     let pmcCache = null;

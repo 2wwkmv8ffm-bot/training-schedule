@@ -974,7 +974,7 @@
       if (!await TS.ask("마지막 확인이에요. 탈퇴하면 같은 계정으로 다시 볼 수 없어요. 탈퇴할까요?", "탈퇴", "취소")) return;
       const { error } = await db.rpc("delete_my_account");
       if (error) { alert("지금은 탈퇴를 처리하지 못했어요. 잠시 뒤 다시 시도하거나 건의사항으로 알려 주세요."); return; }
-      try { sessionStorage.setItem("zone.deleted", "1"); } catch (e) { /* 무시 */ } // 다시 열면 회원가입 화면부터
+      try { sessionStorage.setItem("zone.deleted", "1"); localStorage.setItem("zone.deleted", "1"); } catch (e) { /* 무시 */ } // 다시 열면 회원가입 화면부터 (두 곳에 적어 두어 확실하게)
       try { Object.keys(localStorage).filter((k) => /^training\./.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* 무시 */ }
       try { await db.auth.signOut({ scope: "local" }); } catch (e) { /* 이미 지워진 계정 */ }
       try { Object.keys(localStorage).filter((k) => /^sb-.*-auth-token/.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* 무시 */ } // 로그인 정보까지 확실히 지우기

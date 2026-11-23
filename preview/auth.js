@@ -117,7 +117,7 @@
       try {
         PERSONAL.concat(["zone.coachChat", "zone.maxHr", "training.feedScope", "training.planView", "training.privacy"]).forEach((k) => localStorage.removeItem(k));
         Object.keys(localStorage).filter((k) => /^zone\.(planSig|likeWins)\./.test(k)).forEach((k) => localStorage.removeItem(k));
-        if (sessionStorage.getItem("zone.deleted") !== "1") sessionStorage.setItem("zone.afterLogout", "1"); // 탈퇴했으면 빈 홈 대신 회원가입 화면으로
+        if (sessionStorage.getItem("zone.deleted") !== "1" && localStorage.getItem("zone.deleted") !== "1") sessionStorage.setItem("zone.afterLogout", "1"); // 탈퇴했으면 빈 홈 대신 회원가입 화면으로
         history.replaceState(null, "", location.pathname);
       } catch (e) { /* 무시 */ }
       location.reload();
@@ -368,8 +368,8 @@
     await setUser(s ? s.user : null);
     // 로그인 안 했으면 앱을 열자마자 로그인 · 회원가입 화면
     let afterOut = false; try { afterOut = sessionStorage.getItem("zone.afterLogout") === "1"; sessionStorage.removeItem("zone.afterLogout"); } catch (e) { /* 무시 */ }
-    let deleted = false; try { deleted = sessionStorage.getItem("zone.deleted") === "1"; sessionStorage.removeItem("zone.deleted"); } catch (e) { /* 무시 */ }
-    if (!s && deleted) open("signup"); // 🚪 탈퇴 직후 → 바로 회원가입 화면
+    let deleted = false; try { deleted = sessionStorage.getItem("zone.deleted") === "1" || localStorage.getItem("zone.deleted") === "1"; sessionStorage.removeItem("zone.deleted"); localStorage.removeItem("zone.deleted"); } catch (e) { /* 무시 */ }
+    if (!s && deleted) { open("signup", "탈퇴가 완료됐어요. 다시 시작하려면 새로 가입해 주세요."); } // 🚪 탈퇴 직후 → 바로 회원가입 화면
     else if (!s && !afterOut && !/error_description=|type=recovery/.test(location.hash + location.search)) open("login"); // 방금 로그아웃했으면 빈 홈부터
   });
   // 메일 링크가 만료됐거나 잘못된 경우 (주소 뒤에 error=… 가 붙어 와요)

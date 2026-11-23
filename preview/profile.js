@@ -779,7 +779,15 @@
   function recLow(p) { const L = p && p.sport ? E.levelOf(p) : null; return L && L.lv <= 3 ? 90 : 80; }
   // 🌱 레벨 1~3이면 Z4·Z5를 넣을지 물어봐요 (Z3까지만을 적극 추천)
   function hiAsk(p, L) {
-    if (!L || L.lv > 3) return "";
+    if (!L || L.lv > 6) return "";
+    if (L.lv >= 4) { // 🔥 레벨 4~6: 천천히 올리기(추천) / 설정 비율대로 올리기
+      const on = !!p.allowHi, cap = E.LEVEL_HI_MAX[L.lv];
+      return `<div class="card hi-ask" style="margin:10px 0 0;padding:12px;display:grid;gap:8px">
+        <b>🔥 레벨 ${L.lv}이에요 — 강도를 얼마나 올릴까요?</b>
+        <div class="chips"><button type="button" class="chip${on ? "" : " on"}" data-hi="0">✅ 천천히 올리기 (추천 · 고강도 ${cap}%까지)</button><button type="button" class="chip${on ? " on" : ""}" data-hi="1">💪 강도 올리기 (설정 비율대로)</button></div>
+        <p class="hint" style="margin:0;line-height:1.6"><b>왜 천천히?</b> 레벨 4~6은 역치·인터벌을 막 시작한 단계예요. 심폐는 몇 주면 따라오지만 힘줄·관절·뼈는 몇 달이 걸려서, 강도를 한 번에 올리면 부상이 잘 와요. 쉬운 날 양을 충분히 쌓을수록 강한 훈련 효과도 커져요. 레벨이 오르면 상한도 자동으로 올라가요.</p>
+        ${on ? '<p class="warn" style="margin:0">⚠️ 강도를 올렸어요. 다음 날까지 피곤하거나 아픈 곳이 있으면 \'천천히 올리기\'로 돌려 주세요.</p>' : ""}</div>`;
+    }
     const on = !!p.allowHi;
     return `<div class="card" style="margin:10px 0 0;padding:12px;display:grid;gap:8px">
       <b>🌱 레벨 ${L.lv}이에요 — 강한 훈련(Z4·Z5)도 넣을까요?</b>
@@ -794,7 +802,7 @@
     return `<div class="lv-card"><div class="spread"><b style="font-size:16px">레벨 ${L.lv}<span class="hint">/10</span> · ${esc(L.name)}</b>${compact ? "" : '<button type="button" class="pill" data-lvtable="1">레벨 기준표</button>'}</div>
       <div class="lv-bar">${seg}</div>
       ${L.comeback ? `<p class="hint" style="margin:4px 0;color:#ea580c">🔄 ${esc(L.comeback.name)} — 복귀 기간이라 ${L.before ? `레벨 ${L.before} → ${L.lv}로 낮춰서 ` : ""}${L.comeback.weeks - L.comeback.since}주 동안 천천히 올려요</p>` : ""}
-      <p style="margin:4px 0;font-size:13.5px;line-height:1.6">질 훈련 <b>${esc(L.q)}</b> · ${L.lv <= 3 ? "<b>Z3까지만</b> (Z4·Z5 없음)" : `고강도 최대 <b>${E.LEVEL_HI_MAX[L.lv]}%</b>`} — ${esc(L.desc)}</p>
+      <p style="margin:4px 0;font-size:13.5px;line-height:1.6">질 훈련 <b>${esc(L.q)}</b> · ${L.lv <= 3 ? "<b>Z3까지만</b> (Z4·Z5 없음)" : E.LEVEL_HI_MAX[L.lv] != null ? `고강도 최대 <b>${E.LEVEL_HI_MAX[L.lv]}%</b>` : "<b>설정한 비율 그대로</b>"} — ${esc(L.desc)}</p>
       ${rows ? `<div class="ratio-box">${rows}</div>` : ""}
       <p class="hint" style="margin:6px 0 0">레벨 = 기록 60% + 주간 거리 40%${Object.keys(L.per).length > 1 ? " · 철인3종은 자전거 45 · 달리기 35 · 수영 20 비중" : ""}. ${esc(L.next)}</p></div>`;
   }
@@ -813,7 +821,7 @@
         ${levelCard(L, true)}
         <div class="seg" style="margin:0">${ds.map((x) => `<button type="button" class="${cur === x ? "on" : ""}" data-lvd="${x}">${E.DISC[x].icon} ${E.DISC[x].name}</button>`).join("")}</div>
         <div class="seg" style="margin:0"><button type="button" class="${!fem ? "on" : ""}" data-lvs="m">👨 남자 기준</button><button type="button" class="${fem ? "on" : ""}" data-lvs="f">👩 여자 기준</button></div>
-        <div class="lv-table">${t.map((r) => `<div class="lv-row${my === r.lv ? " me" : ""}"><b>${r.lv}</b><span><b>${esc(r.name)}</b>${my === r.lv ? " 👈 나" : ""}<br><span class="hint">${esc(r.rec)}<br>${esc(r.vol)} · 질 훈련 ${esc(r.q)} · ${r.lv <= 3 ? "<b>Z3까지만</b> (Z4·Z5 없음)" : `고강도 최대 ${r.hiMax}%`}</span></span></div>`).join("")}</div>
+        <div class="lv-table">${t.map((r) => `<div class="lv-row${my === r.lv ? " me" : ""}"><b>${r.lv}</b><span><b>${esc(r.name)}</b>${my === r.lv ? " 👈 나" : ""}<br><span class="hint">${esc(r.rec)}<br>${esc(r.vol)} · 질 훈련 ${esc(r.q)} · ${r.lv <= 3 ? "<b>Z3까지만</b> (Z4·Z5 없음)" : r.hiMax != null ? `고강도 최대 ${r.hiMax}% (원하면 올리기 가능)` : "설정한 비율 그대로 (예: 80:20)"}</span></span></div>`).join("")}</div>
         ${mine.length > 1 ? '<p class="hint" style="margin:0">철인3종 레벨은 세 종목 레벨을 자전거 45% · 달리기 35% · 수영 20%로 합쳐요 (완주 기록에 미치는 영향 순서).</p>' : ""}
       </div>`;
     }
@@ -1319,6 +1327,9 @@
         ${discsOf(p.sport).includes("bike") ? `<span>자전거 타는 곳</span><b><span class="mini-seg">${[["indoor", "🏠 실내"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="${((p.env || {}).bike || "outdoor") === k ? " on" : ""}" data-benv="${k}">${l}</button>`).join("")}</span><span class="hint" style="display:block;margin-top:4px;font-weight:400">실내면 8분 이내 페달링 드릴이 들어가요</span></b>` : ""}
         ${discsOf(p.sport).includes("run") ? `<span>달리는 곳</span><b><span class="mini-seg">${[["indoor", "🏠 트레드밀"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="${((p.env || {}).run || "outdoor") === k ? " on" : ""}" data-renv="${k}">${l}</button>`).join("")}</span><span class="hint" style="display:block;margin-top:4px;font-weight:400">트레드밀이면 속도(km/h)·경사(%)로 알려 드려요</span></b>` : ""}
         ${plan.level ? `<span>레벨</span><b>레벨 ${plan.level.lv}/10 · ${plan.level.name}${plan.level.comeback ? " · 🔄 복귀 중" : ""}</b>` : ""}
+        ${plan.level && plan.level.lv <= 6 ? `<span>강도</span><b style="font-weight:600"><span class="chips explain-pick" style="flex-wrap:wrap">${plan.level.lv <= 3
+          ? `<button type="button" class="chip${p.allowHi ? "" : " on"}" data-planhi="0">Z3까지만 (추천)</button><button type="button" class="chip${p.allowHi ? " on" : ""}" data-planhi="1">Z4·Z5도</button>`
+          : `<button type="button" class="chip${p.allowHi ? "" : " on"}" data-planhi="0">천천히 (추천)</button><button type="button" class="chip${p.allowHi ? " on" : ""}" data-planhi="1">💪 강도 올리기</button>`}</span></b>` : ""}
       </div>
       <div class="eyebrow mt">계획 2가지 — 골라서 보세요</div>
       <div class="vpick">${variants.map((v, i) => { const st = vStats(v), t = vTarget(v), on = i === pickIdx(variants); return `<button type="button" data-v="${i}" class="${vSel === i ? "on" : ""}">
@@ -1334,7 +1345,7 @@
     $("planEdit").onclick = () => { closePlan(); openWizard(1); };
   }
   $("planBody").addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-wk],[data-mo],[data-q],[data-goweek],[data-add],[data-v],[data-ratio],[data-ratioapply],[data-goaledit],[data-syncnow],[data-benv],[data-renv],[data-lvtable],[data-setphil]");
+    const el = e.target.closest("[data-planhi],[data-tab],[data-wk],[data-mo],[data-q],[data-goweek],[data-add],[data-v],[data-ratio],[data-ratioapply],[data-goaledit],[data-syncnow],[data-benv],[data-renv],[data-lvtable],[data-setphil]");
     if (!el) return;
     const d = el.dataset;
     if (d.ratio) { ratioDraft = +d.ratio; const y = $("planOv").scrollTop; renderPlan(); $("planOv").scrollTop = y; return; }
@@ -1345,6 +1356,18 @@
     if (d.benv) { setBikeEnv(d.benv).then(() => { variants = makeVariants(profile); plan = variants[Math.min(vSel, variants.length - 1)].plan; renderPlan(); }); return; }
     if (d.renv) { setBikeEnv(d.renv, "run").then(() => { variants = makeVariants(profile); plan = variants[Math.min(vSel, variants.length - 1)].plan; renderPlan(); }); return; }
     if (d.syncnow) { el.disabled = true; applyPlanToCalendar().then(async (n) => { const p = clone(profile); delete p.holdSync; await saveProfile(p); profile = p; toastP(`📅 대회에 맞춰 스케줄을 바꿨어요 (${n}개)`); TS.reload(); renderPlan(); }); return; }
+    if (d.planhi !== undefined) { // 강도 올리기 / 천천히 → 계획을 다시 짜고 달력도 바꿔요 (화면 안에 그대로)
+      const want = d.planhi === "1";
+      if (!!profile.allowHi === want) return;
+      if (want && !await TS.ask(plan.level.lv <= 3 ? "레벨 1~3에서 Z4·Z5를 넣으면 부상·과로 위험이 커요. 그래도 넣을까요?" : "설정한 비율대로 강도를 올릴까요? 피곤하거나 아픈 곳이 생기면 다시 '천천히'로 돌려 주세요.", "올리기", "취소")) return;
+      const ov = $("planOv"), keepY = ov.scrollTop;
+      await updateProfile({ allowHi: want });
+      variants = makeVariants(profile); vSel = pickIdx(variants); plan = variants[vSel].plan;
+      const n = await addToCalendar(0, savedCalWeeks() || 8, el, true, true);
+      renderPlan(); ov.scrollTop = keepY;
+      toastP(want ? "💪 강도를 올린 계획으로 바꿨어요" : "✅ 천천히 올리는 계획으로 바꿨어요");
+      void n; return;
+    }
     if (d.v !== undefined) { // A안·B안을 누르면 → 그 안으로 앞으로 8주 달력을 바로 바꿔요
       const i = +d.v, v = variants[i];
       if (!v) return;
@@ -1354,7 +1377,10 @@
       vSel = i; plan = v.plan;
       await updateProfile({ planPick: v.key });
       variants = makeVariants(profile); vSel = pickIdx(variants); plan = variants[vSel].plan;
-      await addToCalendar(0, savedCalWeeks() || 8, el, true);
+      const ov = $("planOv"), keepY = ov.scrollTop;
+      const n = await addToCalendar(0, savedCalWeeks() || 8, el, true, true);
+      renderPlan(); ov.scrollTop = keepY;
+      toastP(`✅ ${i === 0 ? "A안" : "B안"}으로 바꿨어요${n ? ` · 달력 ${n}개 새로 넣음` : ""}`);
       return;
     }
     if (d.tab) { if ((d.tab === "year" || d.tab === "quarter") && TS.plan && !TS.plan.can("yearPlan")) return; planTab = d.tab; } // 💎 유료 전환 시 잠금 (지금은 무료)
@@ -1391,7 +1417,7 @@
   // 📅 달력에 넣은 기간(주 수)을 기억해요 — 설정이 바뀌어 자동으로 다시 짤 때도 그 기간만큼만 넣어요
   const calWeeksKey = () => "zone.calWeeks." + ((TS.auth && TS.auth.user && TS.auth.user.id) || "local");
   function savedCalWeeks() { try { return +localStorage.getItem(calWeeksKey()) || 0; } catch (e) { return 0; } }
-  async function addToCalendar(first, count, btn, noAsk) {
+  async function addToCalendar(first, count, btn, noAsk, stay) {
     clearTimeout(syncTimer); // 직접 넣는 중에는 자동 맞춤을 잠시 멈춰요
     const last = Math.min(51, first + count - 1);
     const from = iso(plan.week(first).start), to = iso(addDays(plan.week(last).start, 6)), today = iso(new Date());
@@ -1421,6 +1447,7 @@
     const { error } = await db.from(TS.TABLE).insert(rows);
     btn.disabled = false;
     if (error) { alert(TS.explainError(error).replace(/<[^>]+>/g, "")); return; }
+    if (stay) { TS.reload && TS.reload(); return rows.length; } // A안·B안 바꾸기: 계획 화면 안에 그대로 있어요
     closePlan();
     TS.setWeek(plan.week(first).start);
     if (TS.showTab) TS.showTab("plan");
