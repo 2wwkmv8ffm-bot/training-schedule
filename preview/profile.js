@@ -25,6 +25,8 @@
   const LV_FG = (l) => (l === 3 ? "#422006" : "#fff");
 
   let profile = null, draft = null, step = 0, cloudOk = true;
+  // ⚡ 빠른 시작: 처음 쓰는 사람은 3장(종목 → 나이 → 요일)만 묻고 바로 계획을 보여 줘요. 나머지는 나중에 '설정'에서
+  let quick = false; const QSEQ = [0, 1, 3];
   let planTab = "month", weekIdx = 0, monthIdx = 0, qIdx = 0, plan = null;
 
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -235,6 +237,7 @@
     draft.tests = draft.tests || {};
     draft.goal = draft.goal || { event: "", time: "" };
     step = startStep;
+    quick = !profile; // 처음 한 번만 빠른 시작
     $("wizard").classList.add("show");
     document.body.style.overflow = "hidden";
     $("wzClose").style.visibility = profile ? "visible" : "hidden";
@@ -263,6 +266,15 @@
     return "나이를 적으면 최대심박·MAF를 계산해 드려요.";
   }
   function stepBody() {
+    if (quick) return `<h2>나에 대해 조금만</h2><p class="sub">심박 구간(얼마나 힘들게)을 계산하는 데 써요. 나머지는 나중에 적어도 돼요.</p>
+      <div class="card"><div class="fields">
+        ${field("이름(닉네임)", "nickname", "", "예: 찬욱", "text")}${field("나이", "age", "세", "예: 28")}
+      </div>
+      <div class="eyebrow mt" style="margin-bottom:6px">성별</div>
+      <div class="chips">${[["m", "남자"], ["f", "여자"]].map(([k, l]) => `<button type="button" class="chip${(draft.sex || "m") === k ? " on" : ""}" data-sex="${k}">${l}</button>`).join("")}</div>
+      <div class="eyebrow mt no-easy" style="margin-bottom:6px">운동 용어(Z2·FTP·페이스 같은 말)를 잘 아세요?</div>
+      ${TS.explain ? TS.explain.pickerHtml() : ""}
+      <p class="hint" style="margin:6px 0 0">🌱 <b>초보용</b>은 어려운 말을 쉬운 말로 바꿔 보여 줘요. 🏅 <b>고급용</b>은 용어 그대로, 누르면 정확한 뜻과 기준을 알려 줘요. 나중에 언제든 바꿀 수 있어요.</p></div>`;
     return `<h2>신체 정보</h2><p class="sub">파워(W/kg)와 심박 계산에 쓰여요.</p>
       <div class="card"><div class="fields">
         ${field("이름(닉네임)", "nickname", "", "예: 찬욱", "text")}
@@ -534,10 +546,13 @@
     shareRecords();
     const html = [stepSport, stepBody, stepTests, stepSchedule, stepVolume, stepRecords, stepGoal, stepRaces, stepReview][step]();
     $("wzBody").innerHTML = html + '<p class="warn" id="wzErr"></p>';
-    $("wzBar").style.width = `${((step + 1) / STEPS.length) * 100}%`;
-    $("wzStep").textContent = `${step + 1}/${STEPS.length} ${STEPS[step]}`;
+    const qi = QSEQ.indexOf(step), qLast = quick && step === QSEQ[QSEQ.length - 1];
+    const cur = quick && qi >= 0 ? qi + 1 : step + 1, all = quick && qi >= 0 ? QSEQ.length : STEPS.length;
+    $("wzBar").style.width = `${(cur / all) * 100}%`;
+    $("wzStep").textContent = `${cur}/${all} ${STEPS[step]}`;
     $("wzPrev").style.visibility = step === 0 ? "hidden" : "visible";
-    $("wzNext").textContent = step === STEPS.length - 1 ? "훈련 계획 만들기 ✨" : "다음 ›";
+    $("wzNext").textContent = step === STEPS.length - 1 || qLast ? "훈련 계획 만들기 ✨" : "다음 ›";
+    if (qLast) $("wzBody").insertAdjacentHTML("beforeend", `<div class="card" style="text-align:center"><p class="hint" style="margin:0 0 8px">기록·주간 거리·대회를 알면 계획이 더 정확해져요. 지금 안 적어도 나중에 <b>설정</b>에서 바꿀 수 있어요.</p><button type="button" class="pill" id="wzMore">더 자세히 적기 (선택)</button></div>`);
   }
   function validate() {
     if (step === 0 && !draft.sport) return "종목을 골라주세요.";
@@ -637,6 +652,7 @@
     const b = e.target.closest("button");
     if (!b) return;
     const d = b.dataset;
+    if (b.id === "wzMore") { const err = validate(); if (err) { $("wzErr").textContent = err; return; } quick = false; step = 4; renderStep(); $("wizard").scrollTop = 0; return; }
     if (d.lvtable) { openLevel(draft); return; }
     if (d.hi !== undefined) { draft.allowHi = d.hi === "1"; const lp = $("lvPreview"); if (lp) { const L = E.levelOf(draft); lp.innerHTML = levelCard(L) + hiAsk(draft, L); } return; }
     if (d.sex || d.cb !== undefined) {
@@ -687,9 +703,13 @@
   $("wzNext").onclick = () => {
     const err = validate();
     if (err) { $("wzErr").textContent = err; return; }
+    if (quick && QSEQ.includes(step)) { const qi = QSEQ.indexOf(step); if (qi === QSEQ.length - 1) { finish(); return; } step = QSEQ[qi + 1]; renderStep(); $("wizard").scrollTop = 0; return; }
     if (step < STEPS.length - 1) { step++; renderStep(); $("wizard").scrollTop = 0; } else finish();
   };
-  $("wzPrev").onclick = () => { if (step > 0) { step--; renderStep(); $("wizard").scrollTop = 0; } };
+  $("wzPrev").onclick = () => {
+    if (quick && QSEQ.includes(step)) { const qi = QSEQ.indexOf(step); if (qi > 0) { step = QSEQ[qi - 1]; renderStep(); $("wizard").scrollTop = 0; } return; }
+    if (step > 0) { step--; renderStep(); $("wizard").scrollTop = 0; }
+  };
   $("wzClose").onclick = closeWizard;
 
   // ---------- 계획 화면 ----------
@@ -1273,6 +1293,8 @@
     const body = { week: renderWeekTab, month: renderMonthTab, quarter: renderQuarterTab, year: renderYearTab, basis: renderBasisTab }[planTab]();
     $("planBody").innerHTML = `
       <div class="wz-top plan-hd"><h2>📋 내 훈련 계획</h2><button type="button" class="pill" data-home="1">🏠 홈</button><button type="button" id="planEdit">⚙️ 설정</button><button type="button" id="planClose">닫기</button></div>
+      <div class="note" style="margin:0 0 10px;font-size:12.5px">⚠️ 이 계획은 운동 참고용이며 의료 조언이 아니에요. 가슴 통증·어지러움·숨이 비정상적으로 차거나 관절이 아프면 <b>바로 멈추고</b> 쉬거나 전문가와 상의하세요. 처음 운동하거나 지병이 있으면 먼저 의사와 상의하세요.</div>
+      <div class="spread" style="margin:-4px 0 10px;gap:8px"><span class="hint">설명</span>${TS.explain ? TS.explain.pickerHtml() : ""}</div>
       ${cloudOk ? "" : `<div class="note" style="margin:0 0 12px">⚠️ 프로필이 지금은 이 기기에만 저장됐어요. 로그인하고 인터넷이 연결되면 다른 기기에서도 보여요.</div>`}
       <div class="card"><div class="kv">
         <span>종목 · 목표</span><b>${SPORTS[p.sport].icon} ${esc(g.name)}${g.timeText ? ` · ${esc(g.timeText)}` : ""}</b>
@@ -1396,6 +1418,7 @@
     await saveProfile(p);
     setProfile(p);
   }
+  TS.refreshPlan = () => { if ($("planOv") && $("planOv").classList.contains("show") && plan) renderPlan(); };
   Object.assign(TS, { getProfile: () => profile, openWizard, openPlan, openGoal, isProfileCloud: () => cloudOk, discsOf, updateProfile, openRaceAdd, removeRace, setBikeEnv, openLevel });
   // 오른쪽 위 종목 버튼: 종목만 바꾸고 바로 스케줄 보기 (문진표는 '설정'에서만)
   function openSportQuick() {

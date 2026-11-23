@@ -93,6 +93,24 @@
       if (other) { location.reload(); return true; } // 메모리에 남은 이전 사람 기록까지 비우려고 새로 열어요
     } catch (e) { /* 무시 */ }
   }
+  // 🛟 가입·로그인 직후 화면이 텅 비거나 까맣게 남으면: 홈으로 되돌리고, 원인을 찾을 수 있게 운영자에게 상황만 알려요 (개인정보 없이)
+  function blankGuard() {
+    setTimeout(() => {
+      try {
+        const ov = [...document.querySelectorAll("dialog[open], #wizard.show, #planOv.show, #detailOv.show, #authOv.show, #trackerOv.show")];
+        const el = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+        const emptyOv = ov.find((x) => !(x.innerText || "").trim());
+        const blank = !el || el === document.body || el === document.documentElement || !!emptyOv;
+        if (!blank) return;
+        const info = { 화면: el ? el.tagName + (el.id ? "#" + el.id : "") : "없음", 빈창: emptyOv ? emptyOv.tagName + (emptyOv.id ? "#" + emptyOv.id : "") : "-",
+          앱: window.ZONE_IN_APP ? "앱" : "웹", 기기: navigator.userAgent.slice(0, 120), 시간: new Date().toLocaleString("ko-KR") };
+        if (emptyOv) { if (emptyOv.tagName === "DIALOG") emptyOv.close(); else emptyOv.classList.remove("show"); }
+        document.body.style.overflow = "";
+        if (TS.showTab) TS.showTab("home");
+        if (TS.notifyOwner) TS.notifyOwner("[ZONE] 로그인 후 빈 화면 감지", info);
+      } catch (e) { /* 무시 */ }
+    }, 2500);
+  }
   async function setUser(u) {
     const changed = (A.user && A.user.id) !== (u && u.id);
     if (A.user && !u) { // 🚪 로그아웃: 이 기기에 남은 내 기록을 모두 지우고, 처음 온 사람처럼 홈에서 빈 화면으로
@@ -114,6 +132,7 @@
     if (changed) await TS.setUser(A.user);
     window.dispatchEvent(new Event("ts:auth"));
     if (A.user && $("authOv").classList.contains("show") && !/newpw/.test(mode)) close(); // 로그인되면 로그인 화면 닫기
+    if (changed && A.user) blankGuard();
   }
 
   // ---------- 화면 ----------
@@ -206,6 +225,8 @@
     $("authBody").innerHTML = `
       <div class="wz-top"><h2 style="margin:0;flex:1">${title}</h2>${A.user ? '<button type="button" id="auClose">닫기</button>' : ""}</div>
       ${why ? `<div class="note" style="margin:0 0 12px">${esc(why)}</div>` : ""}
+      ${mode === "signup" ? `<div class="card" style="margin:0 0 12px;padding:12px 14px"><b>🏊🚴🏃 수영·자전거·달리기를 계획 하나로</b>
+        <p class="hint" style="margin:6px 0 0">요일·시간만 알려 주면 이번 주 할 운동을 거리·속도까지 짜 드려요. 철인3종도 한 번에. 무료예요.</p></div>` : ""}
       <form id="auForm" class="card" style="display:grid;gap:12px">${body}<p class="warn" id="auMsg" style="margin:0"></p>
         ${mode !== "newpw" ? `<div style="text-align:center;font-size:13px"><button type="button" class="link" data-mode="login">‹ 로그인으로</button></div>` : ""}</form>`;
     if ($("auClose")) $("auClose").onclick = close;
@@ -294,7 +315,7 @@
         try { const [id, dom] = email.split("@"); TS.notifyOwner && TS.notifyOwner("[ZONE] 새 회원가입", { 닉네임: f.nick.value.trim(), 이메일: id.slice(0, 2) + "***@" + dom, 시간: new Date().toLocaleString("ko-KR") }); } catch (e2) { /* 무시 */ }
         if (!data.session) {
           msg.style.color = "var(--text)";
-          msg.innerHTML = `<b>${TS.escapeHtml ? TS.escapeHtml(email) : email}</b>로 가입 확인 메일을 보냈어요.<br>메일의 링크를 누른 뒤 <b>이 앱으로 돌아오면 자동으로 로그인</b>돼요.<br><span class='hint'>메일이 안 보이면 스팸함(네이버는 '스팸메일함')도 확인해 주세요.</span>
+          msg.innerHTML = `<b>${TS.escapeHtml ? TS.escapeHtml(email) : email}</b>로 가입 확인 메일을 보냈어요.<br>메일의 링크를 누른 뒤 <b>이 앱으로 돌아오면 자동으로 로그인</b>돼요.<br><span class='hint'>메일이 안 보이면 스팸함(네이버는 '스팸메일함')도 확인해 주세요.</span>${/@(naver|hanmail|daum)\./i.test(email) ? "<br><span class='hint'>네이버·다음 메일은 늦게 오거나 안 올 때가 있어요. 5분이 지나도 없으면 <b>지메일</b>로 가입하면 더 빨라요.</span>" : ""}
             <br><button type="button" class="link" id="auResend">📧 확인 메일 다시 보내기</button>`;
           $("auResend").onclick = async () => {
             const { error: e2 } = await db.auth.resend({ type: "signup", email, options: { emailRedirectTo: backUrl() } });

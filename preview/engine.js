@@ -1888,7 +1888,9 @@
           open = open.filter((u) => capOf(u.p[1]) - share[u.k] > 1e-6);
         }
         if (left > 1e-6) { // 상한을 다 채워도 남으면 (설정 비율 우선) 고르게 더하고, 질 훈련 개수를 늘리는 쪽을 더 좋게 평가
-          hu.forEach((u) => { share[u.k] += left / hu.length; });
+          // 그래도 한 번에 너무 많은 고강도는 안 넣어요 (안전 상한: 달리기 15km · 자전거 45km · 수영 2,500m) — 넘치는 만큼은 쉬운 강도로 남겨요
+          const ABS = { run: 15, bike: 45, swim: 2500 }[x];
+          hu.forEach((u) => { share[u.k] = Math.min(Math.max(share[u.k] || 0, ABS), (share[u.k] || 0) + left / hu.length); });
           ratioScore += 1 + left / Math.max(1, hiT);
         }
         const per = hiT / hu.length;

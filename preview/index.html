@@ -200,6 +200,11 @@
     .warn { color: var(--danger); font-size: 14px; min-height: 1em; }
     .chips.grid7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
     .chips.grid7 .chip { padding-left: 0; padding-right: 0; min-width: 0; text-align: center; justify-content: center; }
+    .term { text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--accent, #1d6bf3); cursor: help; }
+    .term-tip { position: fixed; z-index: 9999; display: none; background: var(--card, #fff); color: inherit; border: 1px solid var(--line, #d8e0ec); border-radius: 12px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(15,23,42,.18); font-size: 13.5px; line-height: 1.55; }
+    .term-tip b { display: block; margin-bottom: 4px; font-size: 14px; } .term-tip p { margin: 0; }
+    .explain-pick { display: inline-flex; gap: 6px; flex-wrap: nowrap; } .explain-pick .chip { padding: 6px 12px; font-size: 13px; white-space: nowrap; }
+    .offline-bar { position: fixed; left: 0; right: 0; top: 0; z-index: 9998; background: #334155; color: #fff; font-size: 13px; text-align: center; padding: calc(env(safe-area-inset-top, 0px) + 6px) 12px 6px; }
     input.bad { border-color: var(--danger) !important; background: color-mix(in srgb, var(--danger) 7%, transparent); }
     .note { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; margin-top: 10px; }
     .note code, .banner code { background: rgba(15, 23, 42, .06); padding: 1px 5px; border-radius: 4px; }
@@ -881,7 +886,7 @@
     <section class="tab" id="tab-activity">
       <header class="top top-slim">
         <div style="display:flex;gap:6px">
-        <button class="pill" id="manualBtn">+ 직접 기록</button><button type="button" class="primary act-go" onclick="window.TS && TS.openTracker && TS.openTracker()">▶ 운동 시작</button></div>
+        <button class="pill" id="manualBtn">+ 직접 기록</button><button type="button" class="pill" id="importBtn">⌚ 시계 기록</button><button type="button" class="primary act-go" onclick="window.TS && TS.openTracker && TS.openTracker()">▶ 운동 시작</button></div>
         <input type="file" id="importFile" accept=".fit,.gpx,.tcx,.zip" multiple hidden />
       </header>
       <button type="button" class="pred-btn" data-predict="1">🔮 내 훈련으로 대회 기록 예측하기 <span>›</span></button>
@@ -1044,6 +1049,23 @@
   <script src="feedback.js?v=202611162200"></script>
   <script src="drills.js?v=202611162200"></script>
   <script src="journal.js?v=202611162200"></script>
+  <script src="easy.js?v=202611162200"></script>
+  <script>
+    // 📶 인터넷이 끊기면 위에 알려 줘요 (마지막으로 본 화면은 그대로 볼 수 있어요)
+    (function () {
+      var bar = null;
+      function upd() {
+        if (navigator.onLine) { if (bar) bar.remove(); bar = null; return; }
+        if (bar) return;
+        bar = document.createElement("div"); bar.className = "offline-bar"; bar.setAttribute("role", "status");
+        bar.textContent = "📶 인터넷이 끊겼어요. 마지막으로 본 화면이에요 — 연결되면 자동으로 새로 불러와요.";
+        document.body.appendChild(bar);
+      }
+      window.addEventListener("offline", upd);
+      window.addEventListener("online", function () { upd(); if (window.TS && TS.reload) TS.reload(); });
+      upd();
+    })();
+  </script>
   <script>
     // 🔒 창(팝업·전체 화면)이 열려 있는 동안 뒤 화면은 고정 — 안쪽만 스크롤돼요. 모두 닫히면 자동으로 풀려요.
     (function () {
