@@ -818,8 +818,8 @@
     .set-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); gap: 8px; }
     .set-row:first-of-type { border-top: 0; }
     .set-row > button, .set-row > select, .set-row > label.check { flex: none; white-space: nowrap; }
-    .set-row > .explain-pick { flex: none; margin-left: auto; display: grid; grid-template-columns: max-content; justify-items: stretch; gap: 6px; } /* 나 탭: 초보용·고급용을 오른쪽 끝에 세로로, 두 버튼 너비 같게 */
-    .set-row > .explain-pick .chip { width: 100%; margin: 0; text-align: center; justify-content: center; }
+    .set-row > .explain-pick { flex: none; margin-left: auto; display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 6px; } /* 나 탭: 초보용·고급용을 오른쪽 끝에 가로로 나란히 (휴대폰에서도 한 줄) */
+    .set-row > .explain-pick .chip { margin: 0; padding: 7px 11px; font-size: 13.5px; white-space: nowrap; }
     /* 나: 실내·야외 작게 가로로 / 확대 ON·OFF 스위치 */
     .mini-seg { display: inline-flex; background: var(--panel2, #f1f5f9); border-radius: 10px; padding: 2px; gap: 2px; flex: none; }
     .mini-seg button { margin: 0; padding: 5px 10px; font-size: 12.5px; border: 0; border-radius: 8px; background: none; white-space: nowrap; color: var(--muted, #64748b); }
@@ -1068,22 +1068,22 @@
 
   <script src="vendor/supabase-js-2.49.4/supabase.js"></script>
   <script src="vendor/leaflet-1.9.4/leaflet.js"></script>
-  <script src="config.js?v=202611241300"></script>
-  <script src="zones.js?v=202611241300"></script>
-  <script src="app.js?v=202611241300"></script>
-  <script src="engine.js?v=202611241300"></script>
-  <script src="profile.js?v=202611241300"></script>
-  <script src="garmin.js?v=202611241300"></script>
-  <script src="tracker.js?v=202611241300"></script>
-  <script src="hub.js?v=202611241300"></script>
-  <script src="auth.js?v=202611241300"></script>
-  <script src="community.js?v=202611241300"></script>
-  <script src="coach.js?v=202611241300"></script>
-  <script src="predict.js?v=202611241300"></script>
-  <script src="feedback.js?v=202611241300"></script>
-  <script src="drills.js?v=202611241300"></script>
-  <script src="journal.js?v=202611241300"></script>
-  <script src="easy.js?v=202611241300"></script>
+  <script src="config.js?v=202611241400"></script>
+  <script src="zones.js?v=202611241400"></script>
+  <script src="app.js?v=202611241400"></script>
+  <script src="engine.js?v=202611241400"></script>
+  <script src="profile.js?v=202611241400"></script>
+  <script src="garmin.js?v=202611241400"></script>
+  <script src="tracker.js?v=202611241400"></script>
+  <script src="hub.js?v=202611241400"></script>
+  <script src="auth.js?v=202611241400"></script>
+  <script src="community.js?v=202611241400"></script>
+  <script src="coach.js?v=202611241400"></script>
+  <script src="predict.js?v=202611241400"></script>
+  <script src="feedback.js?v=202611241400"></script>
+  <script src="drills.js?v=202611241400"></script>
+  <script src="journal.js?v=202611241400"></script>
+  <script src="easy.js?v=202611241400"></script>
   <script>
     // 📶 인터넷이 끊기면 위에 알려 줘요 (마지막으로 본 화면은 그대로 볼 수 있어요)
     (function () {
@@ -1157,6 +1157,6 @@
       document.addEventListener("scroll", onScroll, true);
     })();
   </script>
-  <script src="nav.js?v=202611241300"></script>
+  <script src="nav.js?v=202611241400"></script>
 </body>
 </html>
