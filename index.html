@@ -59,7 +59,7 @@
   <meta name="apple-mobile-web-app-title" content="ZONE" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <link rel="stylesheet" href="vendor/leaflet-1.9.4/leaflet.css" /><!-- 🔒 바깥 사이트가 아니라 ZONE 안에 둔 원본 파일 (바깥 사이트가 해킹돼도 안전) -->
   <style>
     :root {
       --safe-top: env(safe-area-inset-top, 0px); /* 📱 시계·배터리·카메라 영역 높이 (휴대폰마다 달라요) */
@@ -230,6 +230,18 @@
     .rep-media { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .rep-th { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: var(--bg); max-width: 100%; }
     .rep-why .chip { background: rgba(220,38,38,.08); color: #b91c1c; border: 0; }
     .rep-act { display: flex; flex-wrap: wrap; gap: 8px; } .danger-pill { color: #dc2626; }
+    .lk-list { display: grid; padding: 4px 12px 8px; max-height: 60vh; overflow-y: auto; }
+    .lk-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+    .lk-row:last-child { border-bottom: 0; }
+    .lk-who { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; background: none; border: 0; padding: 0; text-align: left; color: var(--text); font: inherit; cursor: pointer; }
+    .lk-who .av { flex: none; }
+    .lk-nm { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; font-weight: 700; font-size: 15px; overflow: hidden; }
+    .lk-act { display: grid; grid-template-columns: 64px 82px; gap: 6px; flex: none; align-items: center; } /* 줄마다 버튼 자리가 똑같이 (오와 열 맞추기) */
+    .lk-act > .hint { grid-column: 1 / -1; text-align: right; }
+    .lk-act .lk-btn { width: 100%; padding-left: 0; padding-right: 0; text-align: center; }
+    .lk-btn { font: inherit; font-size: 13px; font-weight: 700; padding: 7px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--card, #fff); color: var(--text); white-space: nowrap; }
+    .lk-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .lk-btn:disabled { opacity: .6; }
     input.bad { border-color: var(--danger) !important; background: color-mix(in srgb, var(--danger) 7%, transparent); }
     .note { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; margin-top: 10px; }
     .note code, .banner code { background: rgba(15, 23, 42, .06); padding: 1px 5px; border-radius: 4px; }
@@ -565,9 +577,6 @@
     }
     .back-fab.show { opacity: .92; transform: none; pointer-events: auto; }
 
-    /* ---- 스트라바 ---- */
-    .strava-btn { background: #fc5200; border-color: #fc5200; color: #fff; }
-    .strava-link { color: #fc5200; font-weight: 700; text-decoration: none; }
     .toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60;
       background: var(--text); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; max-width: calc(100vw - 32px); box-shadow: 0 6px 20px rgba(15, 23, 42, .25); }
 
@@ -712,6 +721,7 @@
     .post.ig .post-body { font-size: 14.5px; margin-bottom: 4px; }
     .htag { color: var(--accent); font-weight: 600; text-decoration: none; }
     .obadge { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 10.5px; font-weight: 900; color: #fff; background: linear-gradient(135deg, #2563eb, #7c3aed); vertical-align: 2px; letter-spacing: .3px; }
+    .cbadge { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 999px; font-size: 10.5px; font-weight: 900; color: #7c2d12; background: linear-gradient(135deg, #fde68a, #fbbf24); white-space: nowrap; vertical-align: middle; line-height: 1.7; }
     .fbadge { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 10.5px; font-weight: 900; color: #fff; background: #1d6bf3; vertical-align: 2px; } /* 팔로워 배지 3개 모두 같은 파란 디자인 */ .fol-btn { font-size: 13px; font-weight: 700; color: var(--accent); padding: 0 4px; }
     .cm-more { display: block; padding: 2px 14px; color: var(--muted); font-size: 13.5px; }
     .post-time { font-size: 12px; margin-top: 2px; }
@@ -1015,8 +1025,6 @@
     </form>
   </dialog>
 
-  <!-- 스트라바 가져오기 -->
-  <dialog id="stravaDlg"><div style="padding:18px;display:grid;gap:12px" id="stravaBody"></div></dialog>
 
   <!-- 커뮤니티 글쓰기 -->
   <dialog id="postDlg"><div style="padding:18px;display:grid;gap:12px" id="postBody"></div></dialog>
@@ -1056,25 +1064,24 @@
   <!-- 로그인 · 회원가입 -->
   <div class="ov" id="authOv"><div class="ov-inner" id="authBody"></div></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="config.js?v=202611231900"></script>
-  <script src="zones.js?v=202611231900"></script>
-  <script src="app.js?v=202611231900"></script>
-  <script src="engine.js?v=202611231900"></script>
-  <script src="profile.js?v=202611231900"></script>
-  <script src="garmin.js?v=202611231900"></script>
-  <script src="tracker.js?v=202611231900"></script>
-  <script src="hub.js?v=202611231900"></script>
-  <script src="auth.js?v=202611231900"></script>
-  <script src="community.js?v=202611231900"></script>
-  <script src="strava.js?v=202611231900"></script>
-  <script src="coach.js?v=202611231900"></script>
-  <script src="predict.js?v=202611231900"></script>
-  <script src="feedback.js?v=202611231900"></script>
-  <script src="drills.js?v=202611231900"></script>
-  <script src="journal.js?v=202611231900"></script>
-  <script src="easy.js?v=202611231900"></script>
+  <script src="vendor/supabase-js-2.49.4/supabase.js"></script>
+  <script src="vendor/leaflet-1.9.4/leaflet.js"></script>
+  <script src="config.js?v=202611241000"></script>
+  <script src="zones.js?v=202611241000"></script>
+  <script src="app.js?v=202611241000"></script>
+  <script src="engine.js?v=202611241000"></script>
+  <script src="profile.js?v=202611241000"></script>
+  <script src="garmin.js?v=202611241000"></script>
+  <script src="tracker.js?v=202611241000"></script>
+  <script src="hub.js?v=202611241000"></script>
+  <script src="auth.js?v=202611241000"></script>
+  <script src="community.js?v=202611241000"></script>
+  <script src="coach.js?v=202611241000"></script>
+  <script src="predict.js?v=202611241000"></script>
+  <script src="feedback.js?v=202611241000"></script>
+  <script src="drills.js?v=202611241000"></script>
+  <script src="journal.js?v=202611241000"></script>
+  <script src="easy.js?v=202611241000"></script>
   <script>
     // 📶 인터넷이 끊기면 위에 알려 줘요 (마지막으로 본 화면은 그대로 볼 수 있어요)
     (function () {
@@ -1148,6 +1155,6 @@
       document.addEventListener("scroll", onScroll, true);
     })();
   </script>
-  <script src="nav.js?v=202611231900"></script>
+  <script src="nav.js?v=202611241000"></script>
 </body>
 </html>

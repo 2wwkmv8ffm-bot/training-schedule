@@ -18,6 +18,9 @@
       [/already (registered|been registered)|User already/i, "이미 가입된 이메일이에요. 로그인해 주세요."],
       [/Password should|password.*(at least|characters)/i, "비밀번호는 6자 이상이어야 해요."],
       [/weak password|pwned|leaked/i, "너무 쉬운 비밀번호예요. 다른 비밀번호를 써 주세요."],
+      // 📧 인증 메일 한도: 수파베이스 시간당 한도 / 지메일 하루 약 500통
+      [/email rate limit|over_email_send_rate/i, "😥 지금 가입하려는 분이 많아서 인증 메일을 잠시 보낼 수 없어요. 약 1시간 뒤에 다시 가입해 주세요. 기다려 주셔서 고마워요!"],
+      [/error sending|sending (confirmation|recovery|magic)|smtp|mail.*(quota|limit)/i, "😥 오늘은 ZONE에 가입하려는 분이 너무 많아서 인증 메일을 더 보낼 수 없어요. (하루 최대 500명)\n내일 다시 가입해 주세요. 기다려 주셔서 고마워요!"],
       [/rate limit|too many/i, "요청이 너무 많아요. 잠시(1분~1시간) 뒤에 다시 시도해 주세요."],
       [/invalid.*email|email.*invalid|Unable to validate email/i, "이메일 주소를 다시 확인해 주세요."],
       [/Signups not allowed|signup.*disabled/i, "지금은 회원가입을 받을 수 없어요."],
@@ -348,7 +351,12 @@
     } catch (err) {
       const m = err.message || String(err);
       msg.style.color = "";
+      msg.style.whiteSpace = "pre-line";
       msg.textContent = korAuthErr(m);
+      // 🛡️ 메일 한도에 걸리면 운영자에게 알려요 (하루 한 번만) → 한도를 올리거나 메일 서비스를 바꿀 때예요
+      if (/email rate limit|over_email_send_rate|error sending|smtp/i.test(m)) {
+        try { const k = "zone.mailLimitNoted." + new Date().toDateString(); if (!localStorage.getItem(k)) { localStorage.setItem(k, "1"); TS.notifyOwner && TS.notifyOwner("[ZONE] 가입 인증 메일 한도에 걸렸어요", { 내용: m.slice(0, 160), 시간: new Date().toLocaleString("ko-KR"), 할일: "수파베이스 Rate Limits 올리기 또는 메일 서비스 바꾸기" }); } } catch (e) { /* 무시 */ }
+      }
     }
     btn.disabled = false;
   }

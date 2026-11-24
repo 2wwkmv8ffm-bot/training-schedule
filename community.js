@@ -100,13 +100,21 @@
   const BADGES = [[1000, "1K", "팔로워 1000명"], [100, "100", "팔로워 100명"], [10, "10", "팔로워 10명"]]; // 3개 모두 같은 파란 배지 (숫자만 달라요)
   // 🛡️ 운영자(앱 주인) — app_admins 표에 있는 계정만, 다른 사람에게는 없는 배지
   let owners = new Set();
-  (async () => { try { const { data } = await db.from("app_admins").select("user_id"); owners = new Set((data || []).map((r) => r.user_id)); } catch (e) { /* 표 없음 */ } })();
-  window.addEventListener("ts:auth", async () => { try { const { data } = await db.from("app_admins").select("user_id"); owners = new Set((data || []).map((r) => r.user_id)); } catch (e) { /* 무시 */ } });
+  const banned = new Set(); // 🚫 운영자가 이용 정지한 회원
+  async function loadOwners() {
+    try { const { data } = await db.from("app_admins").select("user_id"); owners = new Set((data || []).map((r) => r.user_id)); } catch (e) { /* 표 없음 */ }
+    try { const { data, error } = await db.from("banned_users").select("user_id"); if (!error) { banned.clear(); (data || []).forEach((r) => banned.add(r.user_id)); } } catch (e) { /* 표 없음 */ }
+    window.dispatchEvent(new Event("ts:owner")); // 나 탭·홈이 운영자 줄을 다시 그려요 (예전에는 늦게 와서 안 보이던 문제)
+  }
+  loadOwners();
+  window.addEventListener("ts:auth", loadOwners);
+  TS.isBanned = (uid) => banned.has(uid || me());
   TS.isOwner = (uid) => owners.has(uid || me());
   function badge(uid) {
-    const own = owners.has(uid) ? '<span class="obadge" title="ZONE 운영자">✔ ZONE</span>' : "";
-    const n = fol.count[uid] || 0, b = BADGES.find(([k]) => n >= k);
-    return own + (b ? `<span class="fbadge" title="${b[2]} 달성 (지금 ${n}명)">👣${b[1]}</span>` : "");
+    const own = owners.has(uid) ? '<span class="obadge" title="ZONE 운영자">✔ ZONE 운영자</span>' : "";
+    // 🏅 닉네임 옆에는 '지금 좋아요 1등'인 사람에게만 배지 1개 (1등이 바뀌면 새 1등에게로 옮겨 가요)
+    const c = champOf[uid];
+    return own + (c ? `<span class="cbadge" title="${c.all.map((k) => CHAMP_LABEL[k]).join(" · ")} (글 하나의 좋아요 ${c.n}개)">${CHAMP_ICON[c.top]} ${CHAMP_LABEL[c.top]}</span>` : "");
   }
   // 🔢 이름 뒤 번호 (예: 박찬욱#4821) — 아이디로 자동으로 정해져서 바뀌지 않고, 같은 닉네임끼리 구분돼요
   function tagNo(uid) { return uid ? String(parseInt(String(uid).replace(/-/g, "").slice(0, 8), 16) % 9000 + 1000) : ""; }
@@ -126,7 +134,7 @@
   // ---------- 🚩 신고 · 🚫 차단 (schema_report.sql 실행 후) ----------
   const blocked = new Set();
   let blockOk = true;
-  const notBlocked = (x) => !blocked.has(x.user_id) && (!hiddenP.has(String(x.id)) || x.user_id === me() || (TS.isOwner && TS.isOwner(me())));
+  const notBlocked = (x) => !blocked.has(x.user_id) && (!banned.has(x.user_id) || (TS.isOwner && TS.isOwner(me()))) && (!hiddenP.has(String(x.id)) || x.user_id === me() || (TS.isOwner && TS.isOwner(me())));
   // 🙈 신고가 5명 이상 쌓인 글은 운영자가 확인할 때까지 자동으로 숨겨요 (글쓴이·운영자에게는 보여요)
   const hiddenP = new Set();
   async function loadHidden() { try { const { data, error } = await db.from("hidden_posts").select("post_id"); if (error) return; hiddenP.clear(); (data || []).forEach((r) => hiddenP.add(String(r.post_id))); } catch (e) { /* 표 없음 */ } }
@@ -148,6 +156,7 @@
         ${mineP ? "" : `<button type="button" class="as-row danger" data-m="rep">🚩 신고하기<span>›</span></button>
         <button type="button" class="as-row danger" data-m="block">🚫 이 사람 차단</button>`}
         ${owner ? '<button type="button" class="as-row danger" data-m="adel">🛡️ (운영자) 이 글 지우기</button>' : ""}
+        ${owner && !mineP ? `<button type="button" class="as-row danger" data-m="ban">🛡️ (운영자) ${banned.has(uid) ? "이 회원 정지 풀기" : "이 회원 이용 정지"}</button>` : ""}
         <button type="button" class="as-row" data-m="x">취소</button>
       </div><p class="warn as-msg" id="moreMsg"></p>`;
     const reasons = () => `<div class="cm-grab"></div>
@@ -176,6 +185,8 @@
         if (error && !/duplicate/i.test(error.message)) { msg(/relation|schema cache/i.test(error.message) ? "차단 기능은 서버 설정 후에 쓸 수 있어요." : "차단하지 못했어요."); return; }
         blocked.add(uid); d.close(); toast("🚫 차단했어요"); render();
       };
+      const bn = d.querySelector('[data-m="ban"]');
+      if (bn) bn.onclick = async () => { d.close(); await TS.setBan(uid, !banned.has(uid)); };
       const ad = d.querySelector('[data-m="adel"]');
       if (ad) ad.onclick = async () => {
         if (!await TS.ask("운영자 권한으로 이 글을 지울까요?", "삭제")) return;
@@ -210,7 +221,7 @@
         <p class="rep-text">${p ? esc(String(p.body || "(사진·영상만 있는 글)").slice(0, 300)) : "이미 지워진 글이에요."}</p>
         ${p && p.media && p.media.length ? `<div class="rep-media">${p.media.slice(0, 4).map((m) => mediaTag(m, "rep-th")).join("")}</div>` : ""}
         <p class="hint" style="margin:0">마지막 신고 ${new Date(rs[0].created_at || Date.now()).toLocaleString("ko-KR")}</p>
-        <div class="rep-act">${p ? '<button type="button" class="pill danger-pill" data-r="del">🗑 글 지우기</button>' : ""}<button type="button" class="pill" data-r="ok">✓ 문제없음 · 처리 완료</button></div></div>`; };
+        <div class="rep-act">${p ? '<button type="button" class="pill danger-pill" data-r="del">🗑 글 지우기</button>' : ""}${p && p.user_id !== me() ? `<button type="button" class="pill danger-pill" data-r="ban">${banned.has(p.user_id) ? "정지 풀기" : "🚫 글쓴이 정지"}</button>` : ""}<button type="button" class="pill" data-r="ok">✓ 문제없음 · 처리 완료</button></div></div>`; };
     draw(`<p class="hint" style="margin:0 0 10px">처리할 신고 ${open.length}건 · 글 ${ids.length}개. 지우거나 '처리 완료'를 누르면 목록에서 빠져요.</p>${ids.map(card).join("")}`);
     d.querySelectorAll(".rep-card").forEach((c) => {
       const pid = c.dataset.pid, repIds = byPost[pid].map((r) => r.id);
@@ -218,7 +229,37 @@
       const del = c.querySelector('[data-r="del"]');
       if (del) del.onclick = async () => { if (!await TS.ask("이 글을 지울까요? 되돌릴 수 없어요.", "삭제")) return; const { error: e1 } = await db.from("posts").delete().eq("id", pid); if (e1) { toast("지우지 못했어요 (서버 설정 확인)"); return; } await done(); toast("🛡️ 글을 지웠어요"); render(); };
       c.querySelector('[data-r="ok"]').onclick = async () => { await done(); toast("✓ 처리 완료"); };
+      const bb = c.querySelector('[data-r="ban"]'); const P0 = pmap[pid];
+      if (bb && P0) bb.onclick = async () => { if (await TS.setBan(P0.user_id, !banned.has(P0.user_id))) bb.textContent = banned.has(P0.user_id) ? "정지 풀기" : "🚫 글쓴이 정지"; };
     });
+  };
+  TS.setBan = async (uid, on) => {
+    if (!(TS.isOwner && TS.isOwner(me())) || !uid || uid === me()) return false;
+    if (on) {
+      if (!await TS.ask("이 회원을 이용 정지할까요?\n정지하면 글·댓글·스토리를 올릴 수 없고, 이 사람의 글은 다른 사람에게 안 보여요. (나중에 풀 수 있어요)", "정지")) return false;
+      const { error } = await db.from("banned_users").insert({ user_id: uid });
+      if (error && !/duplicate/i.test(error.message)) { toast(/relation|schema cache/i.test(error.message) ? "이용 정지는 서버 설정(SQL) 후에 쓸 수 있어요." : "정지하지 못했어요."); return false; }
+      banned.add(uid); toast("🚫 이용 정지했어요");
+    } else {
+      const { error } = await db.from("banned_users").delete().eq("user_id", uid);
+      if (error) { toast("정지를 풀지 못했어요."); return false; }
+      banned.delete(uid); toast("✓ 정지를 풀었어요");
+    }
+    render(); window.dispatchEvent(new Event("ts:owner")); return true;
+  };
+  TS.bannedCount = () => banned.size;
+  TS.openBans = async () => {
+    if (!(TS.isOwner && TS.isOwner(me()))) return;
+    let d = $("banDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "banDlg"; d.className = "wide-dlg"; document.body.appendChild(d); }
+    const ids = [...banned];
+    const { data: ms } = ids.length ? await db.from("members").select("id,nickname").in("id", ids) : { data: [] };
+    const nm = {}; (ms || []).forEach((m) => { nm[m.id] = m.nickname; });
+    d.innerHTML = `<div class="wide-hd"><b>🛡️ 이용 정지한 회원</b><span class="hint">운영자만 보여요</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
+      <div class="rep-body">${ids.length ? ids.map((u) => `<div class="card rep-card"><div class="spread"><b>${esc(nm[u] || "알 수 없음")}<span class="ntag">#${tagNo(u)}</span></b><button type="button" class="pill" data-unban="${esc(u)}">정지 풀기</button></div></div>`).join("") : '<div class="note">정지한 회원이 없어요. 커뮤니티 글의 "…" 메뉴나 신고된 글 화면에서 정지할 수 있어요.</div>'}</div>`;
+    d.querySelector(".wide-x").onclick = () => d.close();
+    d.querySelectorAll("[data-unban]").forEach((b) => { b.onclick = async () => { if (await TS.setBan(b.dataset.unban, false)) b.closest(".rep-card").remove(); }; });
+    if (!d.open) d.showModal();
   };
   TS.reportCount = async () => { const { data, error } = await db.from("post_reports").select("id,handled").limit(1000); if (error) return null; return (data || []).filter((r) => !r.handled).length; };
   TS.blocks = { list: async () => { const { data } = await db.from("user_blocks").select("blocked").eq("blocker", me()); const ids = (data || []).map((r) => r.blocked); if (!ids.length) return []; const { data: ms } = await db.from("members").select("id,nickname").in("id", ids); return ids.map((id) => ({ id, nickname: ((ms || []).find((m) => m.id === id) || {}).nickname || "?" })); },
@@ -306,6 +347,27 @@
     const out = {};
     HOT_P.forEach(([k]) => { const s = periodStart(k); const best = list.filter((p) => p.created_at >= s && nLikes(p) > 0).sort((a, b) => nLikes(b) - nLikes(a) || a.created_at.localeCompare(b.created_at))[0]; out[k] = best || null; });
     return out;
+  }
+  // 🏅 지금 1등: 기간마다 좋아요가 가장 많은 글을 쓴 사람 (같으면 먼저 올린 글) — 피드에 안 보이는 글까지 모두 세요
+  const CHAMP_ICON = { all: "👑", month: "🏆", week: "⚡", day: "🔥" };
+  const CHAMP_LABEL = { all: "전체 1등", month: "월간 1등", week: "주간 1등", day: "오늘 1등" };
+  let champOf = {};
+  async function loadChamps() {
+    try {
+      const { data, error } = await db.from("posts").select("id,user_id,created_at,media,post_likes(count)").order("created_at", { ascending: false }).limit(3000);
+      if (error) return;
+      const list = (data || []).filter((p) => !isStoryPost(p) && !banned.has(p.user_id) && !hiddenP.has(String(p.id)))
+        .map((p) => ({ u: p.user_id, t: p.created_at, n: (p.post_likes && p.post_likes[0] && p.post_likes[0].count) || 0 })).filter((p) => p.n > 0);
+      const next = {};
+      ["all", "month", "week", "day"].forEach((k) => { // 위에서부터 높은 배지 (사람마다 가장 높은 것 하나만 보여요)
+        const s = periodStart(k);
+        const best = list.filter((p) => p.t >= s).sort((a, b) => b.n - a.n || a.t.localeCompare(b.t))[0];
+        if (!best) return;
+        if (!next[best.u]) next[best.u] = { top: k, all: [], n: best.n };
+        next[best.u].all.push(k);
+      });
+      champOf = next;
+    } catch (e) { /* 무시 */ }
   }
   // 1등 배지 — 한 번이라도 1등이면 1단계, 그다음은 다시 0부터 세어서 다음 단계로 (1 → 3 → 10 → 30번)
   const WIN_STEPS = [1, 3, 10, 30], WIN_NAME = ["1단계", "2단계", "3단계", "4단계"];
@@ -396,6 +458,7 @@
     board = rank(bd.data || []);
     await loadFollows([...feed, ...stories].map((p) => p.user_id).concat(board.map((o) => o.id)));
     await Promise.all([loadBlocks(), loadHidden()]); // 🚫 내가 차단한 사람 글 · 신고로 숨겨진 글은 빼요
+    await loadChamps(); // 🏅 지금 1등 (좋아요가 바뀌면 다음에 불러올 때 배지가 옮겨 가요)
     feed = feed.filter(notBlocked); stories = stories.filter(notBlocked); board = board.filter((o) => !blocked.has(o.id));
     paint(box, main.error);
   }
@@ -549,12 +612,12 @@
     d.innerHTML = `<div style="padding:16px;max-height:90vh;overflow:auto;display:grid;gap:12px">
       <div class="spread" style="gap:8px"><b class="nm-row" style="flex:1;font-size:16px">${nameTag(m.nickname, uid)}${badge(uid)}</b><button type="button" class="link" style="font-size:20px" data-pf="x">✕</button></div>
       <div class="prof-hd">${avatar(m, 76)}<div class="prof-st"><div><b>${posts.length}</b><span>게시물</span></div><div><b>${fol.ok ? nFol : "-"}</b><span>팔로워</span></div><div><b>${fol.ok ? nFing : "-"}</b><span>팔로잉</span></div><div><b>${likes}</b><span>받은 ❤️</span></div></div></div>
-      ${m.sport || (fol.ok && nextB) ? `<div class="hint">${m.sport ? esc(m.sport) : ""}${m.sport && fol.ok && nextB ? " · " : ""}${fol.ok && nextB ? `다음 팔로워 배지까지 ${nextB - nFol}명` : ""}</div>` : ""}
+      ${m.sport ? `<div class="hint">${esc(m.sport)}</div>` : ""}
       <div style="display:flex;gap:8px">
         ${st === "me" ? "" : `<button type="button" class="${isF ? "pill" : "primary"}" data-pf="follow" style="flex:1">${isF ? "✓ 팔로잉" : "👣 팔로우"}</button>`}
         ${st === "me" ? "" : st === "friend" ? '<button type="button" class="pill" disabled style="flex:1">✓ 친구</button>' : st === "sent" ? '<button type="button" class="pill" disabled style="flex:1">친구 요청 보냄</button>'
         : st === "got" ? `<button type="button" class="primary" data-pf="acc" style="flex:1">친구 요청 수락</button>` : `<button type="button" class="pill" data-pf="ask" style="flex:1">＋ 친구 요청</button>`}</div>
-      <p class="hint" style="margin:0">팔로워 배지: 10명 · 100명 · 1000명 — 이름 옆에 파란 배지로 붙어요.</p>
+      ${champOf[uid] ? `<p class="hint" style="margin:0">🏅 지금 <b>${champOf[uid].all.map((k) => CHAMP_LABEL[k]).join(" · ")}</b> — 다른 사람이 좋아요를 더 받으면 배지가 옮겨 가요.</p>` : ""}
       ${isMe ? `<details class="wbox"><summary><b>🏅 내 좋아요 1등 배지</b></summary><div class="wb-grid">${winBadges()}</div></details>` : ""}
       <div class="seg" style="margin:0"><button type="button" data-pv="posts" class="${profView === "posts" ? "on" : ""}">▦ 게시물 ${posts.length}</button><button type="button" data-pv="photos" class="${profView === "photos" ? "on" : ""}">🖼️ 사진 ${photos.length}</button></div>
       ${isMe && posts.length ? `<p class="hint" style="margin:0">사진을 누르면 크게 보고 <b>📌 고정</b>·<b>삭제</b>할 수 있어요. 고정한 글은 맨 위에 보여요 (최대 ${MAX_PINS}개).</p>` : ""}
@@ -834,14 +897,50 @@
   }
 
   // ❤️ 내 글에 누가 좋아요를 눌렀는지 보기 (글 주인만)
+  // ❤️ 좋아요 누른 사람: 아래에서 올라오는 창 — 프로필 사진 · 이름 · 팔로우 · 친구 추가 (이름·사진을 누르면 프로필)
   async function showLikers(id) {
     const p = findPost(id);
-    const ids = ((p && p.post_likes) || []).map((l) => l.user_id);
-    if (!ids.length) { alert("아직 좋아요가 없어요."); return; }
-    const { data, error } = await db.from("members").select("id,nickname").in("id", ids);
-    if (error) { alert("지금은 목록을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
-    const names = ids.map((u) => ((data || []).find((m) => m.id === u) || {}).nickname || "알 수 없음");
-    alert(`❤️ 좋아요를 누른 사람 (${names.length}명)\n\n` + names.join("\n"));
+    const ids = [...new Set(((p && p.post_likes) || []).map((l) => l.user_id))];
+    if (!ids.length) { toast("아직 좋아요가 없어요."); return; }
+    let d = $("likeDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "likeDlg"; d.className = "act-sheet like-sheet"; document.body.appendChild(d); d.onclick = (e) => { if (e.target === d) d.close(); }; }
+    d.innerHTML = `<div class="cm-grab"></div><div class="as-head"><b>좋아요 ${ids.length}명</b></div><p class="hint as-note">불러오는 중…</p>`;
+    if (!d.open) d.showModal();
+    const { data, error } = await db.from("members").select("id,nickname,avatar_url").in("id", ids);
+    if (error) { d.querySelector(".as-note").textContent = "지금은 목록을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."; return; }
+    await loadFollows(ids).catch(() => {});
+    const mm = {}; (data || []).forEach((m) => { mm[m.id] = m; });
+    const order = ids.slice().sort((a, b) => (b === me()) - (a === me())); // 나를 맨 위에
+    const btns = (u) => {
+      if (u === me()) return '<span class="hint">나</span>';
+      const isF = fol.following.has(u);
+      const st = fr.accepted.includes(u) ? "friend" : fr.outgoing.includes(u) ? "sent" : fr.incoming.includes(u) ? "got" : "none";
+      const f = fol.ok ? `<button type="button" class="lk-btn ${isF ? "" : "on"}" data-lk-fol="${esc(u)}">${isF ? "팔로잉" : "팔로우"}</button>` : "";
+      const r = st === "friend" ? '<button type="button" class="lk-btn" disabled>✓ 친구</button>'
+        : st === "sent" ? '<button type="button" class="lk-btn" disabled>요청 보냄</button>'
+        : st === "got" ? `<button type="button" class="lk-btn on" data-lk-acc="${esc(u)}">친구 수락</button>`
+        : `<button type="button" class="lk-btn" data-lk-ask="${esc(u)}">＋ 친구</button>`;
+      return f + r;
+    };
+    const row = (u) => { const m = mm[u] || { nickname: "알 수 없음" };
+      return `<div class="lk-row" data-u="${esc(u)}"><button type="button" class="lk-who" data-lk-prof="${esc(u)}">${avatar(m, 44)}<span class="lk-nm">${nameTag(m.nickname, u)}${badge(u)}</span></button><span class="lk-act">${btns(u)}</span></div>`; };
+    const draw = () => {
+      d.innerHTML = `<div class="cm-grab"></div><div class="as-head"><b>❤️ 좋아요 ${ids.length}명</b></div><div class="lk-list">${order.map(row).join("")}</div>`;
+      d.querySelectorAll("[data-lk-prof]").forEach((b) => { b.onclick = () => { d.close(); openProfile(b.dataset.lkProf); }; });
+      d.querySelectorAll("[data-lk-fol]").forEach((b) => { b.onclick = async () => { b.disabled = true; await toggleFollow(b.dataset.lkFol); draw(); }; });
+      d.querySelectorAll("[data-lk-ask]").forEach((b) => { b.onclick = async () => {
+        if (TS.isBanned && TS.isBanned()) { toast("운영자가 이용을 정지해서 친구 요청을 보낼 수 없어요."); return; }
+        b.disabled = true; const u = b.dataset.lkAsk;
+        const { error: e1 } = await db.from("friendships").insert({ requester: me(), addressee: u, status: "pending" });
+        if (e1 && !/duplicate/i.test(e1.message)) { toast("친구 요청을 보내지 못했어요"); b.disabled = false; return; }
+        if (!fr.outgoing.includes(u)) fr.outgoing.push(u); toast("🤝 친구 요청을 보냈어요"); draw(); }; });
+      d.querySelectorAll("[data-lk-acc]").forEach((b) => { b.onclick = async () => {
+        b.disabled = true; const u = b.dataset.lkAcc;
+        const { error: e2 } = await db.from("friendships").update({ status: "accepted" }).eq("requester", u).eq("addressee", me());
+        if (e2) { toast("수락하지 못했어요"); b.disabled = false; return; }
+        fr.incoming = fr.incoming.filter((x) => x !== u); if (!fr.accepted.includes(u)) fr.accepted.push(u); toast("🤝 이제 친구예요"); draw(); }; });
+    };
+    draw();
   }
   // 💬 댓글: 인스타그램처럼 아래에서 화면의 2/3 높이로 올라오는 창
   function commentSheet() {
@@ -879,6 +978,7 @@
       e.preventDefault();
       const body = form.querySelector("input").value.trim();
       if (!body) return;
+      if (TS.isBanned && TS.isBanned()) { toast("운영자가 이용을 정지해서 댓글을 쓸 수 없어요."); return; }
       const bad = TS.badText && TS.badText(body); if (bad) { toast(bad); return; }
       const { error: e2 } = await db.from("post_comments").insert({ post_id: id, user_id: me(), body });
       if (e2) { toast("댓글을 올리지 못했어요. 인터넷 연결을 확인해 주세요"); return; }
@@ -1003,6 +1103,7 @@
   async function submitPost() {
     const vis = $("pcVis").value, text = $("pcText").value.trim(), actId = null;
     const msg = $("pcMsg"), btn = $("pcGo");
+    if (TS.isBanned && TS.isBanned()) { msg.textContent = "운영자가 이용을 정지해서 글을 올릴 수 없어요. 문의는 나 탭 → 건의사항으로 보내 주세요."; return; }
     const bad = TS.badText && TS.badText(text); if (bad) { msg.textContent = bad; return; }
     if (pcKind === "story" && !picked.length) { msg.textContent = "스토리는 사진이나 동영상이 있어야 해요."; return; }
     if (!text && !picked.length) { msg.textContent = "글이나 사진 중 하나는 있어야 해요."; return; }
