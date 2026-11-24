@@ -482,6 +482,9 @@
     .zcard { padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); font-size: 14px; }
     .zcard summary { cursor: pointer; line-height: 1.6; }
     .mc i b { font-weight: 800; }
+    .mc i .mm { display: none; } /* 좁은 폰 달력: 글자 대신 '50분'처럼 시간만 (색이 강도) */
+    @media (max-width: 559px) { .mc i .mt { display: none; } .mc i .mm { display: inline; font-weight: 700; } }
+    .ratio-now { margin-top: 10px; padding: 11px 12px; border-radius: 12px; text-align: center; font-weight: 800; font-size: 14.5px; color: #15803d; background: #f0fdf4; border: 1.5px solid #86efac; }
     .zb { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; color: #fff; white-space: nowrap; }
     .z1 { background: #64748b; } .z2 { background: #16a34a; } .z3 { background: #ca8a04; } .z4 { background: #ea580c; } .z5 { background: #dc2626; }
     .sess { border-left: 5px solid var(--accent); }
@@ -503,7 +506,7 @@
     .wd .wn.sun { color: #e11d48; } .wd .wn.sat { color: var(--accent); }
     .wd .wdt { font-size: 15px; font-weight: 800; }
     .wd .wi { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 40px; border-radius: 8px; color: #fff; font-size: 15px; line-height: 1.2; padding: 3px 0; }
-    .wd .wi small { font-size: 9.5px; font-weight: 800; }
+    .wd .wi small { font-size: 9.5px; font-weight: 800; word-break: keep-all; text-align: center; line-height: 1.25; } /* '조금 숨차게'가 '조금 / 숨차게' 두 줄로 */
     .wd .wi.dn { opacity: .6; }
     .wd .wrest { font-size: 10px; color: var(--muted); padding-top: 6px; }
     .goal-row { margin-top: 12px; }
@@ -1068,22 +1071,22 @@
 
   <script src="vendor/supabase-js-2.49.4/supabase.js"></script>
   <script src="vendor/leaflet-1.9.4/leaflet.js"></script>
-  <script src="config.js?v=202611241500"></script>
-  <script src="zones.js?v=202611241500"></script>
-  <script src="app.js?v=202611241500"></script>
-  <script src="engine.js?v=202611241500"></script>
-  <script src="profile.js?v=202611241500"></script>
-  <script src="garmin.js?v=202611241500"></script>
-  <script src="tracker.js?v=202611241500"></script>
-  <script src="hub.js?v=202611241500"></script>
-  <script src="auth.js?v=202611241500"></script>
-  <script src="community.js?v=202611241500"></script>
-  <script src="coach.js?v=202611241500"></script>
-  <script src="predict.js?v=202611241500"></script>
-  <script src="feedback.js?v=202611241500"></script>
-  <script src="drills.js?v=202611241500"></script>
-  <script src="journal.js?v=202611241500"></script>
-  <script src="easy.js?v=202611241500"></script>
+  <script src="config.js?v=202611241700"></script>
+  <script src="zones.js?v=202611241700"></script>
+  <script src="app.js?v=202611241700"></script>
+  <script src="engine.js?v=202611241700"></script>
+  <script src="profile.js?v=202611241700"></script>
+  <script src="garmin.js?v=202611241700"></script>
+  <script src="tracker.js?v=202611241700"></script>
+  <script src="hub.js?v=202611241700"></script>
+  <script src="auth.js?v=202611241700"></script>
+  <script src="community.js?v=202611241700"></script>
+  <script src="coach.js?v=202611241700"></script>
+  <script src="predict.js?v=202611241700"></script>
+  <script src="feedback.js?v=202611241700"></script>
+  <script src="drills.js?v=202611241700"></script>
+  <script src="journal.js?v=202611241700"></script>
+  <script src="easy.js?v=202611241700"></script>
   <script>
     // 📶 인터넷이 끊기면 위에 알려 줘요 (마지막으로 본 화면은 그대로 볼 수 있어요)
     (function () {
@@ -1157,6 +1160,6 @@
       document.addEventListener("scroll", onScroll, true);
     })();
   </script>
-  <script src="nav.js?v=202611241500"></script>
+  <script src="nav.js?v=202611241700"></script>
 </body>
 </html>

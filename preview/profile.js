@@ -1024,7 +1024,7 @@
       <div class="spread"><b style="font-size:14px">⚖️ 강도 비율 조절</b><span id="ratioVal" style="font-size:14px">저강도 <b>${v}</b> : 고강도 <b>${100 - v}</b></span></div>
       <input type="range" id="ratioRange" min="50" max="95" step="5" value="${v}" style="width:100%;margin:10px 0 6px;accent-color:var(--accent)" />
       <div class="chips grid5">${[90, 85, 80, 75, 70].map((x) => `<button type="button" class="chip${x === v ? " on" : ""}" data-ratio="${x}">${x}:${100 - x}${x === recLow(profile) ? "<small>추천</small>" : ""}</button>`).join("")}</div>
-      <button type="button" class="primary" data-ratioapply="1" style="width:100%;padding:12px;border-radius:12px;margin-top:10px" ${v === cur ? "disabled" : ""}>${v === cur ? `지금 비율 ${cur}:${100 - cur}` : `✓ ${v}:${100 - v}로 적용하고 스케줄 바꾸기`}</button>
+      ${v === cur ? `<div class="ratio-now">✅ 지금 적용 중: ${cur}:${100 - cur}</div>` : `<button type="button" class="primary" data-ratioapply="1" style="width:100%;padding:12px;border-radius:12px;margin-top:10px">✓ ${v}:${100 - v}로 적용하고 스케줄 바꾸기</button>`}
     </div>`;
   }
   async function applyRatio(btn) {
