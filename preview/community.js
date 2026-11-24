@@ -112,8 +112,9 @@
   TS.isOwner = (uid) => owners.has(uid || me());
   function badge(uid) {
     const own = owners.has(uid) ? '<span class="obadge" title="ZONE 운영자">✔ ZONE 운영자</span>' : "";
-    const n = fol.count[uid] || 0, b = BADGES.find(([k]) => n >= k);
-    return own + (b ? `<span class="fbadge" title="${b[2]} 달성 (지금 ${n}명)">👣${b[1]}</span>` : "");
+    // 🏅 닉네임 옆에는 '지금 좋아요 1등'인 사람에게만 배지 1개 (1등이 바뀌면 새 1등에게로 옮겨 가요)
+    const c = champOf[uid];
+    return own + (c ? `<span class="cbadge" title="${c.all.map((k) => CHAMP_LABEL[k]).join(" · ")} (글 하나의 좋아요 ${c.n}개)">${CHAMP_ICON[c.top]} ${CHAMP_LABEL[c.top]}</span>` : "");
   }
   // 🔢 이름 뒤 번호 (예: 박찬욱#4821) — 아이디로 자동으로 정해져서 바뀌지 않고, 같은 닉네임끼리 구분돼요
   function tagNo(uid) { return uid ? String(parseInt(String(uid).replace(/-/g, "").slice(0, 8), 16) % 9000 + 1000) : ""; }
@@ -347,6 +348,27 @@
     HOT_P.forEach(([k]) => { const s = periodStart(k); const best = list.filter((p) => p.created_at >= s && nLikes(p) > 0).sort((a, b) => nLikes(b) - nLikes(a) || a.created_at.localeCompare(b.created_at))[0]; out[k] = best || null; });
     return out;
   }
+  // 🏅 지금 1등: 기간마다 좋아요가 가장 많은 글을 쓴 사람 (같으면 먼저 올린 글) — 피드에 안 보이는 글까지 모두 세요
+  const CHAMP_ICON = { all: "👑", month: "🏆", week: "⚡", day: "🔥" };
+  const CHAMP_LABEL = { all: "전체 1등", month: "월간 1등", week: "주간 1등", day: "오늘 1등" };
+  let champOf = {};
+  async function loadChamps() {
+    try {
+      const { data, error } = await db.from("posts").select("id,user_id,created_at,media,post_likes(count)").order("created_at", { ascending: false }).limit(3000);
+      if (error) return;
+      const list = (data || []).filter((p) => !isStoryPost(p) && !banned.has(p.user_id) && !hiddenP.has(String(p.id)))
+        .map((p) => ({ u: p.user_id, t: p.created_at, n: (p.post_likes && p.post_likes[0] && p.post_likes[0].count) || 0 })).filter((p) => p.n > 0);
+      const next = {};
+      ["all", "month", "week", "day"].forEach((k) => { // 위에서부터 높은 배지 (사람마다 가장 높은 것 하나만 보여요)
+        const s = periodStart(k);
+        const best = list.filter((p) => p.t >= s).sort((a, b) => b.n - a.n || a.t.localeCompare(b.t))[0];
+        if (!best) return;
+        if (!next[best.u]) next[best.u] = { top: k, all: [], n: best.n };
+        next[best.u].all.push(k);
+      });
+      champOf = next;
+    } catch (e) { /* 무시 */ }
+  }
   // 1등 배지 — 한 번이라도 1등이면 1단계, 그다음은 다시 0부터 세어서 다음 단계로 (1 → 3 → 10 → 30번)
   const WIN_STEPS = [1, 3, 10, 30], WIN_NAME = ["1단계", "2단계", "3단계", "4단계"];
   const WIN_ICON = { day: "🔥", week: "⚡", month: "🏆", all: "👑" };
@@ -436,6 +458,7 @@
     board = rank(bd.data || []);
     await loadFollows([...feed, ...stories].map((p) => p.user_id).concat(board.map((o) => o.id)));
     await Promise.all([loadBlocks(), loadHidden()]); // 🚫 내가 차단한 사람 글 · 신고로 숨겨진 글은 빼요
+    await loadChamps(); // 🏅 지금 1등 (좋아요가 바뀌면 다음에 불러올 때 배지가 옮겨 가요)
     feed = feed.filter(notBlocked); stories = stories.filter(notBlocked); board = board.filter((o) => !blocked.has(o.id));
     paint(box, main.error);
   }
@@ -589,12 +612,12 @@
     d.innerHTML = `<div style="padding:16px;max-height:90vh;overflow:auto;display:grid;gap:12px">
       <div class="spread" style="gap:8px"><b class="nm-row" style="flex:1;font-size:16px">${nameTag(m.nickname, uid)}${badge(uid)}</b><button type="button" class="link" style="font-size:20px" data-pf="x">✕</button></div>
       <div class="prof-hd">${avatar(m, 76)}<div class="prof-st"><div><b>${posts.length}</b><span>게시물</span></div><div><b>${fol.ok ? nFol : "-"}</b><span>팔로워</span></div><div><b>${fol.ok ? nFing : "-"}</b><span>팔로잉</span></div><div><b>${likes}</b><span>받은 ❤️</span></div></div></div>
-      ${m.sport || (fol.ok && nextB) ? `<div class="hint">${m.sport ? esc(m.sport) : ""}${m.sport && fol.ok && nextB ? " · " : ""}${fol.ok && nextB ? `다음 팔로워 배지까지 ${nextB - nFol}명` : ""}</div>` : ""}
+      ${m.sport ? `<div class="hint">${esc(m.sport)}</div>` : ""}
       <div style="display:flex;gap:8px">
         ${st === "me" ? "" : `<button type="button" class="${isF ? "pill" : "primary"}" data-pf="follow" style="flex:1">${isF ? "✓ 팔로잉" : "👣 팔로우"}</button>`}
         ${st === "me" ? "" : st === "friend" ? '<button type="button" class="pill" disabled style="flex:1">✓ 친구</button>' : st === "sent" ? '<button type="button" class="pill" disabled style="flex:1">친구 요청 보냄</button>'
         : st === "got" ? `<button type="button" class="primary" data-pf="acc" style="flex:1">친구 요청 수락</button>` : `<button type="button" class="pill" data-pf="ask" style="flex:1">＋ 친구 요청</button>`}</div>
-      <p class="hint" style="margin:0">팔로워 배지: 10명 · 100명 · 1000명 — 이름 옆에 파란 배지로 붙어요.</p>
+      ${champOf[uid] ? `<p class="hint" style="margin:0">🏅 지금 <b>${champOf[uid].all.map((k) => CHAMP_LABEL[k]).join(" · ")}</b> — 다른 사람이 좋아요를 더 받으면 배지가 옮겨 가요.</p>` : ""}
       ${isMe ? `<details class="wbox"><summary><b>🏅 내 좋아요 1등 배지</b></summary><div class="wb-grid">${winBadges()}</div></details>` : ""}
       <div class="seg" style="margin:0"><button type="button" data-pv="posts" class="${profView === "posts" ? "on" : ""}">▦ 게시물 ${posts.length}</button><button type="button" data-pv="photos" class="${profView === "photos" ? "on" : ""}">🖼️ 사진 ${photos.length}</button></div>
       ${isMe && posts.length ? `<p class="hint" style="margin:0">사진을 누르면 크게 보고 <b>📌 고정</b>·<b>삭제</b>할 수 있어요. 고정한 글은 맨 위에 보여요 (최대 ${MAX_PINS}개).</p>` : ""}
