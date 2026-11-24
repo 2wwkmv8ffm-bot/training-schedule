@@ -945,19 +945,39 @@
     const label = m ? m[1].trim() : /드릴/.test(t) ? "드릴" : /T2|전환/.test(t) ? "전환" : /쿨다운/.test(t) ? "쿨다운" : /워밍업/.test(t) ? "워밍업" : /^(야외라면|언덕은|오르내림|끝나고|마지막에|중간에|보급)/.test(t) ? "팁" : "메인";
     const body = m ? m[2] : t;
     const chips = [];
-    let rep = /(\d+(?:\.\d+)?)\s?(km|m)\s*×\s*(\d+)/.exec(body);
+    const N = (x) => +String(x).replace(/,/g, ""); // "4,450" 같은 쉼표 숫자도 읽어요
+    if (/÷|m당|km당/.test(body)) return { label, body, chips }; // 계산식·설명 줄 (예: (400m − 200m) ÷ 2 = 100m당 CSS)에는 거리 칸을 안 붙여요
+    // ① 글에 '총 ○m'·'=○m'·합계가 적혀 있으면 그 숫자가 정답이에요 (예: 드릴 … (총 400m) · 사다리 … (=2000m × 1))
+    const totM = /(?:총\s*|\(=\s*)(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s?(km|m)\b(?!당)/.exec(body) || (label === "합계" ? /^(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s?(km|m)\b/.exec(body.trim()) : null);
+    // ② "워밍업 400m + 빠르게 50m × 2"처럼 '+'로 이어진 줄은 모두 더해요
+    let plusSum = null;
+    const head = body.split(" — ")[0].replace(/\[[^\]]*\]|\([^)]*\)/g, ""); // [홀=… + …] 같은 설명 괄호는 빼고
+    if (!totM && /\+/.test(head)) {
+      const parts = head.split("+"); let tot2 = 0, unit = null, ok = 0;
+      parts.forEach((q) => { const r1 = /(\d+(?:\.\d+)?)\s?(km|m)\b\s*×\s*(\d+)/.exec(q), r0 = /(\d+(?:\.\d+)?)\s?(km|m)\b(?![a-z/])/.exec(q);
+        const hit = r1 || r0; if (!hit) return; const u = hit[2]; if (unit && u !== unit) return; unit = u; tot2 += +hit[1] * (r1 ? +r1[3] : 1); ok++; });
+      if (ok >= 2) plusSum = [tot2, unit];
+    }
+    let rep = totM || plusSum ? null : /(\d+(?:\.\d+)?)\s?(km|m)\s*×\s*(\d+)/.exec(body);
     const rep2 = /(\d+)\s*×\s*(\d+(?:\.\d+)?)\s?(km|m)\b/.exec(body); // "7 × 100m" 순서
-    if (!rep && rep2) rep = [rep2[0], rep2[2], rep2[3], rep2[1]];
-    if (rep) {
+    if (!totM && !plusSum && !rep && rep2) rep = [rep2[0], rep2[2], rep2[3], rep2[1]];
+    if (plusSum) chips.push(plusSum[1] === "km" ? `${Math.round(plusSum[0] * 10) / 10}km` : `${plusSum[0].toLocaleString()}m`);
+    else if (totM) {
+      const v = N(totM[1]);
+      chips.push(totM[2] === "km" ? `${v}km` : `${v.toLocaleString()}m`); // 수영은 미터 그대로 (예: 4,450m)
+    } else if (rep) {
       const tot = +rep[1] * +rep[3];
       chips.push(rep[2] === "km" ? `${Math.round(tot * 10) / 10}km` : tot >= 1000 ? `${(tot / 1000).toFixed(1)}km` : `${tot}m`);
     } else {
-      const d = /(\d+(?:\.\d+)?)\s?km(?![/a-z])/.exec(body) || /(\d{3,5})m(?![a-z/])/.exec(body);
+      const d = /(\d+(?:\.\d+)?)\s?km(?![/a-z])/.exec(body) || /(\d{1,3}(?:,\d{3})+|\d{2,5})m(?![a-z/당])/.exec(body);
       if (d) chips.push(d[0].replace(/\s/g, ""));
     }
     const repT = /(\d+)분\s*×\s*(\d+)/.exec(body);
     if (repT) chips.push(`${+repT[1] * +repT[2]}분`);
-    else { const tm = /(\d+)분/.exec(body); if (tm && !/마지막|처음/.test(body.slice(0, tm.index))) chips.push(`${tm[1]}분`); }
+    else { // 쉬는 시간('세트 사이 1분'·'휴식 1분')과 출발 간격('1분 40초마다')은 운동 시간이 아니에요
+      const tm = [...body.matchAll(/(\d+)분/g)].find((q) => !/(사이|휴식|쉬고)\s*$/.test(body.slice(0, q.index)) && !/^분\s*(\d+초)?\s*마다/.test(body.slice(q.index + q[1].length)));
+      if (tm && !/마지막|처음/.test(body.slice(0, tm.index))) chips.push(`${tm[1]}분`);
+    }
     return { label, body, chips };
   }
   function stepTable(steps) {
@@ -1004,7 +1024,7 @@
       <div class="spread"><b style="font-size:14px">⚖️ 강도 비율 조절</b><span id="ratioVal" style="font-size:14px">저강도 <b>${v}</b> : 고강도 <b>${100 - v}</b></span></div>
       <input type="range" id="ratioRange" min="50" max="95" step="5" value="${v}" style="width:100%;margin:10px 0 6px;accent-color:var(--accent)" />
       <div class="chips grid5">${[90, 85, 80, 75, 70].map((x) => `<button type="button" class="chip${x === v ? " on" : ""}" data-ratio="${x}">${x}:${100 - x}${x === recLow(profile) ? "<small>추천</small>" : ""}</button>`).join("")}</div>
-      <button type="button" class="primary" data-ratioapply="1" style="width:100%;padding:12px;border-radius:12px;margin-top:10px" ${v === cur ? "disabled" : ""}>${v === cur ? `지금 비율 ${cur}:${100 - cur}` : `✓ ${v}:${100 - v}로 적용하고 스케줄 바꾸기`}</button>
+      ${v === cur ? `<div class="ratio-now">✅ 지금 적용 중: ${cur}:${100 - cur}</div>` : `<button type="button" class="primary" data-ratioapply="1" style="width:100%;padding:12px;border-radius:12px;margin-top:10px">✓ ${v}:${100 - v}로 적용하고 스케줄 바꾸기</button>`}
     </div>`;
   }
   async function applyRatio(btn) {
