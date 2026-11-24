@@ -385,7 +385,9 @@
       <p class="hint" style="margin:8px 0 0">설정에 적은 주간 거리예요. 회복 주에는 70%로 줄어요.</p></div>`;
   }
 
+  let homeSeq = 0, homeLast = ""; // 홈을 여러 번 연달아 그려도 마지막 것만, 내용이 같으면 다시 그리지 않아요 (깜빡임 방지)
   async function renderHome() {
+    const seq = ++homeSeq;
     document.body.classList.toggle("guest", !(TS.auth && TS.auth.user)); // 로그아웃이면 종목·심박 존·레벨 기준표 숨김
     const p = TS.getProfile ? TS.getProfile() : null;
     const now = new Date();
@@ -396,6 +398,7 @@
     const mon = mondayOf(now);
     const { data: weekSess } = await TS.mine(db.from(TS.TABLE).select("*")).gte("date", iso(mon)).lte("date", iso(addDays(mon, 6)))
       .order("date").order("start_time", { nullsFirst: true });
+    if (seq !== homeSeq) return; // 그사이 더 새로 그리기 시작했으면 이건 버려요
     const plan = weekSess || [];
     if (!homeDay || homeDay < iso(mon) || homeDay > iso(addDays(mon, 6))) homeDay = iso(now);
     const list = plan.filter((s) => s.date === homeDay);
@@ -431,7 +434,7 @@
     const dayTitle = homeDay === todayIso ? "오늘의 훈련" : `${sd.getMonth() + 1}/${sd.getDate()} ${DAY[(sd.getDay() + 6) % 7]}요일 훈련`;
     const todayHtml = list.length ? list.map((s) => sessHtml(s, homeDay === todayIso)).join("") : `<p class="hint" style="margin:0">${plan.length ? "이날은 쉬는 날이에요. 푹 쉬세요 😴" : "이번 주 계획이 아직 없어요."}</p>`;
 
-    $("homeBody").innerHTML = `
+    const homeHtml = `
       <div style="margin-bottom:14px"><div class="eyebrow">${now.getMonth() + 1}월 ${now.getDate()}일 ${DAY[(now.getDay() + 6) % 7]}요일</div>
         <h1 class="big">${name}${greet}</h1></div>
       ${p && p.detail === "quick" ? `<div class="card detail-nudge"><b>📋 계획을 더 정확하게 만들어 볼까요?</b>
@@ -489,6 +492,10 @@
 
       ${acts[0] ? `<div class="eyebrow mt">최근 활동</div>${actCard(acts[0])}` : ""}
     `;
+    const homeKey = (TS.explain ? TS.explain.mode() : "") + homeHtml; // 초보용·고급용을 바꾸면 다시 그려요
+    if (homeKey === homeLast && $("homeBody").firstElementChild) return; // 똑같으면 그대로 둬요
+    homeLast = homeKey;
+    $("homeBody").innerHTML = homeHtml;
     if ($("hGo")) $("hGo").onclick = () => TS.openTracker();
     if ($("hMakePlan")) $("hMakePlan").onclick = () => TS.openPlan();
     if ($("hToPlan")) $("hToPlan").onclick = () => showTab("plan");

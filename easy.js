@@ -89,10 +89,8 @@
   const IDS = ["homeBody", "tab-plan", "planBody", "detailBody", "wizard", "actBody"];
   let busy = false;
   const run = () => { if (busy) return; busy = true; try { IDS.forEach((id) => walk(document.getElementById(id))); } finally { busy = false; } };
-  let timer = null;
-  const later = () => { clearTimeout(timer); timer = setTimeout(run, 30); };
   function start() {
-    const mo = new MutationObserver(() => { if (!busy) later(); });
+    const mo = new MutationObserver(() => { if (!busy) run(); }); // 화면에 그려지기 전에 바로 바꿔요 (0.03초 뒤에 바꾸면 한 번 깜빡여요)
     IDS.forEach((id) => { const el = document.getElementById(id); if (el) mo.observe(el, { childList: true, subtree: true, characterData: true }); });
     run();
   }
