@@ -100,11 +100,18 @@
   const BADGES = [[1000, "1K", "팔로워 1000명"], [100, "100", "팔로워 100명"], [10, "10", "팔로워 10명"]]; // 3개 모두 같은 파란 배지 (숫자만 달라요)
   // 🛡️ 운영자(앱 주인) — app_admins 표에 있는 계정만, 다른 사람에게는 없는 배지
   let owners = new Set();
-  (async () => { try { const { data } = await db.from("app_admins").select("user_id"); owners = new Set((data || []).map((r) => r.user_id)); } catch (e) { /* 표 없음 */ } })();
-  window.addEventListener("ts:auth", async () => { try { const { data } = await db.from("app_admins").select("user_id"); owners = new Set((data || []).map((r) => r.user_id)); } catch (e) { /* 무시 */ } });
+  const banned = new Set(); // 🚫 운영자가 이용 정지한 회원
+  async function loadOwners() {
+    try { const { data } = await db.from("app_admins").select("user_id"); owners = new Set((data || []).map((r) => r.user_id)); } catch (e) { /* 표 없음 */ }
+    try { const { data, error } = await db.from("banned_users").select("user_id"); if (!error) { banned.clear(); (data || []).forEach((r) => banned.add(r.user_id)); } } catch (e) { /* 표 없음 */ }
+    window.dispatchEvent(new Event("ts:owner")); // 나 탭·홈이 운영자 줄을 다시 그려요 (예전에는 늦게 와서 안 보이던 문제)
+  }
+  loadOwners();
+  window.addEventListener("ts:auth", loadOwners);
+  TS.isBanned = (uid) => banned.has(uid || me());
   TS.isOwner = (uid) => owners.has(uid || me());
   function badge(uid) {
-    const own = owners.has(uid) ? '<span class="obadge" title="ZONE 운영자">✔ ZONE</span>' : "";
+    const own = owners.has(uid) ? '<span class="obadge" title="ZONE 운영자">✔ ZONE 운영자</span>' : "";
     const n = fol.count[uid] || 0, b = BADGES.find(([k]) => n >= k);
     return own + (b ? `<span class="fbadge" title="${b[2]} 달성 (지금 ${n}명)">👣${b[1]}</span>` : "");
   }
@@ -126,7 +133,7 @@
   // ---------- 🚩 신고 · 🚫 차단 (schema_report.sql 실행 후) ----------
   const blocked = new Set();
   let blockOk = true;
-  const notBlocked = (x) => !blocked.has(x.user_id) && (!hiddenP.has(String(x.id)) || x.user_id === me() || (TS.isOwner && TS.isOwner(me())));
+  const notBlocked = (x) => !blocked.has(x.user_id) && (!banned.has(x.user_id) || (TS.isOwner && TS.isOwner(me()))) && (!hiddenP.has(String(x.id)) || x.user_id === me() || (TS.isOwner && TS.isOwner(me())));
   // 🙈 신고가 5명 이상 쌓인 글은 운영자가 확인할 때까지 자동으로 숨겨요 (글쓴이·운영자에게는 보여요)
   const hiddenP = new Set();
   async function loadHidden() { try { const { data, error } = await db.from("hidden_posts").select("post_id"); if (error) return; hiddenP.clear(); (data || []).forEach((r) => hiddenP.add(String(r.post_id))); } catch (e) { /* 표 없음 */ } }
@@ -148,6 +155,7 @@
         ${mineP ? "" : `<button type="button" class="as-row danger" data-m="rep">🚩 신고하기<span>›</span></button>
         <button type="button" class="as-row danger" data-m="block">🚫 이 사람 차단</button>`}
         ${owner ? '<button type="button" class="as-row danger" data-m="adel">🛡️ (운영자) 이 글 지우기</button>' : ""}
+        ${owner && !mineP ? `<button type="button" class="as-row danger" data-m="ban">🛡️ (운영자) ${banned.has(uid) ? "이 회원 정지 풀기" : "이 회원 이용 정지"}</button>` : ""}
         <button type="button" class="as-row" data-m="x">취소</button>
       </div><p class="warn as-msg" id="moreMsg"></p>`;
     const reasons = () => `<div class="cm-grab"></div>
@@ -176,6 +184,8 @@
         if (error && !/duplicate/i.test(error.message)) { msg(/relation|schema cache/i.test(error.message) ? "차단 기능은 서버 설정 후에 쓸 수 있어요." : "차단하지 못했어요."); return; }
         blocked.add(uid); d.close(); toast("🚫 차단했어요"); render();
       };
+      const bn = d.querySelector('[data-m="ban"]');
+      if (bn) bn.onclick = async () => { d.close(); await TS.setBan(uid, !banned.has(uid)); };
       const ad = d.querySelector('[data-m="adel"]');
       if (ad) ad.onclick = async () => {
         if (!await TS.ask("운영자 권한으로 이 글을 지울까요?", "삭제")) return;
@@ -210,7 +220,7 @@
         <p class="rep-text">${p ? esc(String(p.body || "(사진·영상만 있는 글)").slice(0, 300)) : "이미 지워진 글이에요."}</p>
         ${p && p.media && p.media.length ? `<div class="rep-media">${p.media.slice(0, 4).map((m) => mediaTag(m, "rep-th")).join("")}</div>` : ""}
         <p class="hint" style="margin:0">마지막 신고 ${new Date(rs[0].created_at || Date.now()).toLocaleString("ko-KR")}</p>
-        <div class="rep-act">${p ? '<button type="button" class="pill danger-pill" data-r="del">🗑 글 지우기</button>' : ""}<button type="button" class="pill" data-r="ok">✓ 문제없음 · 처리 완료</button></div></div>`; };
+        <div class="rep-act">${p ? '<button type="button" class="pill danger-pill" data-r="del">🗑 글 지우기</button>' : ""}${p && p.user_id !== me() ? `<button type="button" class="pill danger-pill" data-r="ban">${banned.has(p.user_id) ? "정지 풀기" : "🚫 글쓴이 정지"}</button>` : ""}<button type="button" class="pill" data-r="ok">✓ 문제없음 · 처리 완료</button></div></div>`; };
     draw(`<p class="hint" style="margin:0 0 10px">처리할 신고 ${open.length}건 · 글 ${ids.length}개. 지우거나 '처리 완료'를 누르면 목록에서 빠져요.</p>${ids.map(card).join("")}`);
     d.querySelectorAll(".rep-card").forEach((c) => {
       const pid = c.dataset.pid, repIds = byPost[pid].map((r) => r.id);
@@ -218,7 +228,37 @@
       const del = c.querySelector('[data-r="del"]');
       if (del) del.onclick = async () => { if (!await TS.ask("이 글을 지울까요? 되돌릴 수 없어요.", "삭제")) return; const { error: e1 } = await db.from("posts").delete().eq("id", pid); if (e1) { toast("지우지 못했어요 (서버 설정 확인)"); return; } await done(); toast("🛡️ 글을 지웠어요"); render(); };
       c.querySelector('[data-r="ok"]').onclick = async () => { await done(); toast("✓ 처리 완료"); };
+      const bb = c.querySelector('[data-r="ban"]'); const P0 = pmap[pid];
+      if (bb && P0) bb.onclick = async () => { if (await TS.setBan(P0.user_id, !banned.has(P0.user_id))) bb.textContent = banned.has(P0.user_id) ? "정지 풀기" : "🚫 글쓴이 정지"; };
     });
+  };
+  TS.setBan = async (uid, on) => {
+    if (!(TS.isOwner && TS.isOwner(me())) || !uid || uid === me()) return false;
+    if (on) {
+      if (!await TS.ask("이 회원을 이용 정지할까요?\n정지하면 글·댓글·스토리를 올릴 수 없고, 이 사람의 글은 다른 사람에게 안 보여요. (나중에 풀 수 있어요)", "정지")) return false;
+      const { error } = await db.from("banned_users").insert({ user_id: uid });
+      if (error && !/duplicate/i.test(error.message)) { toast(/relation|schema cache/i.test(error.message) ? "이용 정지는 서버 설정(SQL) 후에 쓸 수 있어요." : "정지하지 못했어요."); return false; }
+      banned.add(uid); toast("🚫 이용 정지했어요");
+    } else {
+      const { error } = await db.from("banned_users").delete().eq("user_id", uid);
+      if (error) { toast("정지를 풀지 못했어요."); return false; }
+      banned.delete(uid); toast("✓ 정지를 풀었어요");
+    }
+    render(); window.dispatchEvent(new Event("ts:owner")); return true;
+  };
+  TS.bannedCount = () => banned.size;
+  TS.openBans = async () => {
+    if (!(TS.isOwner && TS.isOwner(me()))) return;
+    let d = $("banDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "banDlg"; d.className = "wide-dlg"; document.body.appendChild(d); }
+    const ids = [...banned];
+    const { data: ms } = ids.length ? await db.from("members").select("id,nickname").in("id", ids) : { data: [] };
+    const nm = {}; (ms || []).forEach((m) => { nm[m.id] = m.nickname; });
+    d.innerHTML = `<div class="wide-hd"><b>🛡️ 이용 정지한 회원</b><span class="hint">운영자만 보여요</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
+      <div class="rep-body">${ids.length ? ids.map((u) => `<div class="card rep-card"><div class="spread"><b>${esc(nm[u] || "알 수 없음")}<span class="ntag">#${tagNo(u)}</span></b><button type="button" class="pill" data-unban="${esc(u)}">정지 풀기</button></div></div>`).join("") : '<div class="note">정지한 회원이 없어요. 커뮤니티 글의 "…" 메뉴나 신고된 글 화면에서 정지할 수 있어요.</div>'}</div>`;
+    d.querySelector(".wide-x").onclick = () => d.close();
+    d.querySelectorAll("[data-unban]").forEach((b) => { b.onclick = async () => { if (await TS.setBan(b.dataset.unban, false)) b.closest(".rep-card").remove(); }; });
+    if (!d.open) d.showModal();
   };
   TS.reportCount = async () => { const { data, error } = await db.from("post_reports").select("id,handled").limit(1000); if (error) return null; return (data || []).filter((r) => !r.handled).length; };
   TS.blocks = { list: async () => { const { data } = await db.from("user_blocks").select("blocked").eq("blocker", me()); const ids = (data || []).map((r) => r.blocked); if (!ids.length) return []; const { data: ms } = await db.from("members").select("id,nickname").in("id", ids); return ids.map((id) => ({ id, nickname: ((ms || []).find((m) => m.id === id) || {}).nickname || "?" })); },
@@ -879,6 +919,7 @@
       e.preventDefault();
       const body = form.querySelector("input").value.trim();
       if (!body) return;
+      if (TS.isBanned && TS.isBanned()) { toast("운영자가 이용을 정지해서 댓글을 쓸 수 없어요."); return; }
       const bad = TS.badText && TS.badText(body); if (bad) { toast(bad); return; }
       const { error: e2 } = await db.from("post_comments").insert({ post_id: id, user_id: me(), body });
       if (e2) { toast("댓글을 올리지 못했어요. 인터넷 연결을 확인해 주세요"); return; }
@@ -1003,6 +1044,7 @@
   async function submitPost() {
     const vis = $("pcVis").value, text = $("pcText").value.trim(), actId = null;
     const msg = $("pcMsg"), btn = $("pcGo");
+    if (TS.isBanned && TS.isBanned()) { msg.textContent = "운영자가 이용을 정지해서 글을 올릴 수 없어요. 문의는 나 탭 → 건의사항으로 보내 주세요."; return; }
     const bad = TS.badText && TS.badText(text); if (bad) { msg.textContent = bad; return; }
     if (pcKind === "story" && !picked.length) { msg.textContent = "스토리는 사진이나 동영상이 있어야 해요."; return; }
     if (!text && !picked.length) { msg.textContent = "글이나 사진 중 하나는 있어야 해요."; return; }

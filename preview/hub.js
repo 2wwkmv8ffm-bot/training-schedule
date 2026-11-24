@@ -153,6 +153,7 @@
   window.addEventListener("ts:activities", refresh);
   window.addEventListener("ts:profile", renderCurrent);
   window.addEventListener("ts:auth", () => { if (current === "me") renderMe(); else if (current === "home") renderHome(); });
+  window.addEventListener("ts:owner", () => { if (current === "me") renderMe(); }); // 운영자 확인이 끝나면 운영자 줄을 바로 보여 줘요
   window.addEventListener("ts:sessions", () => { if (current === "home") renderHome(); });
   window.addEventListener("ts:journal", () => { if (current === "home") renderHome(); });
 
@@ -918,7 +919,8 @@
       : `<div class="set-row"><span>👤 <b>${esc((A.member && A.member.nickname) || "")}</b> <span class="hint">${esc(A.user.email || "")}</span></span><button type="button" class="pill" id="acNick">닉네임 변경</button></div>
          <form class="set-row" id="acNickForm" hidden style="gap:6px"><input id="acNickIn" maxlength="20" placeholder="새 닉네임 (20자 이내)" value="${esc((A.member && A.member.nickname) || "")}" style="flex:1" /><button type="submit" class="primary pill">저장</button><button type="button" class="pill" id="acNickX">취소</button></form>
          ${nLocal ? `<div class="set-row"><span>이 기기에만 있는 기록 ${nLocal}개</span><button type="button" class="pill" id="acUp">계정에 올리기</button></div>` : ""}
-         ${TS.isOwner && TS.isOwner() ? `<div class="set-row"><span>🛡️ 운영자 · 가입한 회원 수</span><b id="adminCount">세는 중…</b></div>` : ""}
+         ${TS.isOwner && TS.isOwner() ? `<div class="set-row"><span>🛡️ 운영자 · 가입한 회원</span><b id="adminCount" style="text-align:right">세는 중…</b></div>` : ""}
+         ${TS.isOwner && TS.isOwner() ? `<div class="set-row"><span>🛡️ 운영자 · 이용 정지한 회원 <b style="color:#dc2626">${TS.bannedCount ? TS.bannedCount() : 0}명</b></span><button type="button" class="pill" onclick="TS.openBans && TS.openBans()">보기</button></div>` : ""}
          ${TS.isOwner && TS.isOwner() ? `<div class="set-row"><span>🛡️ 운영자 · 신고된 글 <b id="adminRep" style="color:#dc2626"></b></span><button type="button" class="pill" onclick="TS.openReports && TS.openReports()">보기</button></div>` : ""}
          <div class="set-row"><span>로그아웃</span><button type="button" class="pill" id="acOut">로그아웃</button></div>
          <div class="set-row"><span class="hint">회원 탈퇴 — 계정과 모든 기록·글·일지가 지워져요</span><button type="button" class="link" id="acDel" style="color:#dc2626">회원 탈퇴</button></div>
@@ -963,9 +965,12 @@
       A.member = data; renderMe();
     };
     if ($("adminRep") && TS.reportCount) TS.reportCount().then((n) => { if ($("adminRep")) $("adminRep").textContent = n == null ? "" : n ? `${n}건` : "0건"; });
-    if ($("adminCount")) db.from("members").select("id", { count: "exact", head: true }).then(({ count, error }) => { // 운영자만 보여요
+    if ($("adminCount")) (async () => { // 운영자만 보여요: 전체 · 인증 완료 · 오늘 · 7일 (서버 함수가 없으면 전체만)
+      const { data: st, error: se } = await db.rpc("admin_member_stats");
+      if (!se && st) { if ($("adminCount")) $("adminCount").innerHTML = `${st.total}명 <span class="hint">(인증 ${st.confirmed})</span><br><span class="hint">오늘 +${st.today} · 7일 +${st.week}</span>`; return; }
+      const { count, error } = await db.from("members").select("id", { count: "exact", head: true });
       if ($("adminCount")) $("adminCount").textContent = error || count == null ? "불러오지 못했어요" : `${count}명`;
-    });
+    })();
     if ($("acDel")) $("acDel").onclick = async () => { // 회원 탈퇴 (앱스토어·개인정보보호법 필수)
       if (!await TS.ask("정말 탈퇴할까요? 계정과 모든 훈련 기록·글·사진·일지가 지워지고 되돌릴 수 없어요.", "탈퇴", "취소")) return;
       if (!await TS.ask("마지막 확인이에요. 탈퇴하면 같은 계정으로 다시 볼 수 없어요. 탈퇴할까요?", "탈퇴", "취소")) return;
