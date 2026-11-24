@@ -59,7 +59,7 @@
   <meta name="apple-mobile-web-app-title" content="ZONE" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <link rel="stylesheet" href="vendor/leaflet-1.9.4/leaflet.css" /><!-- 🔒 바깥 사이트가 아니라 ZONE 안에 둔 원본 파일 (바깥 사이트가 해킹돼도 안전) -->
   <style>
     :root {
       --safe-top: env(safe-area-inset-top, 0px); /* 📱 시계·배터리·카메라 영역 높이 (휴대폰마다 달라요) */
@@ -1051,8 +1051,8 @@
   <!-- 로그인 · 회원가입 -->
   <div class="ov" id="authOv"><div class="ov-inner" id="authBody"></div></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="vendor/supabase-js-2.49.4/supabase.js"></script>
+  <script src="vendor/leaflet-1.9.4/leaflet.js"></script>
   <script src="config.js?v=202611231900"></script>
   <script src="zones.js?v=202611231900"></script>
   <script src="app.js?v=202611231900"></script>

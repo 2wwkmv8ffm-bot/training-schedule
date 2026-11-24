@@ -227,7 +227,7 @@
     if (jszip) return jszip;
     jszip = new Promise((ok, bad) => {
       const s = document.createElement("script");
-      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+      s.src = "vendor/jszip-3.10.1/jszip.min.js"; // 🔒 ZONE 안에 둔 원본 파일
       s.onload = () => ok(window.JSZip);
       s.onerror = () => bad(new Error("ZIP 도구를 불러오지 못했어요. 압축을 풀어서 .fit 파일을 올려 주세요."));
       document.head.appendChild(s);

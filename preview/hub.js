@@ -714,6 +714,7 @@
       const ext = (f.name.match(/\.[a-z0-9]+$/i) || [""])[0].toLowerCase();
       const path = `${a.id}/${Date.now()}-${i}${ext}`;
       const { error } = await db.storage.from(BUCKET).upload(path, f, { contentType: f.type || undefined, upsert: false });
+      if (error && /mime|type|not allowed|size|large/i.test(error.message || "")) { alert(`${f.name}: 사진(jpg·png·heic 등)이나 동영상(mp4·mov) 파일만, 20MB까지 올릴 수 있어요.`); continue; }
       if (error) { msg.textContent = /not found|bucket/i.test(error.message) ? MEDIA_HELP : "올리기 실패: " + error.message; return; }
     }
     $("dFile").value = "";
