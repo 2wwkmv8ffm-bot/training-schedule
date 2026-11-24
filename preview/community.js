@@ -874,14 +874,50 @@
   }
 
   // ❤️ 내 글에 누가 좋아요를 눌렀는지 보기 (글 주인만)
+  // ❤️ 좋아요 누른 사람: 아래에서 올라오는 창 — 프로필 사진 · 이름 · 팔로우 · 친구 추가 (이름·사진을 누르면 프로필)
   async function showLikers(id) {
     const p = findPost(id);
-    const ids = ((p && p.post_likes) || []).map((l) => l.user_id);
-    if (!ids.length) { alert("아직 좋아요가 없어요."); return; }
-    const { data, error } = await db.from("members").select("id,nickname").in("id", ids);
-    if (error) { alert("지금은 목록을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
-    const names = ids.map((u) => ((data || []).find((m) => m.id === u) || {}).nickname || "알 수 없음");
-    alert(`❤️ 좋아요를 누른 사람 (${names.length}명)\n\n` + names.join("\n"));
+    const ids = [...new Set(((p && p.post_likes) || []).map((l) => l.user_id))];
+    if (!ids.length) { toast("아직 좋아요가 없어요."); return; }
+    let d = $("likeDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "likeDlg"; d.className = "act-sheet like-sheet"; document.body.appendChild(d); d.onclick = (e) => { if (e.target === d) d.close(); }; }
+    d.innerHTML = `<div class="cm-grab"></div><div class="as-head"><b>좋아요 ${ids.length}명</b></div><p class="hint as-note">불러오는 중…</p>`;
+    if (!d.open) d.showModal();
+    const { data, error } = await db.from("members").select("id,nickname,avatar_url").in("id", ids);
+    if (error) { d.querySelector(".as-note").textContent = "지금은 목록을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."; return; }
+    await loadFollows(ids).catch(() => {});
+    const mm = {}; (data || []).forEach((m) => { mm[m.id] = m; });
+    const order = ids.slice().sort((a, b) => (b === me()) - (a === me())); // 나를 맨 위에
+    const btns = (u) => {
+      if (u === me()) return '<span class="hint">나</span>';
+      const isF = fol.following.has(u);
+      const st = fr.accepted.includes(u) ? "friend" : fr.outgoing.includes(u) ? "sent" : fr.incoming.includes(u) ? "got" : "none";
+      const f = fol.ok ? `<button type="button" class="lk-btn ${isF ? "" : "on"}" data-lk-fol="${esc(u)}">${isF ? "팔로잉" : "팔로우"}</button>` : "";
+      const r = st === "friend" ? '<button type="button" class="lk-btn" disabled>✓ 친구</button>'
+        : st === "sent" ? '<button type="button" class="lk-btn" disabled>요청 보냄</button>'
+        : st === "got" ? `<button type="button" class="lk-btn on" data-lk-acc="${esc(u)}">친구 수락</button>`
+        : `<button type="button" class="lk-btn" data-lk-ask="${esc(u)}">＋ 친구</button>`;
+      return f + r;
+    };
+    const row = (u) => { const m = mm[u] || { nickname: "알 수 없음" };
+      return `<div class="lk-row" data-u="${esc(u)}"><button type="button" class="lk-who" data-lk-prof="${esc(u)}">${avatar(m, 44)}<span class="lk-nm">${nameTag(m.nickname, u)}${badge(u)}</span></button><span class="lk-act">${btns(u)}</span></div>`; };
+    const draw = () => {
+      d.innerHTML = `<div class="cm-grab"></div><div class="as-head"><b>❤️ 좋아요 ${ids.length}명</b></div><div class="lk-list">${order.map(row).join("")}</div>`;
+      d.querySelectorAll("[data-lk-prof]").forEach((b) => { b.onclick = () => { d.close(); openProfile(b.dataset.lkProf); }; });
+      d.querySelectorAll("[data-lk-fol]").forEach((b) => { b.onclick = async () => { b.disabled = true; await toggleFollow(b.dataset.lkFol); draw(); }; });
+      d.querySelectorAll("[data-lk-ask]").forEach((b) => { b.onclick = async () => {
+        if (TS.isBanned && TS.isBanned()) { toast("운영자가 이용을 정지해서 친구 요청을 보낼 수 없어요."); return; }
+        b.disabled = true; const u = b.dataset.lkAsk;
+        const { error: e1 } = await db.from("friendships").insert({ requester: me(), addressee: u, status: "pending" });
+        if (e1 && !/duplicate/i.test(e1.message)) { toast("친구 요청을 보내지 못했어요"); b.disabled = false; return; }
+        if (!fr.outgoing.includes(u)) fr.outgoing.push(u); toast("🤝 친구 요청을 보냈어요"); draw(); }; });
+      d.querySelectorAll("[data-lk-acc]").forEach((b) => { b.onclick = async () => {
+        b.disabled = true; const u = b.dataset.lkAcc;
+        const { error: e2 } = await db.from("friendships").update({ status: "accepted" }).eq("requester", u).eq("addressee", me());
+        if (e2) { toast("수락하지 못했어요"); b.disabled = false; return; }
+        fr.incoming = fr.incoming.filter((x) => x !== u); if (!fr.accepted.includes(u)) fr.accepted.push(u); toast("🤝 이제 친구예요"); draw(); }; });
+    };
+    draw();
   }
   // 💬 댓글: 인스타그램처럼 아래에서 화면의 2/3 높이로 올라오는 창
   function commentSheet() {
