@@ -210,7 +210,7 @@
     }
     TS.setSport(p ? p.sport : null);
     const b = $("sportBtn");
-    if (b) b.textContent = p && p.sport ? `${SPORTS[p.sport].icon} ${p.sport} ▾` : "종목 선택";
+    if (b) b.textContent = "📋 문진표"; // 홈 버튼 이름은 늘 '문진표' (누르면 종목·문진표 고르기)
     window.dispatchEvent(new Event("ts:profile"));
   }
 

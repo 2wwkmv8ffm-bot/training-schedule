@@ -409,7 +409,7 @@
     /* 홈: 종목(문진표)·심박 존·레벨 기준표 — 조금 작게, ZONE 글자와 가운데 맞춤 */
     #tab-home > .top { align-items: center; }
     body.guest .home-tools { visibility: hidden; }
-    .home-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 4px; min-width: 0; } /* 가로로 한 줄, 좁은 폰에서만 두 줄 */
+    .home-tools { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; margin-top: 8px; min-width: 0; } /* 문진표·심박 존·레벨 기준표 세로로, 오른쪽 끝 맞춤 */
     .home-tools .pill { font-size: 12px; padding: 5px 11px; margin: 0; line-height: 1.25; }
     .pw-wrap { position: relative; display: block; }
     .pw-wrap input { padding-right: 44px; }
@@ -883,7 +883,7 @@
       <header class="top">
         <div class="brand" data-home="1" style="cursor:pointer">Z<i>O</i>NE</div>
         <div class="home-tools">
-          <button class="pill" id="sportBtn">종목 선택</button>
+          <button class="pill" id="sportBtn">📋 문진표</button>
           <button type="button" class="pill zone-btn" data-zguide="0">❤️ 심박 존</button>
           <button type="button" class="pill lv-btn" onclick="window.TS && TS.openLevel && TS.openLevel()">🏅 레벨 기준표</button>
         </div>
@@ -1071,22 +1071,22 @@
 
   <script src="vendor/supabase-js-2.49.4/supabase.js"></script>
   <script src="vendor/leaflet-1.9.4/leaflet.js"></script>
-  <script src="config.js?v=202611241700"></script>
-  <script src="zones.js?v=202611241700"></script>
-  <script src="app.js?v=202611241700"></script>
-  <script src="engine.js?v=202611241700"></script>
-  <script src="profile.js?v=202611241700"></script>
-  <script src="garmin.js?v=202611241700"></script>
-  <script src="tracker.js?v=202611241700"></script>
-  <script src="hub.js?v=202611241700"></script>
-  <script src="auth.js?v=202611241700"></script>
-  <script src="community.js?v=202611241700"></script>
-  <script src="coach.js?v=202611241700"></script>
-  <script src="predict.js?v=202611241700"></script>
-  <script src="feedback.js?v=202611241700"></script>
-  <script src="drills.js?v=202611241700"></script>
-  <script src="journal.js?v=202611241700"></script>
-  <script src="easy.js?v=202611241700"></script>
+  <script src="config.js?v=202611241800"></script>
+  <script src="zones.js?v=202611241800"></script>
+  <script src="app.js?v=202611241800"></script>
+  <script src="engine.js?v=202611241800"></script>
+  <script src="profile.js?v=202611241800"></script>
+  <script src="garmin.js?v=202611241800"></script>
+  <script src="tracker.js?v=202611241800"></script>
+  <script src="hub.js?v=202611241800"></script>
+  <script src="auth.js?v=202611241800"></script>
+  <script src="community.js?v=202611241800"></script>
+  <script src="coach.js?v=202611241800"></script>
+  <script src="predict.js?v=202611241800"></script>
+  <script src="feedback.js?v=202611241800"></script>
+  <script src="drills.js?v=202611241800"></script>
+  <script src="journal.js?v=202611241800"></script>
+  <script src="easy.js?v=202611241800"></script>
   <script>
     // 📶 인터넷이 끊기면 위에 알려 줘요 (마지막으로 본 화면은 그대로 볼 수 있어요)
     (function () {
@@ -1160,6 +1160,6 @@
       document.addEventListener("scroll", onScroll, true);
     })();
   </script>
-  <script src="nav.js?v=202611241700"></script>
+  <script src="nav.js?v=202611241800"></script>
 </body>
 </html>
