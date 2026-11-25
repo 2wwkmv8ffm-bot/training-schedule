@@ -16,7 +16,7 @@
   const BENEFITS = [
     ["🏊", "한 달에 한 번 모임", "코치에게 2시간 직접 배우는 시간"],
     ["💬", "개인 카톡 자세 피드백", "영상을 보내면 자세를 봐 드려요"],
-    ["📞", "코치 통화", "훈련 · 대회 고민을 전화로 상담"],
+    ["📞", "주 1회 코치 통화", "훈련 · 대회 고민을 매주 전화로 상담"],
   ];
 
   // 내 추천 코드 = Z + 계정 번호 앞 8자리 (서버 함수와 같은 규칙)
@@ -83,7 +83,7 @@
       : st.req && st.req.status === "new" ? `<b style="color:#b45309">신청 완료 · 이메일로 안내드려요</b>` : `<span class="hint">지금은 무료 버전이에요</span>`;
     return `
       <div class="card inv-card"><div class="spread"><h3 style="margin:0">🎁 친구 초대</h3><span class="inv-free">10명 = 1개월 무료</span></div>
-        <div class="inv-value"><b class="inv-main">${PRICE} 코칭 멤버십 1개월 무료!</b><span class="inv-sub1">친구 ${NEED}명 초대하고 혜택 받기</span><span class="inv-sub2">코치 2시간 모임 · 카톡 피드백 · 코치 통화 포함 (${PRICE} 상당)</span></div>
+        <div class="inv-value"><b class="inv-main">${PRICE} 코칭 멤버십 1개월 무료!</b><span class="inv-sub1">친구 ${NEED}명 초대하고 혜택 받기</span><span class="inv-sub2">코치 2시간 모임 · 카톡 피드백 · 주 1회 코치 통화 포함 (${PRICE} 상당)</span></div>
         <div class="inv-code"><span class="hint">내 추천 코드</span><b id="invCode">${esc(code)}</b></div>
         <div class="inv-bar" aria-label="추천 ${st.left}/${NEED}명"><i style="width:${pct}%"></i></div>
         <div class="spread hint" style="margin-top:4px"><span>다음 쿠폰까지 <b style="color:var(--text)">${st.left}/${NEED}명</b></span><span>지금까지 ${st.total}명 초대</span></div>
@@ -186,6 +186,15 @@
             <label class="check" style="font-size:13px"><input type="checkbox" id="msAgree" required /> 안내를 위해 이메일을 운영자에게 보내는 데 동의해요</label>
             <button type="submit" class="primary" style="width:100%">${isMember() ? "이메일 남기기" : "멤버십 신청하기"}</button>
             ${isMember() ? "" : '<p class="hint" style="margin:0">아직 돈이 나가지 않아요. 결제는 이메일 안내를 받은 뒤에 해요.</p>'}</form>`}
+        <details class="ms-refund"><summary>환불 규정</summary>
+          <ol>
+            <li>결제 후 7일 안에, 아직 혜택(모임 · 피드백 · 통화)을 하나도 받지 않았다면 <b>전액 환불</b>해 드려요.</li>
+            <li>혜택을 받기 시작한 뒤에는 이용한 날짜만큼 빼고 남은 날짜만큼 환불해 드려요 (30일 기준 일할 계산). 이미 참석한 모임이나 받은 통화 · 피드백은 환불되지 않아요.</li>
+            <li>운영자 사정으로 모임이 취소되면 다음 달로 미루거나, 원하시면 그만큼 환불해 드려요.</li>
+            <li>무료 쿠폰(친구 초대 · 1등 혜택 · 선물)으로 받은 멤버십은 환불 대상이 아니에요.</li>
+            <li>멤버십은 자동으로 연장되지 않아요. 다음 달도 이용하려면 다시 결제하시면 돼요.</li>
+            <li>환불 신청: <b class="sel">cksdnr990605@naver.com</b> 으로 이름과 결제일을 보내 주세요. 영업일 3일 안에 결제하신 방법으로 환불해 드려요.</li>
+          </ol></details>
       </div>`;
     d.querySelector(".wide-x").onclick = () => d.close();
     const f = d.querySelector("#msForm");
