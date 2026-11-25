@@ -80,7 +80,7 @@
     const pend = st.coupons.filter((c) => c.status === "pending" && !(c.source === "referral" && !c.requested_at));
     const used = st.coupons.filter((c) => c.status === "used" && recent(c));
     const msLine = isMember() ? `<b style="color:#15803d">멤버 이용 중 · ${daysLeft()}일 남음</b> <span class="hint">(${esc(st.endsOn)}까지)</span>`
-      : st.req && st.req.status === "new" ? `<b style="color:#b45309">신청 완료 · 운영자가 카톡으로 연락드려요</b>` : `<span class="hint">지금은 무료 버전이에요</span>`;
+      : st.req && st.req.status === "new" ? `<b style="color:#b45309">신청 완료 · 이메일로 안내드려요</b>` : `<span class="hint">지금은 무료 버전이에요</span>`;
     return `
       <div class="card inv-card"><div class="spread"><h3 style="margin:0">🎁 친구 초대</h3><span class="inv-free">10명 = 1개월 무료</span></div>
         <div class="inv-value"><b class="inv-main">${PRICE} 코칭 멤버십 1개월 무료!</b><span class="inv-sub1">친구 ${NEED}명 초대하고 혜택 받기</span><span class="inv-sub2">코치 2시간 모임 · 카톡 피드백 · 코치 통화 포함 (${PRICE} 상당)</span></div>
@@ -90,7 +90,7 @@
         <div class="inv-btns"><button type="button" class="inv-kakao" id="invKakao">💬 카카오톡으로 초대</button><button type="button" class="pill" id="invCopy">문구 복사</button></div></div>
       <div class="card ms-card"><div class="spread"><h3 style="margin:0">💎 ZONE 코칭 멤버십</h3><span class="hint">월 ${PRICE}</span></div>
         <p style="margin:6px 0 10px">${msLine}</p>
-        <button type="button" class="pill" id="msOpen" style="width:100%">${isMember() ? "멤버십 혜택 · 연락처 남기기" : "멤버십 알아보기"}</button></div>
+        <button type="button" class="pill" id="msOpen" style="width:100%">${isMember() ? "멤버십 혜택 · 이메일 남기기" : "멤버십 알아보기"}</button></div>
       ${usable.length || ready.length || pend.length || used.length ? `<div class="card cp-card"><div class="spread"><h3 style="margin:0">🎟️ 내 쿠폰</h3><span class="hint">1장 = 멤버십 30일 (${PRICE} 상당)</span></div>
         ${ready.map((c) => `<div class="set-row"><span><b>🎉 친구 10명 초대 달성!</b><br><span class="hint">[쿠폰 받기]를 누르면 운영자 확인 후 쿠폰함에 들어와요</span></span><button type="button" class="primary pill" data-reqcp="${c.id}">쿠폰 받기</button></div>`).join("")}
         ${usable.map((c) => `<div class="set-row"><span><b>${esc(cpName(c))}</b><br><span class="hint">원할 때 사용하세요 · 사용한 날부터 30일${isMember() ? " (지금 멤버 기간 뒤에 이어져요)" : ""}</span></span><button type="button" class="primary pill" data-usecp="${c.id}">사용하기</button></div>`).join("")}
@@ -123,7 +123,7 @@
       const { data, error } = await db.rpc("use_coupon", { cid: +b.dataset.usecp });
       if (error || !data) { alert("쿠폰을 사용하지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
       toast(`✅ 멤버십 시작 · ${data}까지`);
-      if (TS.notifyOwner) TS.notifyOwner("[ZONE] 쿠폰 사용 · 멤버십 시작", { 닉네임: (TS.auth.member && TS.auth.member.nickname) || "", 끝나는날: data, 안내: "모임 · 피드백 일정을 카톡으로 안내해 주세요" });
+      if (TS.notifyOwner) TS.notifyOwner("[ZONE] 쿠폰 사용 · 멤버십 시작", { 닉네임: (TS.auth.member && TS.auth.member.nickname) || "", 끝나는날: data, 안내: "모임 · 피드백 일정을 이메일로 안내해 주세요" });
       await load(); if (rerender) rerender();
     }; });
   }
@@ -178,26 +178,25 @@
     d.innerHTML = `<div class="wide-hd"><b>💎 ZONE 코칭 멤버십</b><span class="hint">월 ${PRICE}</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
       <div class="rep-body">
         <div class="ms-ben">${BENEFITS.map(([i, t, s]) => `<div><span>${i}</span><div><b>${t}</b><p class="hint">${s}</p></div></div>`).join("")}</div>
-        ${isMember() ? `<div class="note">✅ 멤버 이용 중이에요 · ${daysLeft()}일 남음 (${esc(st.endsOn)}까지). 모임 · 피드백 일정은 운영자가 카톡으로 안내해요.</div>` : ""}
-        ${waiting ? `<div class="note">📨 ${isMember() ? "연락처를 받았어요." : "신청이 접수됐어요."} 운영자가 적어 주신 연락처로 <b>카카오톡</b>으로 연락드려요.</div>`
+        ${isMember() ? `<div class="note">✅ 멤버 이용 중이에요 · ${daysLeft()}일 남음 (${esc(st.endsOn)}까지). 모임 · 피드백 일정은 이메일로 안내해요.</div>` : ""}
+        ${waiting ? `<div class="note">📨 ${isMember() ? "연락처를 받았어요." : "신청이 접수됐어요."} 적어 주신 <b>이메일</b>로 안내드려요.</div>`
           : `<form id="msForm" class="ms-form">
-            <p class="hint" style="margin:0">${isMember() ? "모임 · 피드백 안내를 받을 연락처를 남겨 주세요." : "신청하면 운영자가 <b>카카오톡으로 결제(카카오페이) 안내</b>를 드려요. 결제가 확인되면 그날부터 30일 동안 멤버예요."}</p>
-            <label>이름<input id="msName" maxlength="30" required placeholder="예: 박찬욱" /></label>
-            <label>카톡 아이디 또는 전화번호<input id="msContact" maxlength="60" required placeholder="예: zone_runner 또는 010-1234-5678" /></label>
-            <label class="check" style="font-size:13px"><input type="checkbox" id="msAgree" required /> 연락을 위해 이름 · 연락처를 운영자에게 보내는 데 동의해요</label>
-            <button type="submit" class="primary" style="width:100%">${isMember() ? "연락처 남기기" : "멤버십 신청하기"}</button>
-            ${isMember() ? "" : '<p class="hint" style="margin:0">아직 돈이 나가지 않아요. 결제는 운영자와 카톡으로 확인한 뒤에 해요.</p>'}</form>`}
+            <p class="hint" style="margin:0">${isMember() ? "모임 · 피드백 안내를 받을 이메일을 남겨 주세요." : "신청하면 적어 주신 이메일로 <b>결제 안내</b>를 드려요. 결제가 확인되면 그날부터 30일 동안 멤버예요."}</p>
+            <label>이메일<input id="msContact" type="email" maxlength="60" required autocomplete="email" inputmode="email" autocapitalize="off" value="${esc((TS.auth && TS.auth.user && TS.auth.user.email) || "")}" placeholder="예: zone@naver.com" /></label>
+            <label class="check" style="font-size:13px"><input type="checkbox" id="msAgree" required /> 안내를 위해 이메일을 운영자에게 보내는 데 동의해요</label>
+            <button type="submit" class="primary" style="width:100%">${isMember() ? "이메일 남기기" : "멤버십 신청하기"}</button>
+            ${isMember() ? "" : '<p class="hint" style="margin:0">아직 돈이 나가지 않아요. 결제는 이메일 안내를 받은 뒤에 해요.</p>'}</form>`}
       </div>`;
     d.querySelector(".wide-x").onclick = () => d.close();
     const f = d.querySelector("#msForm");
     if (f) f.onsubmit = async (e) => {
       e.preventDefault();
-      const name = $("msName").value.trim(), contact = $("msContact").value.trim();
-      if (!name || contact.length < 3) return;
+      const contact = $("msContact").value.trim(), name = ((TS.auth.member && TS.auth.member.nickname) || "회원").slice(0, 30);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) { alert("이메일 주소를 확인해 주세요."); return; }
       const btn = f.querySelector("button[type=submit]"); btn.disabled = true; btn.textContent = "보내는 중…";
       const { error } = await db.from("membership_requests").insert({ user_id: me(), name, contact });
       if (error) { btn.disabled = false; btn.textContent = "멤버십 신청하기"; alert("신청을 보내지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
-      if (TS.notifyOwner) TS.notifyOwner("[ZONE] 새 멤버십 신청", { 닉네임: (TS.auth.member && TS.auth.member.nickname) || "", 이름: name, 연락처: contact, 안내: "앱 → 나 → 운영자 · 멤버십에서 확인" });
+      if (TS.notifyOwner) TS.notifyOwner("[ZONE] 새 멤버십 신청", { 닉네임: (TS.auth.member && TS.auth.member.nickname) || "", 이메일: contact, 안내: "앱 → 나 → 운영자 · 멤버십에서 확인" });
       await load(); openMembership(rerender); if (rerender) rerender();
     };
     if (!d.open) d.showModal();
@@ -217,10 +216,10 @@
     const rows = data || [];
     const nm = await names([...new Set(rows.map((r) => r.user_id))]);
     d.innerHTML = `<div class="wide-hd"><b>🛡️ 멤버십 신청</b><span class="hint">운영자만 보여요</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
-      <div class="rep-body"><p class="hint" style="margin:0 0 8px">카톡으로 결제 안내 → 결제 확인 → <b>멤버 시작(30일)</b>. 이미 멤버면 끝나는 날에서 30일 더해져요.</p>
+      <div class="rep-body"><p class="hint" style="margin:0 0 8px">이메일로 결제 안내 → 결제 확인 → <b>멤버 시작(30일)</b>. 이미 멤버면 끝나는 날에서 30일 더해져요.</p>
       ${rows.length ? rows.map((r) => `<div class="card rep-card${r.status === "done" ? " done" : ""}">
         <div class="spread"><b>${esc(nm[r.user_id] || "알 수 없음")}${tag(r.user_id)}</b><span class="hint">${esc(String(r.created_at).slice(0, 10))}</span></div>
-        <div style="margin:6px 0">이름 <b>${esc(r.name)}</b> · 연락처 <b class="sel">${esc(r.contact)}</b></div>
+        <div style="margin:6px 0">이메일 <b class="sel">${esc(r.contact)}</b></div>
         ${r.status === "new" ? `<div class="spread" style="gap:6px"><button type="button" class="primary pill" data-grant="${esc(r.user_id)}" data-req="${r.id}">결제 확인 · 멤버 시작</button><button type="button" class="pill" data-done="${r.id}">처리 완료만</button></div>` : '<span class="hint">✔ 처리 완료</span>'}
       </div>`).join("") : '<div class="note">아직 신청이 없어요.</div>'}</div>`;
     d.querySelector(".wide-x").onclick = () => d.close();
