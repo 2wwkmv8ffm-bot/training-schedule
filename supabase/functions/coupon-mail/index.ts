@@ -9,7 +9,7 @@
 //   GMAIL_APP_PASSWORD : 그 Gmail의 '앱 비밀번호' (16자리)
 //   OWNER_EMAIL        : 운영자가 받을 메일 (없으면 GMAIL_USER)
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import nodemailer from "npm:nodemailer@6.9.16"; // 한글 제목 · 본문을 제대로 보내요
 
 // 서버 전용 열쇠: 새 방식(SUPABASE_SECRET_KEYS)이 있으면 그걸, 없으면 예전 방식(SUPABASE_SERVICE_ROLE_KEY)
 function serverKey(): string {
@@ -69,14 +69,12 @@ Deno.serve(async (req) => {
   mails.push({ to: OWNER, subject: ownerTitle, text:
     `회원: ${nick}${email ? ` (${email})` : ""}\n쿠폰: ${what}${c.note ? ` · ${c.note}` : ""}\n상태: ${c.status === "pending" ? "승인 대기" : c.status === "used" ? "자동 사용됨" : "승인됨"}${ms?.ends_on ? `\n멤버십 끝나는 날: ${ms.ends_on}` : ""}\n\n${col === "mailed_request_at" ? "앱 → 나 → 🛡️ 운영자 · 멤버십 → 쿠폰 승인 대기에서 확인하고 승인해 주세요." : "회원에게 카톡으로 모임 · 피드백 일정을 안내해 주세요."}` });
 
-  const client = new SMTPClient({ connection: { hostname: "smtp.gmail.com", port: 465, tls: true, auth: { username: USER, password: PASS } } });
+  const tx = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: USER, pass: PASS } });
   try {
-    for (const x of mails) await client.send({ from: `ZONE <${USER}>`, to: x.to, subject: x.subject, content: x.text, html: html(x.text) });
+    for (const x of mails) await tx.sendMail({ from: `"ZONE" <${USER}>`, to: x.to, subject: x.subject, text: x.text, html: html(x.text) });
   } catch (e) {
     await SB.from("coupons").update({ [col]: null }).eq("id", id); // 다음에 다시 보낼 수 있게
     return reply({ ok: false, reason: "mail failed", detail: String(e) }, 500);
-  } finally {
-    try { await client.close(); } catch { /* 무시 */ }
   }
   return reply({ ok: true, sent: mails.length });
 });
