@@ -11,7 +11,12 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
-const SB = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+// 서버 전용 열쇠: 새 방식(SUPABASE_SECRET_KEYS)이 있으면 그걸, 없으면 예전 방식(SUPABASE_SERVICE_ROLE_KEY)
+function serverKey(): string {
+  try { const j = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}"); const k = j.default || Object.values(j)[0]; if (k) return String(k); } catch { /* 없음 */ }
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+}
+const SB = createClient(Deno.env.get("SUPABASE_URL")!, serverKey(), { auth: { persistSession: false, autoRefreshToken: false } });
 const USER = Deno.env.get("GMAIL_USER") ?? "";
 const PASS = Deno.env.get("GMAIL_APP_PASSWORD") ?? "";
 const OWNER = Deno.env.get("OWNER_EMAIL") || USER;
@@ -29,7 +34,8 @@ Deno.serve(async (req) => {
   try { const b = await req.json(); id = Number(b.id); action = String(b.action || ""); } catch { return reply({ ok: false, reason: "bad body" }, 400); }
   if (!id || !USER || !PASS) return reply({ ok: false, reason: "setup" }, 400);
 
-  const { data: c } = await SB.from("coupons").select("*").eq("id", id).maybeSingle();
+  const { data: c, error: ce } = await SB.from("coupons").select("*").eq("id", id).maybeSingle();
+  if (ce) return reply({ ok: false, reason: "db", detail: ce.message }, 500);
   if (!c) return reply({ ok: false, reason: "no coupon" });
   let col = "", toMember = false;
   if (action === "request" && c.source === "referral" && c.status === "pending" && c.requested_at && !c.mailed_request_at) col = "mailed_request_at";
