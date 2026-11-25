@@ -99,6 +99,9 @@ Deno.serve(async (req) => {
   const nick = m?.nickname || "회원";
   const what = c.source === "referral" ? "친구 10명 초대" : c.source === "likes" ? `${monthKo(c.period)}좋아요 1등` : c.source === "gift" ? `ZONE 선물${c.note && c.note !== "운영자 선물" ? ` (${c.note})` : ""}` : `${monthKo(c.period)}팔로워 1등`;
 
+  const year = (c.days || 30) >= 365;
+  const LEN = year ? "1년" : "1개월";
+  const VAL = year ? "1,188,000원" : PRICE; // 1년권 = 99,000원 × 12개월
   const mails: Mail[] = [];
   if (toMember && email) {
     if (action === "auto") {
@@ -109,10 +112,10 @@ Deno.serve(async (req) => {
         list: BEN, button: "ZONE 앱 열기",
         foot: "모임 · 피드백 일정은 이 이메일로 안내드려요." });
     } else {
-      mails.push({ to: email, subject: `[ZONE] 🎟️ 멤버십 1개월 무료 쿠폰이 도착했어요`,
-        title: `🎟️ ${nick}님, 무료 쿠폰이 도착했어요!`,
-        lead: `ZONE 코칭 멤버십 1개월 무료 쿠폰(${PRICE} 상당)을 드려요.\n원할 때 사용하면 그날부터 30일 동안 멤버예요.`,
-        box: [["받은 이유", what + (c.note && (c.source === "likes" || c.source === "followers") ? ` · ${c.note}` : "")], ["쓰는 방법", "앱 → 나 → 🎟️ 내 쿠폰 → [사용하기]"], ["혜택 가치", `${PRICE} 상당`]],
+      mails.push({ to: email, subject: `[ZONE] 🎟️ 멤버십 ${LEN} 무료 쿠폰이 도착했어요`,
+        title: `🎟️ ${nick}님, ${LEN} 무료 쿠폰이 도착했어요!`,
+        lead: `ZONE 코칭 멤버십 ${LEN} 무료 쿠폰(${VAL} 상당)을 드려요.\n원할 때 사용하면 그날부터 ${year ? "1년(365일)" : "30일"} 동안 멤버예요.`,
+        box: [["받은 이유", what + (c.note && (c.source === "likes" || c.source === "followers") ? ` · ${c.note}` : "")], ["쿠폰 기간", year ? "1년권 (365일)" : "1개월권 (30일)"], ["쓰는 방법", "앱 → 나 → 🎟️ 내 쿠폰 → [사용하기]"], ["혜택 가치", `${VAL} 상당`]],
         list: BEN, button: "쿠폰 쓰러 가기",
         foot: "이 메일은 ZONE에서 쿠폰을 받으신 분께 보내 드렸어요." });
     }
@@ -122,7 +125,7 @@ Deno.serve(async (req) => {
     subject: ask ? `[ZONE 운영자] 쿠폰 승인해 주세요 · ${nick} · ${what}` : `[ZONE 운영자] ${nick}님에게 ${action === "auto" ? "무료 멤버십 시작" : "쿠폰 도착"} 메일을 보냈어요`,
     title: ask ? "🛡️ 쿠폰 승인 요청이 왔어요" : `🛡️ ${nick}님에게 쿠폰 메일을 보냈어요`,
     lead: ask ? "확인하고 승인해 주세요. 승인하면 회원에게 메일이 가요." : "회원에게 이메일로 모임 · 피드백 일정을 안내해 주세요.",
-    box: [["회원", `${nick}${email ? ` (${email})` : ""}`], ["쿠폰", `${what}${c.note ? ` · ${c.note}` : ""}`], ["상태", c.status === "pending" ? "승인 대기" : c.status === "used" ? "자동 사용됨" : "승인됨"], ...(ms?.ends_on ? [["멤버 끝나는 날", ms.ends_on] as [string, string]] : [])],
+    box: [["회원", `${nick}${email ? ` (${email})` : ""}`], ["쿠폰", `${what}${c.note ? ` · ${c.note}` : ""} · ${LEN}권`], ["상태", c.status === "pending" ? "승인 대기" : c.status === "used" ? "자동 사용됨" : "승인됨"], ...(ms?.ends_on ? [["멤버 끝나는 날", ms.ends_on] as [string, string]] : [])],
     button: ask ? "앱에서 승인하기" : "ZONE 앱 열기",
     foot: ask ? "앱 → 나 → 🛡️ 운영자 · 멤버십 → 쿠폰 승인 대기" : "운영자에게만 보내는 사본이에요." });
 

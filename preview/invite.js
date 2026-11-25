@@ -35,7 +35,7 @@
     const uid = me(); if (!uid) { st.loaded = false; return; }
     const [r1, r2, r3, r4] = await Promise.all([
       db.from("referrals").select("referee,coupon_id").eq("referrer", uid),
-      db.from("coupons").select("id,source,period,note,status,created_at,requested_at,used_at").eq("user_id", uid).order("created_at"),
+      db.from("coupons").select("*").eq("user_id", uid).order("created_at"),
       db.from("memberships").select("ends_on").eq("user_id", uid).maybeSingle(),
       db.from("membership_requests").select("id,status,created_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(1),
     ]);
@@ -69,7 +69,8 @@
 
   // ---------- "나" 탭 카드 ----------
   const monthKo = (p) => (p ? `${+p.slice(5, 7)}월 ` : "");
-  const cpName = (c) => (c.source === "referral" ? "🎁 친구 10명 초대" : c.source === "likes" ? `❤️ ${monthKo(c.period)}좋아요 1등` : c.source === "gift" ? `💝 ZONE 선물${c.note && c.note !== "운영자 선물" ? ` · ${c.note}` : ""}` : `👑 ${monthKo(c.period)}팔로워 1등`);
+  const cpName0 = (c) => (c.source === "referral" ? "🎁 친구 10명 초대" : c.source === "likes" ? `❤️ ${monthKo(c.period)}좋아요 1등` : c.source === "gift" ? `💝 ZONE 선물${c.note && c.note !== "운영자 선물" ? ` · ${c.note}` : ""}` : `👑 ${monthKo(c.period)}팔로워 1등`);
+  const cpName = (c) => `${cpName0(c)}${c.days >= 365 ? " · 1년권" : ""}`;
   function cardsHtml() {
     if (!me() || !st.loaded) return "";
     const code = codeOf(me());
@@ -93,7 +94,7 @@
         <button type="button" class="pill" id="msOpen" style="width:100%">${isMember() ? "멤버십 혜택 · 이메일 남기기" : "멤버십 알아보기"}</button></div>
       ${usable.length || ready.length || pend.length || used.length ? `<div class="card cp-card"><div class="spread"><h3 style="margin:0">🎟️ 내 쿠폰</h3><span class="hint">1장 = 멤버십 30일 (${PRICE} 상당)</span></div>
         ${ready.map((c) => `<div class="set-row"><span><b>🎉 친구 10명 초대 달성!</b><br><span class="hint">[쿠폰 받기]를 누르면 운영자 확인 후 쿠폰함에 들어와요</span></span><button type="button" class="primary pill" data-reqcp="${c.id}">쿠폰 받기</button></div>`).join("")}
-        ${usable.map((c) => `<div class="set-row"><span><b>${esc(cpName(c))}</b><br><span class="hint">원할 때 사용하세요 · 사용한 날부터 30일${isMember() ? " (지금 멤버 기간 뒤에 이어져요)" : ""}</span></span><button type="button" class="primary pill" data-usecp="${c.id}">사용하기</button></div>`).join("")}
+        ${usable.map((c) => `<div class="set-row"><span><b>${esc(cpName(c))}</b><br><span class="hint">원할 때 사용하세요 · 사용한 날부터 ${c.days >= 365 ? "1년(365일)" : "30일"}${isMember() ? " (지금 멤버 기간 뒤에 이어져요)" : ""}</span></span><button type="button" class="primary pill" data-usecp="${c.id}">사용하기</button></div>`).join("")}
         ${pend.map((c) => `<div class="set-row"><span><b>${esc(cpName(c))}</b><br><span class="hint">운영자 확인 중 · 승인되면 메일로 알려 드려요</span></span><span class="hint">승인 대기</span></div>`).join("")}
         ${used.map((c) => `<div class="set-row"><span><b>${esc(cpName(c))}</b><br><span class="hint">${c.source === "followers" ? "자동으로 사용됐어요 · 멤버십 30일" : "사용했어요 · 멤버십 30일"}</span></span><span class="hint">✔ 사용함</span></div>`).join("")}</div>` : ""}
       ${isAdmin() ? `<div class="card"><h3>🛡️ 운영자 · 멤버십</h3>
@@ -119,7 +120,8 @@
       await load(); if (rerender) rerender();
     }; });
     document.querySelectorAll("[data-usecp]").forEach((b) => { b.onclick = async () => {
-      if (!await TS.ask(isMember() ? "쿠폰을 사용할까요? 지금 멤버 기간이 끝나는 날에서 30일이 더해져요." : "쿠폰을 사용할까요? 오늘부터 30일 동안 멤버예요.", "사용하기", "나중에")) return;
+      const c0 = st.coupons.find((x) => x.id === +b.dataset.usecp) || {}; const len = (c0.days || 30) >= 365 ? "1년(365일)" : "30일";
+      if (!await TS.ask(isMember() ? `쿠폰을 사용할까요? 지금 멤버 기간이 끝나는 날에서 ${len}이 더해져요.` : `쿠폰을 사용할까요? 오늘부터 ${len} 동안 멤버예요.`, "사용하기", "나중에")) return;
       const { data, error } = await db.rpc("use_coupon", { cid: +b.dataset.usecp });
       if (error || !data) { alert("쿠폰을 사용하지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
       toast(`✅ 멤버십 시작 · ${data}까지`);
@@ -251,7 +253,7 @@
     const d = dlg("admCpDlg");
     // 지난달 1등 쿠폰을 (없으면) 만들어 둬요 — 여러 번 열어도 한 번만 생겨요
     { const { data: made } = await db.rpc("zone_monthly_tick"); if (Array.isArray(made)) for (const x of made) await mail(x.id, x.action); }
-    const { data } = await db.from("coupons").select("id,user_id,source,period,note,status,created_at,used_at,requested_at").order("created_at", { ascending: false }).limit(150);
+    const { data } = await db.from("coupons").select("*").order("created_at", { ascending: false }).limit(150);
     const rows = data || [];
     const refIds = rows.filter((r) => r.source === "referral").map((r) => r.id);
     const { data: refs } = refIds.length ? await db.from("referrals").select("referee,coupon_id,created_at").in("coupon_id", refIds) : { data: [] };
@@ -284,17 +286,21 @@
     if (!isAdmin()) return;
     const d = dlg("admGiftDlg");
     d.innerHTML = `<div class="wide-hd"><b>💝 쿠폰 직접 보내기</b><span class="hint">운영자만 보여요</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
-      <div class="rep-body"><p class="hint" style="margin:0 0 8px">받는 사람 쿠폰함에 <b>바로 쓸 수 있는 쿠폰</b>(멤버십 30일)이 들어가고, 그 사람과 운영자에게 메일이 가요.</p>
+      <div class="rep-body"><p class="hint" style="margin:0 0 8px">받는 사람 쿠폰함에 <b>바로 쓸 수 있는 쿠폰</b>(1개월권 또는 1년권)이 들어가고, 그 사람과 운영자에게 메일이 가요.</p>
         <form id="gfFind" class="ref-row"><input id="gfQ" maxlength="30" placeholder="닉네임 (예: 러너지민 또는 러너지민#1234)" /><button type="submit" class="pill">찾기</button></form>
+        <div style="margin-top:10px"><span class="hint">쿠폰 기간</span><div class="seg" id="gfLen" style="margin-top:4px"><button type="button" class="on" data-days="30">1개월권</button><button type="button" data-days="365">1년권</button></div></div>
         <label style="display:block;margin-top:10px">보내는 이유 <span class="hint">(메일과 쿠폰에 보여요 · 선택)</span><input id="gfWhy" maxlength="40" placeholder="예: 첫 모임 참석 감사" /></label>
         <div id="gfList" style="margin-top:10px"><button type="button" class="pill" id="gfMe" style="width:100%">🙋 나(운영자)에게 시험으로 보내기</button></div></div>`;
     d.querySelector(".wide-x").onclick = () => d.close();
+    let gfDays = 30;
+    d.querySelectorAll("#gfLen [data-days]").forEach((x) => { x.onclick = () => { gfDays = +x.dataset.days; d.querySelectorAll("#gfLen [data-days]").forEach((y) => y.classList.toggle("on", y === x)); }; });
     const give = async (uid, name) => {
-      if (!await TS.ask(`${name} 님에게 멤버십 쿠폰 1장(30일)을 보낼까요? 메일도 같이 가요.`, "보내기", "취소")) return;
-      const { data: cid, error } = await db.rpc("admin_give_coupon", { target: uid, why: $("gfWhy").value.trim() });
+      const len = gfDays >= 365 ? "1년권(365일)" : "1개월권(30일)";
+      if (!await TS.ask(`${name} 님에게 멤버십 ${len} 쿠폰 1장을 보낼까요? 메일도 같이 가요.`, "보내기", "취소")) return;
+      const { data: cid, error } = await db.rpc("admin_give_coupon", { target: uid, why: $("gfWhy").value.trim(), n: gfDays });
       if (error || !cid) { alert("보내지 못했어요. 서버 설정(SQL)을 확인하거나 잠시 뒤 다시 시도해 주세요."); return; }
       const r = await db.functions.invoke(MAIL_FN, { body: { id: cid, action: "approved" } }).catch((e) => ({ error: e }));
-      toast(r && !r.error ? `✅ ${name} 님에게 쿠폰과 메일을 보냈어요` : `✅ 쿠폰은 보냈어요 (메일은 보내지 못했어요)`);
+      toast(r && !r.error ? `✅ ${name} 님에게 ${len} 쿠폰과 메일을 보냈어요` : `✅ 쿠폰은 보냈어요 (메일은 보내지 못했어요)`);
       await load(); if (rerender) rerender();
     };
     $("gfMe").onclick = () => give(me(), (TS.auth.member && TS.auth.member.nickname) || "나");
