@@ -415,10 +415,15 @@
     .inv-code { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 12px 0 8px; padding: 12px 14px; border-radius: 12px; background: var(--panel2, #f1f5f9); }
     .inv-code b { font-size: 22px; letter-spacing: 2px; font-variant-numeric: tabular-nums; user-select: all; -webkit-user-select: all; }
     .inv-bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; } .inv-bar i { display: block; height: 100%; background: linear-gradient(90deg, #22c55e, #16a34a); border-radius: 999px; }
-    .inv-btns { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 12px; }
-    .inv-kakao { background: #fee500; color: #191600; border: 0; border-radius: 12px; padding: 12px; font-weight: 800; font-size: 15px; }
+    .inv-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+    .inv-btns .pill { margin: 0; }
+    .inv-kakao { background: #fee500; color: #191600; border: 0; border-radius: 999px; padding: 7px 14px; font-weight: 800; font-size: 13.5px; }
+    .inv-free { font-size: 12px; font-weight: 800; color: #b45309; background: #fff4e5; border-radius: 999px; padding: 3px 10px; }
+    .inv-value { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, #eff6ff, #f5f3ff); color: #1e1b4b; font-size: 14px; line-height: 1.55; }
+    .inv-value span { font-size: 12.5px; color: #4c4f6b; } .inv-value b { color: #1d4ed8; }
     .ms-ben { display: grid; gap: 12px; margin-bottom: 14px; } .ms-ben > div { display: grid; grid-template-columns: 34px 1fr; gap: 8px; align-items: start; } .ms-ben > div > span { font-size: 24px; } .ms-ben p { margin: 2px 0 0; }
-    .ms-form { display: grid; gap: 12px; } .rep-card.done { opacity: .6; } .sel { user-select: all; -webkit-user-select: all; }
+    .ms-form { display: grid; gap: 12px; }
+    .ref-row { display: flex; gap: 6px; margin-top: 4px; } .ref-row input { flex: 1; min-width: 0; } .ref-row .pill { margin: 0; white-space: nowrap; } .rep-card.done { opacity: .6; } .sel { user-select: all; -webkit-user-select: all; }
     .pw-wrap { position: relative; display: block; }
     .pw-wrap input { padding-right: 44px; }
     .pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: 0; font-size: 18px; padding: 6px 8px; cursor: pointer; }
@@ -1079,23 +1084,23 @@
 
   <script src="vendor/supabase-js-2.49.4/supabase.js"></script>
   <script src="vendor/leaflet-1.9.4/leaflet.js"></script>
-  <script src="config.js?v=202611251000"></script>
-  <script src="zones.js?v=202611251000"></script>
-  <script src="app.js?v=202611251000"></script>
-  <script src="engine.js?v=202611251000"></script>
-  <script src="profile.js?v=202611251000"></script>
-  <script src="garmin.js?v=202611251000"></script>
-  <script src="tracker.js?v=202611251000"></script>
-  <script src="hub.js?v=202611251000"></script>
-  <script src="auth.js?v=202611251000"></script>
-  <script src="community.js?v=202611251000"></script>
-  <script src="invite.js?v=202611251000"></script>
-  <script src="coach.js?v=202611251000"></script>
-  <script src="predict.js?v=202611251000"></script>
-  <script src="feedback.js?v=202611251000"></script>
-  <script src="drills.js?v=202611251000"></script>
-  <script src="journal.js?v=202611251000"></script>
-  <script src="easy.js?v=202611251000"></script>
+  <script src="config.js?v=202611251300"></script>
+  <script src="zones.js?v=202611251300"></script>
+  <script src="app.js?v=202611251300"></script>
+  <script src="engine.js?v=202611251300"></script>
+  <script src="profile.js?v=202611251300"></script>
+  <script src="garmin.js?v=202611251300"></script>
+  <script src="tracker.js?v=202611251300"></script>
+  <script src="hub.js?v=202611251300"></script>
+  <script src="auth.js?v=202611251300"></script>
+  <script src="community.js?v=202611251300"></script>
+  <script src="invite.js?v=202611251300"></script>
+  <script src="coach.js?v=202611251300"></script>
+  <script src="predict.js?v=202611251300"></script>
+  <script src="feedback.js?v=202611251300"></script>
+  <script src="drills.js?v=202611251300"></script>
+  <script src="journal.js?v=202611251300"></script>
+  <script src="easy.js?v=202611251300"></script>
   <script>
     // 📶 인터넷이 끊기면 위에 알려 줘요 (마지막으로 본 화면은 그대로 볼 수 있어요)
     (function () {
@@ -1169,6 +1174,6 @@
       document.addEventListener("scroll", onScroll, true);
     })();
   </script>
-  <script src="nav.js?v=202611251000"></script>
+  <script src="nav.js?v=202611251300"></script>
 </body>
 </html>

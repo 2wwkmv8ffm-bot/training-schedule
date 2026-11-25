@@ -35,7 +35,7 @@
     const uid = me(); if (!uid) { st.loaded = false; return; }
     const [r1, r2, r3, r4] = await Promise.all([
       db.from("referrals").select("referee,coupon_id").eq("referrer", uid),
-      db.from("coupons").select("id,source,period,note,status,created_at").eq("user_id", uid).order("created_at"),
+      db.from("coupons").select("id,source,period,note,status,created_at,requested_at,used_at").eq("user_id", uid).order("created_at"),
       db.from("memberships").select("ends_on").eq("user_id", uid).maybeSingle(),
       db.from("membership_requests").select("id,status,created_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(1),
     ]);
@@ -53,6 +53,17 @@
       st.adminReq = a1.count || 0; st.adminCp = a2.count || 0;
     }
     st.loaded = true;
+    monthlyTick();
+  }
+  // 📧 쿠폰 메일 (서버 함수 coupon-mail 이 쿠폰 상태를 다시 확인하고 한 번만 보내요)
+  const mail = (id, action) => db.functions.invoke("coupon-mail", { body: { id, action } }).catch(() => {});
+  // 📅 매달 1일이 지나면 지난달 1등 쿠폰 (팔로워 1등은 바로 사용) — 하루 한 번만 확인
+  async function monthlyTick() {
+    const k = "zone.tick." + today();
+    try { if (localStorage.getItem(k)) return; localStorage.setItem(k, "1"); } catch (e) { return; }
+    const { data, error } = await db.rpc("zone_monthly_tick");
+    if (error || !Array.isArray(data)) return;
+    for (const x of data) await mail(x.id, x.action);
   }
 
   // ---------- "나" 탭 카드 ----------
@@ -62,35 +73,48 @@
     if (!me() || !st.loaded) return "";
     const code = codeOf(me());
     const pct = Math.min(100, Math.round((st.left / NEED) * 100));
+    const recent = (c) => c.used_at && Date.now() - new Date(c.used_at) < 40 * 864e5;
     const usable = st.coupons.filter((c) => c.status === "approved");
-    const pend = st.coupons.filter((c) => c.status === "pending");
+    const ready = st.coupons.filter((c) => c.status === "pending" && c.source === "referral" && !c.requested_at);
+    const pend = st.coupons.filter((c) => c.status === "pending" && !(c.source === "referral" && !c.requested_at));
+    const used = st.coupons.filter((c) => c.status === "used" && recent(c));
+    const msLine = isMember() ? `<b style="color:#15803d">멤버 이용 중 · ${daysLeft()}일 남음</b> <span class="hint">(${esc(st.endsOn)}까지)</span>`
+      : st.req && st.req.status === "new" ? `<b style="color:#b45309">신청 완료 · 운영자가 카톡으로 연락드려요</b>` : `<span class="hint">지금은 무료 버전이에요</span>`;
     return `
-      ${usable.length || pend.length ? `<div class="card cp-card"><div class="spread"><h3 style="margin:0">🎟️ 내 쿠폰</h3><span class="hint">1장 = 멤버십 30일</span></div>
-        ${usable.map((c) => `<div class="set-row"><span><b>${esc(cpName(c))}</b><br><span class="hint">원할 때 사용하세요 · 사용한 날부터 30일${isMember() ? " (지금 멤버 기간 뒤에 이어져요)" : ""}</span></span><button type="button" class="primary pill" data-usecp="${c.id}">사용하기</button></div>`).join("")}
-        ${pend.map((c) => `<div class="set-row"><span><b>${esc(cpName(c))}</b><br><span class="hint">운영자 확인 중 · 승인되면 사용할 수 있어요</span></span><span class="hint">승인 대기</span></div>`).join("")}</div>` : ""}
-      <div class="card inv-card"><div class="spread"><h3 style="margin:0">🎁 친구 초대</h3><span class="hint">${NEED}명 초대하면 쿠폰 1장</span></div>
+      <div class="card inv-card"><div class="spread"><h3 style="margin:0">🎁 친구 초대</h3><span class="inv-free">10명 = 1개월 무료</span></div>
+        <div class="inv-value">🎟️ 친구 ${NEED}명이 가입하면 <b>ZONE 코칭 멤버십 1개월</b>을 드려요<br><span>코치와 2시간 모임 · 카톡 자세 피드백 · 코치 통화 — <b>${PRICE} 상당</b></span></div>
         <div class="inv-code"><span class="hint">내 추천 코드</span><b id="invCode">${esc(code)}</b></div>
         <div class="inv-bar" aria-label="추천 ${st.left}/${NEED}명"><i style="width:${pct}%"></i></div>
         <div class="spread hint" style="margin-top:4px"><span>다음 쿠폰까지 <b style="color:var(--text)">${st.left}/${NEED}명</b></span><span>지금까지 ${st.total}명 초대</span></div>
-        <div class="inv-btns"><button type="button" class="inv-kakao" id="invKakao">카카오톡으로 초대</button><button type="button" class="pill" id="invCopy">문구 복사</button></div></div>
+        <div class="inv-btns"><button type="button" class="inv-kakao" id="invKakao">💬 카카오톡으로 초대</button><button type="button" class="pill" id="invCopy">문구 복사</button></div></div>
+      <div class="card ms-card"><div class="spread"><h3 style="margin:0">💎 ZONE 코칭 멤버십</h3><span class="hint">월 ${PRICE}</span></div>
+        <p style="margin:6px 0 10px">${msLine}</p>
+        <button type="button" class="pill" id="msOpen" style="width:100%">${isMember() ? "멤버십 혜택 · 연락처 남기기" : "멤버십 알아보기"}</button></div>
+      ${usable.length || ready.length || pend.length || used.length ? `<div class="card cp-card"><div class="spread"><h3 style="margin:0">🎟️ 내 쿠폰</h3><span class="hint">1장 = 멤버십 30일 (${PRICE} 상당)</span></div>
+        ${ready.map((c) => `<div class="set-row"><span><b>🎉 친구 10명 초대 달성!</b><br><span class="hint">[쿠폰 받기]를 누르면 운영자 확인 후 쿠폰함에 들어와요</span></span><button type="button" class="primary pill" data-reqcp="${c.id}">쿠폰 받기</button></div>`).join("")}
+        ${usable.map((c) => `<div class="set-row"><span><b>${esc(cpName(c))}</b><br><span class="hint">원할 때 사용하세요 · 사용한 날부터 30일${isMember() ? " (지금 멤버 기간 뒤에 이어져요)" : ""}</span></span><button type="button" class="primary pill" data-usecp="${c.id}">사용하기</button></div>`).join("")}
+        ${pend.map((c) => `<div class="set-row"><span><b>${esc(cpName(c))}</b><br><span class="hint">운영자 확인 중 · 승인되면 메일로 알려 드려요</span></span><span class="hint">승인 대기</span></div>`).join("")}
+        ${used.map((c) => `<div class="set-row"><span><b>${esc(cpName(c))}</b><br><span class="hint">${c.source === "followers" ? "자동으로 사용됐어요 · 멤버십 30일" : "사용했어요 · 멤버십 30일"}</span></span><span class="hint">✔ 사용함</span></div>`).join("")}</div>` : ""}
       ${isAdmin() ? `<div class="card"><h3>🛡️ 운영자 · 멤버십</h3>
         <div class="set-row"><span>새 멤버십 신청 <b style="color:#dc2626">${st.adminReq}건</b></span><button type="button" class="pill" id="admMsReq">보기</button></div>
-        <div class="set-row"><span>쿠폰 승인 대기 <b style="color:#dc2626">${st.adminCp}건</b> <span class="hint">(추천 · 월간 1등)</span></span><button type="button" class="pill" id="admCp">보기</button></div></div>` : ""}`;
+        <div class="set-row"><span>쿠폰 승인 대기 <b style="color:#dc2626">${st.adminCp}건</b> <span class="hint">(추천 · 좋아요 1등)</span></span><button type="button" class="pill" id="admCp">보기</button></div></div>` : ""}`;
   }
   // ⚙️ 설정의 "내 요금제" 줄 → 멤버십 줄 (누르면 안내 · 신청)
-  function msRowHtml() {
-    if (!me()) return "";
-    const ready = st.loaded;
-    const line = ready && isMember() ? `<b style="color:#15803d">멤버 · ${daysLeft()}일 남음</b>`
-      : ready && st.req && st.req.status === "new" ? `<b style="color:#b45309">신청 완료</b>` : `<span class="hint">지금은 무료 버전</span>`;
-    return `<div class="set-row"><span>💎 ZONE 코칭 멤버십 <span class="hint">(월 ${PRICE})</span><br>${line}</span><button type="button" class="primary pill" id="msOpen">${ready && isMember() ? "혜택 보기" : "알아보기"}</button></div>`;
-  }
+  function msRowHtml() { return ""; } // 멤버십은 친구 초대 카드 밑으로 옮겼어요
   function bind(rerender) {
     if ($("msOpen")) $("msOpen").onclick = () => openMembership(rerender);
     if ($("invKakao")) $("invKakao").onclick = () => shareKakao(codeOf(me()));
     if ($("invCopy")) $("invCopy").onclick = () => copyText(inviteText(codeOf(me())));
     if ($("admMsReq")) $("admMsReq").onclick = () => openAdminRequests(rerender);
     if ($("admCp")) $("admCp").onclick = () => openAdminCoupons(rerender);
+    document.querySelectorAll("[data-reqcp]").forEach((b) => { b.onclick = async () => {
+      b.disabled = true;
+      const { data, error } = await db.rpc("request_coupon", { cid: +b.dataset.reqcp });
+      if (error || !data) { b.disabled = false; alert("지금은 쿠폰을 받지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
+      await mail(+b.dataset.reqcp, "request");
+      toast("📨 쿠폰을 신청했어요. 운영자가 확인하면 메일로 알려 드려요.");
+      await load(); if (rerender) rerender();
+    }; });
     document.querySelectorAll("[data-usecp]").forEach((b) => { b.onclick = async () => {
       if (!await TS.ask(isMember() ? "쿠폰을 사용할까요? 지금 멤버 기간이 끝나는 날에서 30일이 더해져요." : "쿠폰을 사용할까요? 오늘부터 30일 동안 멤버예요.", "사용하기", "나중에")) return;
       const { data, error } = await db.rpc("use_coupon", { cid: +b.dataset.usecp });
@@ -151,15 +175,15 @@
     d.innerHTML = `<div class="wide-hd"><b>💎 ZONE 코칭 멤버십</b><span class="hint">월 ${PRICE}</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
       <div class="rep-body">
         <div class="ms-ben">${BENEFITS.map(([i, t, s]) => `<div><span>${i}</span><div><b>${t}</b><p class="hint">${s}</p></div></div>`).join("")}</div>
-        ${isMember() ? `<div class="note">✅ 멤버 이용 중이에요 · ${daysLeft()}일 남음 (${esc(st.endsOn)}까지). 모임 · 피드백 일정은 운영자가 카톡으로 안내해요.</div>`
-          : waiting ? `<div class="note">📨 신청이 접수됐어요. 운영자가 적어 주신 연락처로 <b>카카오톡 결제 안내</b>를 드려요.</div>`
+        ${isMember() ? `<div class="note">✅ 멤버 이용 중이에요 · ${daysLeft()}일 남음 (${esc(st.endsOn)}까지). 모임 · 피드백 일정은 운영자가 카톡으로 안내해요.</div>` : ""}
+        ${waiting ? `<div class="note">📨 ${isMember() ? "연락처를 받았어요." : "신청이 접수됐어요."} 운영자가 적어 주신 연락처로 <b>카카오톡</b>으로 연락드려요.</div>`
           : `<form id="msForm" class="ms-form">
-            <p class="hint" style="margin:0">신청하면 운영자가 <b>카카오톡으로 결제(카카오페이) 안내</b>를 드려요. 결제가 확인되면 그날부터 30일 동안 멤버예요.</p>
+            <p class="hint" style="margin:0">${isMember() ? "모임 · 피드백 안내를 받을 연락처를 남겨 주세요." : "신청하면 운영자가 <b>카카오톡으로 결제(카카오페이) 안내</b>를 드려요. 결제가 확인되면 그날부터 30일 동안 멤버예요."}</p>
             <label>이름<input id="msName" maxlength="30" required placeholder="예: 박찬욱" /></label>
             <label>카톡 아이디 또는 전화번호<input id="msContact" maxlength="60" required placeholder="예: zone_runner 또는 010-1234-5678" /></label>
             <label class="check" style="font-size:13px"><input type="checkbox" id="msAgree" required /> 연락을 위해 이름 · 연락처를 운영자에게 보내는 데 동의해요</label>
-            <button type="submit" class="primary" style="width:100%">멤버십 신청하기</button>
-            <p class="hint" style="margin:0">아직 돈이 나가지 않아요. 결제는 운영자와 카톡으로 확인한 뒤에 해요.</p></form>`}
+            <button type="submit" class="primary" style="width:100%">${isMember() ? "연락처 남기기" : "멤버십 신청하기"}</button>
+            ${isMember() ? "" : '<p class="hint" style="margin:0">아직 돈이 나가지 않아요. 결제는 운영자와 카톡으로 확인한 뒤에 해요.</p>'}</form>`}
       </div>`;
     d.querySelector(".wide-x").onclick = () => d.close();
     const f = d.querySelector("#msForm");
@@ -214,20 +238,19 @@
   async function openAdminCoupons(rerender) {
     if (!isAdmin()) return;
     const d = dlg("admCpDlg");
-    // 지난달 좋아요 1등 · 팔로워 1등 쿠폰을 (없으면) 만들어 둬요 — 여러 번 열어도 한 번만 생겨요
-    const k = new Date(Date.now() + 9 * 3600e3); k.setUTCDate(1); k.setUTCMonth(k.getUTCMonth() - 1);
-    const lastMonth = k.toISOString().slice(0, 7);
-    await db.rpc("admin_make_champion_coupons", { month: lastMonth });
-    const { data } = await db.from("coupons").select("id,user_id,source,period,note,status,created_at,used_at").order("created_at", { ascending: false }).limit(150);
+    // 지난달 1등 쿠폰을 (없으면) 만들어 둬요 — 여러 번 열어도 한 번만 생겨요
+    { const { data: made } = await db.rpc("zone_monthly_tick"); if (Array.isArray(made)) for (const x of made) await mail(x.id, x.action); }
+    const { data } = await db.from("coupons").select("id,user_id,source,period,note,status,created_at,used_at,requested_at").order("created_at", { ascending: false }).limit(150);
     const rows = data || [];
     const refIds = rows.filter((r) => r.source === "referral").map((r) => r.id);
     const { data: refs } = refIds.length ? await db.from("referrals").select("referee,coupon_id,created_at").in("coupon_id", refIds) : { data: [] };
     const nm = await names([...new Set(rows.map((r) => r.user_id).concat((refs || []).map((x) => x.referee)))]);
     const ST = { pending: "승인 대기", approved: "✔ 승인 · 아직 안 씀", used: "✔ 사용함", rejected: "거절" };
+    const stOf = (r) => (r.status === "pending" && r.source === "referral" && !r.requested_at ? "회원이 아직 [쿠폰 받기] 안 누름" : r.source === "followers" && r.status === "used" ? "✔ 자동 사용" : ST[r.status] || "");
     d.innerHTML = `<div class="wide-hd"><b>🛡️ 멤버십 쿠폰</b><span class="hint">운영자만 보여요</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
-      <div class="rep-body"><p class="hint" style="margin:0 0 8px">승인하면 회원 쿠폰함에 들어가고, 회원이 원할 때 [사용하기]를 누르면 30일이 시작돼요. 매달 1일이 지나면 이 화면을 열 때 <b>지난달 1등 쿠폰</b>이 자동으로 생겨요. 추천 쿠폰은 10명이 진짜 사람인지 확인해 주세요.</p>
+      <div class="rep-body"><p class="hint" style="margin:0 0 8px"><b>승인</b>하면 회원에게 메일이 가고(운영자에게 사본), 회원 쿠폰함에 [사용하기]가 생겨요. 회원이 원할 때 누르면 30일이 시작돼요. 팔로워 1등은 승인 없이 자동으로 사용돼요. 추천 쿠폰은 10명이 진짜 사람인지 확인해 주세요.</p>
       ${rows.length ? rows.map((r) => { const list = (refs || []).filter((x) => x.coupon_id === r.id); return `<div class="card rep-card${r.status !== "pending" ? " done" : ""}">
-        <div class="spread"><b>${esc(nm[r.user_id] || "알 수 없음")}${tag(r.user_id)}</b><span class="hint">${ST[r.status] || ""}</span></div>
+        <div class="spread"><b>${esc(nm[r.user_id] || "알 수 없음")}${tag(r.user_id)}</b><span class="hint">${stOf(r)}</span></div>
         <div style="margin:4px 0">${esc(cpName(r))}${r.note && r.source !== "referral" ? ` <span class="hint">· ${esc(r.note)}</span>` : ""}</div>
         ${r.source === "referral" ? `<details style="margin:6px 0"><summary class="hint">초대한 ${list.length}명 보기</summary><div class="hint" style="line-height:1.8">${list.map((x) => `${esc(nm[x.referee] || "?")}${tag(x.referee)} · ${esc(String(x.created_at).slice(0, 10))}`).join("<br>")}</div></details>` : ""}
         ${r.status === "pending" ? `<div class="spread" style="gap:6px"><button type="button" class="primary pill" data-ok="${r.id}">승인</button><button type="button" class="pill" data-no="${r.id}">거절</button></div>` : ""}
@@ -236,8 +259,10 @@
     d.querySelectorAll("[data-ok],[data-no]").forEach((b) => { b.onclick = async () => {
       const ok = !!b.dataset.ok;
       if (!await TS.ask(ok ? "이 쿠폰을 승인할까요? 회원 쿠폰함에 들어가요." : "이 쿠폰을 거절할까요?", ok ? "승인" : "거절", "취소")) return;
-      const { error } = await db.rpc("admin_decide_coupon", { cid: +(b.dataset.ok || b.dataset.no), ok });
+      const cid = +(b.dataset.ok || b.dataset.no);
+      const { error } = await db.rpc("admin_decide_coupon", { cid, ok });
       if (error) { alert("처리하지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
+      if (ok) { await mail(cid, "approved"); toast("✅ 승인했어요. 회원에게 메일을 보냈어요."); }
       await load(); openAdminCoupons(rerender); if (rerender) rerender();
     }; });
     if (!d.open) d.showModal();
