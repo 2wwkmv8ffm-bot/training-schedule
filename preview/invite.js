@@ -55,8 +55,9 @@
     st.loaded = true;
     monthlyTick();
   }
+  const MAIL_FN = "dynamic-processor"; // 수파베이스에 올린 쿠폰 메일 함수 이름
   // 📧 쿠폰 메일 (서버 함수 coupon-mail 이 쿠폰 상태를 다시 확인하고 한 번만 보내요)
-  const mail = (id, action) => db.functions.invoke("coupon-mail", { body: { id, action } }).catch(() => {});
+  const mail = (id, action) => db.functions.invoke(MAIL_FN, { body: { id, action } }).catch(() => {});
   // 📅 매달 1일이 지나면 지난달 1등 쿠폰 (팔로워 1등은 바로 사용) — 하루 한 번만 확인
   async function monthlyTick() {
     const k = "zone.tick." + today();
