@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ZONE 초대</title>
+  <meta name="description" content="친구가 ZONE에 초대했어요. 아침마다 코치가 내 훈련을 짜 주는 수영·자전거·달리기·철인3종 앱이에요." />
+  <meta property="og:title" content="ZONE 같이 해요! 🏊🚴🏃" />
+  <meta property="og:description" content="아침마다 코치가 내 훈련을 짜 줘요. 가입할 때 추천인 코드를 적어 주세요." />
+  <meta property="og:image" content="app-icon-1024.png" />
+  <link rel="icon" href="icon-192.png" />
+  <style>
+    :root { --bg: #eef3fb; --card: #fff; --text: #0f172a; --muted: #5b6577; --accent: #1d5fe0; --line: #dbe3ef; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0e131c; --card: #161e2b; --text: #e9eef7; --muted: #9aa6ba; --accent: #6d9cff; --line: #283348; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; line-height: 1.6; }
+    .hero { background: radial-gradient(900px 500px at 50% 0%, #3b82f6, #1d4ed8 55%, #0b1b4d); color: #fff; text-align: center; padding: calc(env(safe-area-inset-top, 0px) + 40px) 20px 56px; }
+    .hero img { width: 84px; height: 84px; border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+    .hero h1 { margin: 16px 0 6px; font-size: 26px; letter-spacing: -0.5px; }
+    .hero p { margin: 0; opacity: .9; }
+    main { max-width: 480px; margin: -32px auto 40px; padding: 0 16px; display: grid; gap: 14px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
+    .code { text-align: center; }
+    .code small { color: var(--muted); }
+    .code b { display: block; font-size: 32px; letter-spacing: 3px; margin: 4px 0 10px; font-variant-numeric: tabular-nums; user-select: all; -webkit-user-select: all; }
+    button, .btn { display: block; width: 100%; border: 0; border-radius: 12px; padding: 13px; font: inherit; font-weight: 800; text-align: center; text-decoration: none; cursor: pointer; }
+    .copy { background: #fee500; color: #191600; }
+    .btn { background: var(--accent); color: #fff; margin-top: 10px; }
+    .btn.ghost { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+    ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+    .muted { color: var(--muted); font-size: 14px; }
+    .ok { color: #15803d; font-weight: 700; min-height: 1.6em; margin: 8px 0 0; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <img src="app-icon-1024.png" alt="ZONE" />
+    <h1>친구가 ZONE에 초대했어요</h1>
+    <p>아침마다 코치가 내 훈련을 짜 줘요.<br />부상 없이 쉽게 늘어요.</p>
+  </div>
+  <main>
+    <div class="card code" id="codeCard">
+      <small>추천인 코드</small>
+      <b id="code">-</b>
+      <button type="button" class="copy" id="copy">코드 복사하기</button>
+      <p class="ok" id="msg"></p>
+    </div>
+    <div class="card">
+      <ol>
+        <li>아래 버튼으로 <b>ZONE 앱</b>을 받아요.</li>
+        <li><b>회원가입</b> 화면의 <b>추천인 코드</b> 칸에 위 코드를 붙여 넣어요.</li>
+        <li>가입하면 끝! 친구에게도 초대 1명이 더해져요.</li>
+      </ol>
+      <a class="btn" id="play" href="https://play.google.com/store/apps/details?id=com.zonetraining.app">갤럭시 · Google Play에서 받기</a>
+      <a class="btn" id="ios" href="#" hidden>아이폰 · App Store에서 받기</a>
+      <p class="muted" id="iosNote" style="margin:10px 0 0;text-align:center">아이폰은 App Store에서 <b>ZONE</b>을 검색해 주세요.</p>
+      <a class="btn ghost" id="web" href="index.html">설치 없이 웹에서 바로 시작</a>
+    </div>
+    <p class="muted" style="text-align:center">수영 · 자전거 · 달리기 · 철인3종 맞춤 훈련 계획</p>
+  </main>
+  <script>
+    (function () {
+      var APP_STORE = ""; // 아이폰 앱 주소 (출시 후 넣어요)
+      var raw = new URLSearchParams(location.search).get("c") || "";
+      var code = raw.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+      if (code && code[0] !== "Z") code = "Z" + code;
+      var ok = /^Z[0-9A-F]{8}$/.test(code);
+      document.getElementById("code").textContent = ok ? code : "코드 없음";
+      if (!ok) document.getElementById("copy").hidden = true;
+      if (ok) {
+        try { localStorage.setItem("zone.refCode", code); } catch (e) {}
+        document.getElementById("web").href = "index.html?c=" + encodeURIComponent(code);
+      }
+      if (APP_STORE) { var a = document.getElementById("ios"); a.href = APP_STORE; a.hidden = false; document.getElementById("iosNote").hidden = true; }
+      document.getElementById("copy").onclick = function () {
+        var m = document.getElementById("msg");
+        var done = function () { m.textContent = "✅ 복사했어요. 회원가입할 때 붙여 넣어 주세요."; };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(done, fallback); else fallback();
+        function fallback() { var t = document.createElement("textarea"); t.value = code; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) { m.textContent = "코드를 길게 눌러 복사해 주세요."; } t.remove(); }
+      };
+    })();
+  </script>
+</body>
+</html>

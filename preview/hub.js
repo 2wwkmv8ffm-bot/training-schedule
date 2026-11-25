@@ -750,6 +750,7 @@
       $("meLogin").onclick = () => TS.auth && TS.auth.open("login");
       return;
     }
+    if (TS.invite) await TS.invite.load(); // 🎁 친구 초대 · 💎 멤버십 (서버 설정 전이면 카드 없이)
     const p = TS.getProfile ? TS.getProfile() : null;
     const s = stats();
     const lv = levelOf(s.total);
@@ -813,12 +814,13 @@
         <div class="badges mt">${badgeHtml}</div>
         <button type="button" class="pill" id="meBadgeAll" style="width:100%;margin-top:10px">🎖 내 배지 모두 보기</button></div>
 
+      ${TS.invite ? TS.invite.cardsHtml() : ""}
       ${accountCard()}
       <div class="card"><h3>⚙️ 설정</h3>
         <div class="set-row"><span>프로필 · 종목 · 기록 · 대회</span><button type="button" class="pill" id="meEdit">수정</button></div>
         <div class="set-row"><span>자동 훈련 계획</span><button type="button" class="pill" id="mePlan">보기</button></div>
         <div class="set-row"><span>❤️ 심박 존 가이드 (최대심박 계산기)</span><button type="button" class="pill" data-zguide="0">열기</button></div>
-        <div class="set-row"><span>💎 내 요금제</span><b>${TS.plan && TS.plan.tier === "pro" ? "프로" : TS.plan && TS.plan.paidOn ? "무료" : "무료 — 지금은 모든 기능을 무료로 쓸 수 있어요"}</b></div>
+        ${TS.invite ? TS.invite.msRowHtml() : ""}
         <div class="set-row"><span>🔮 대회 기록 예측</span><button type="button" class="pill" data-predict="1">보기</button></div>
         <div class="set-row"><span>🎯 목표 대회·기록</span><button type="button" class="pill" id="meGoal">바꾸기</button></div>
         ${p && TS.discsOf && TS.discsOf(p.sport).includes("bike") ? `<div class="set-row"><span>🚴 자전거</span><span class="mini-seg">${[["indoor", "🏠 실내"], ["outdoor", "🌳 야외"]].map(([k, l]) => `<button type="button" class="${((p.env || {}).bike || "outdoor") === k ? " on" : ""}" data-mebenv="${k}">${l}</button>`).join("")}</span></div>` : ""}
@@ -837,6 +839,7 @@
       <div id="fbBox"></div>
       <p class="hint" style="text-align:center;margin:16px 0 4px"><a href="terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="privacy.html" target="_blank" rel="noopener"><b>개인정보처리방침</b></a><br>ZONE의 훈련 안내는 일반적인 운동 정보예요. 몸에 이상이 있으면 운동을 멈추고 의사와 상의하세요.</p>`;
     bindAccount();
+    if (TS.invite) TS.invite.bind(renderMe);
     bindAvatar();
     if (TS.feedback) TS.feedback.mount($("fbBox"));
     if ($("meJournal")) $("meJournal").onclick = () => TS.journal && TS.journal.openList();
