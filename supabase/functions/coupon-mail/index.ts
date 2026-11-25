@@ -51,7 +51,7 @@ ${m.button ? `<table cellpadding="0" cellspacing="0" style="margin:24px 0 8px"><
   const text = [m.title, "", m.lead, "", ...(m.box || []).map(([k, v]) => `${k}: ${v}`), ...(m.list ? ["", m.list[0], ...m.list[1].map((x) => "- " + x)] : []), "", m.foot].join("\n");
   return { html, text };
 }
-const BEN: [string, string[]] = ["멤버 혜택", ["한 달에 한 번 코치와 2시간 모임", "개인 카톡 자세 피드백", "코치 통화 상담"]];
+const BEN: [string, string[]] = ["멤버 혜택", ["한 달에 한 번 코치와 2시간 모임", "개인 카톡 자세 피드백", "주 1회 코치 통화 상담"]];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
