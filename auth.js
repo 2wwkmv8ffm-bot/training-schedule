@@ -216,6 +216,7 @@
         <button type="button" data-mode="signup" class="${mode === "signup" ? "on" : ""}">회원가입</button></div>
       <form id="auForm" class="card" style="display:grid;gap:12px">
         ${mode === "signup" ? `<label>닉네임 (커뮤니티에 보여요)<input name="nick" maxlength="20" required placeholder="예: 찬욱" /></label>` : ""}
+        ${mode === "signup" ? `<label>추천인 코드 <span class="hint">(선택 · 초대해 준 친구의 코드)</span><span class="ref-row"><input name="ref" maxlength="14" autocapitalize="characters" autocomplete="off" placeholder="예: Z3F2A9C41" value="${esc(TS.invite && TS.invite.savedRef ? TS.invite.savedRef() : "")}" /><button type="button" class="pill" id="refPaste">📋 붙여넣기</button></span></label>` : ""}
         <label>이메일<input name="email" type="email" autocomplete="email" inputmode="email" autocapitalize="off" required /></label>
         <div class="mail-chips" role="group" aria-label="이메일 주소 빨리 쓰기">${MAIL_DOMAINS.map((d) => `<button type="button" class="pill" data-dom="${d}">@${d}</button>`).join("")}<button type="button" class="pill" data-dom="">직접 입력</button></div>
         <label>비밀번호 ${mode === "signup" ? "(8자 이상 · 영문과 숫자 섞기)" : ""}<input name="pw" type="password" minlength="${mode === "signup" ? 8 : 6}" autocomplete="${mode === "signup" ? "new-password" : "current-password"}" required /></label>
@@ -231,6 +232,19 @@
     $("authBody").querySelectorAll("[data-mode]").forEach((b) => { b.onclick = () => { mode = b.dataset.mode; render(why); }; });
     $("auForm").onsubmit = submit;
     bindMailChips($("auForm"));
+    // 🎁 추천인 코드: 초대 페이지에서 복사해 둔 코드를 칸을 누르거나 [붙여넣기]로 바로 넣어요
+    const refIn = $("auForm").querySelector("[name=ref]");
+    if (refIn) {
+      const pasteRef = async (loud) => {
+        let t = "";
+        try { t = await navigator.clipboard.readText(); } catch (e) { /* 휴대폰이 막으면 직접 입력 */ }
+        const c = TS.invite ? TS.invite.cleanCode((t.match(/Z?[0-9A-Fa-f]{8}/) || [""])[0]) : "";
+        if (c && TS.invite.codeOk(c)) { refIn.value = c; return; }
+        if (loud) $("auMsg").textContent = "복사한 추천인 코드가 없어요. 친구에게 받은 코드를 직접 적어 주세요.";
+      };
+      refIn.addEventListener("focus", () => { if (!refIn.value.trim()) pasteRef(false); }, { once: true });
+      if ($("refPaste")) $("refPaste").onclick = () => pasteRef(true);
+    }
     addEyes();
   }
   function toastMsg(t) { const m = $("auMsg"); if (m) { m.style.color = "var(--text)"; m.textContent = t; } }
@@ -334,10 +348,12 @@
         const nickBad = TS.badNick && TS.badNick(f.nick.value);
         if (nickBad) { msg.textContent = nickBad; btn.disabled = false; return; }
         if (weakPw(f.pw.value)) { msg.textContent = "비밀번호는 8자 이상, 영문과 숫자를 섞어 주세요."; btn.disabled = false; return; }
+        const ref = f.ref && f.ref.value.trim() ? TS.invite.cleanCode(f.ref.value) : "";
+        if (ref && !TS.invite.codeOk(ref)) { msg.textContent = "추천인 코드는 Z로 시작하는 9자리예요 (예: Z3F2A9C41). 모르면 비워 두세요."; btn.disabled = false; return; }
         if (f.pw2 && f.pw.value !== f.pw2.value) { msg.textContent = "비밀번호가 서로 달라요. 한 번 더 확인해 주세요."; btn.disabled = false; return; }
         const fix = mailTypo(email);
         if (fix && await TS.ask(`혹시 ${fix} 아닌가요?`, "네, 바꿀게요", "아니요")) { f.email.value = fix; btn.disabled = false; msg.textContent = "이메일을 고쳤어요. 다시 [가입하기]를 눌러 주세요."; return; }
-        const { data, error } = await db.auth.signUp({ email, password: f.pw.value, options: { emailRedirectTo: backUrl(), data: { nickname: f.nick.value.trim() } } });
+        const { data, error } = await db.auth.signUp({ email, password: f.pw.value, options: { emailRedirectTo: backUrl(), data: Object.assign({ nickname: f.nick.value.trim() }, ref ? { ref } : {}) } });
         if (error) throw error;
         // 🆕 새 회원가입 알림은 메일 인증 후 처음 로그인할 때 ZONE 메일로 보내요 (아래 signupNotice)
         if (!data.session) {
