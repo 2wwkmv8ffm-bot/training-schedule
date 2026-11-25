@@ -17,7 +17,7 @@
 
   // 📧 건의가 오면 앱 주인 메일로도 보내요 (FormSubmit 무료 서비스 — 처음 한 번 'Activate' 메일 확인 필요)
   //    메일 주소를 숨기려면: Activate 후 FormSubmit이 알려 주는 임의 문자열로 아래 MAIL_TO를 바꾸면 돼요
-  const MAIL_TO = "cksdnr990605@naver.com";
+  const MAIL_TO = "cksdnr990605@naver.com"; // 운영자 알림 받는 메일 (처음 한 번 FormSubmit 확인 메일의 Activate를 눌러야 해요)
   function mailOwner(row) {
     if (!MAIL_TO) return;
     fetch(`https://formsubmit.co/ajax/${MAIL_TO}`, {
