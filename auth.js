@@ -96,6 +96,15 @@
       if (other) { location.reload(); return true; } // 메모리에 남은 이전 사람 기록까지 비우려고 새로 열어요
     } catch (e) { /* 무시 */ }
   }
+  // 🆕 가입하고 처음 로그인하면(가입 3일 안) 운영자에게 한 번 알려요 — 닉네임 + 가린 이메일
+  function signupNotice() {
+    try {
+      const u = A.user; if (!u || !u.created_at || Date.now() - new Date(u.created_at) > 3 * 864e5) return;
+      const k = "zone.signupNoted." + u.id; if (localStorage.getItem(k)) return; localStorage.setItem(k, "1");
+      const [id, dom] = String(u.email || "").split("@");
+      if (TS.notifyOwner) TS.notifyOwner("[ZONE] 새 회원가입", { 닉네임: (A.member && A.member.nickname) || (u.user_metadata && u.user_metadata.nickname) || "", 이메일: (id || "").slice(0, 2) + "***@" + (dom || ""), 가입: new Date(u.created_at).toLocaleString("ko-KR"), 추천인코드: (u.user_metadata && u.user_metadata.ref) || "없음" });
+    } catch (e) { /* 무시 */ }
+  }
   // 🛟 가입·로그인 직후 화면이 텅 비거나 까맣게 남으면: 홈으로 되돌리고, 원인을 찾을 수 있게 운영자에게 상황만 알려요 (개인정보 없이)
   function blankGuard() {
     setTimeout(() => {
@@ -136,6 +145,7 @@
     window.dispatchEvent(new Event("ts:auth"));
     if (A.user && $("authOv").classList.contains("show") && !/newpw/.test(mode)) close(); // 로그인되면 로그인 화면 닫기
     if (changed && A.user) blankGuard();
+    if (changed && A.user) signupNotice();
   }
 
   // ---------- 화면 ----------
@@ -329,7 +339,7 @@
         if (fix && await TS.ask(`혹시 ${fix} 아닌가요?`, "네, 바꿀게요", "아니요")) { f.email.value = fix; btn.disabled = false; msg.textContent = "이메일을 고쳤어요. 다시 [가입하기]를 눌러 주세요."; return; }
         const { data, error } = await db.auth.signUp({ email, password: f.pw.value, options: { emailRedirectTo: backUrl(), data: { nickname: f.nick.value.trim() } } });
         if (error) throw error;
-        try { const [id, dom] = email.split("@"); TS.notifyOwner && TS.notifyOwner("[ZONE] 새 회원가입", { 닉네임: f.nick.value.trim(), 이메일: id.slice(0, 2) + "***@" + dom, 시간: new Date().toLocaleString("ko-KR") }); } catch (e2) { /* 무시 */ }
+        // 🆕 새 회원가입 알림은 메일 인증 후 처음 로그인할 때 ZONE 메일로 보내요 (아래 signupNotice)
         if (!data.session) {
           msg.style.color = "var(--text)";
           msg.innerHTML = `<b>${TS.escapeHtml ? TS.escapeHtml(email) : email}</b>로 가입 확인 메일을 보냈어요.<br>메일의 링크를 누른 뒤 <b>이 앱으로 돌아오면 자동으로 로그인</b>돼요.<br><span class='hint'>메일이 안 보이면 스팸함(네이버는 '스팸메일함')도 확인해 주세요.</span>${/@(naver|hanmail|daum)\./i.test(email) ? "<br><span class='hint'>네이버·다음 메일은 늦게 오거나 안 올 때가 있어요. 5분이 지나도 없으면 <b>지메일</b>로 가입하면 더 빨라요.</span>" : ""}

@@ -741,7 +741,13 @@
   }
 
   // ---------- 나 ----------
+  const hasSavedLogin = () => { try { return Object.keys(localStorage).some((k) => /^sb-.*-auth-token$/.test(k) && localStorage.getItem(k)); } catch (e) { return false; } };
   async function renderMe() {
+    // 자동 로그인 확인이 끝나기 전에는 '로그인하세요' 대신 잠깐 기다리는 화면 (확인이 끝나면 ts:auth 로 다시 그려요)
+    if (!(TS.auth && TS.auth.user) && !(TS.auth && TS.auth.ready) && hasSavedLogin()) {
+      $("meBody").innerHTML = '<div class="card" style="text-align:center;padding:40px 18px"><p class="hint" style="margin:0">불러오는 중…</p></div>';
+      return;
+    }
     if (!(TS.auth && TS.auth.user)) { // 로그아웃 상태: 기록·레벨·최고 기록 없이 로그인 안내만
       $("meBody").innerHTML = `<div class="card" style="text-align:center;padding:28px 18px">
         <div style="font-size:44px">🙂</div><h3 style="margin:8px 0">로그인하면 내 기록이 보여요</h3>
