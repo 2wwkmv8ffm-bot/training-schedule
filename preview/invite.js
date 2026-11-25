@@ -82,7 +82,7 @@
       : st.req && st.req.status === "new" ? `<b style="color:#b45309">신청 완료 · 운영자가 카톡으로 연락드려요</b>` : `<span class="hint">지금은 무료 버전이에요</span>`;
     return `
       <div class="card inv-card"><div class="spread"><h3 style="margin:0">🎁 친구 초대</h3><span class="inv-free">10명 = 1개월 무료</span></div>
-        <div class="inv-value">🎟️ 친구 ${NEED}명이 가입하면 <b>ZONE 코칭 멤버십 1개월</b>을 드려요<br><span>코치와 2시간 모임 · 카톡 자세 피드백 · 코치 통화 — <b>${PRICE} 상당</b></span></div>
+        <div class="inv-value"><b class="inv-main">${PRICE} 코칭 멤버십 1개월 무료!</b><span class="inv-sub1">친구 ${NEED}명 초대하고 혜택 받기</span><span class="inv-sub2">코치 2시간 모임 · 카톡 피드백 · 코치 통화 포함 (${PRICE} 상당)</span></div>
         <div class="inv-code"><span class="hint">내 추천 코드</span><b id="invCode">${esc(code)}</b></div>
         <div class="inv-bar" aria-label="추천 ${st.left}/${NEED}명"><i style="width:${pct}%"></i></div>
         <div class="spread hint" style="margin-top:4px"><span>다음 쿠폰까지 <b style="color:var(--text)">${st.left}/${NEED}명</b></span><span>지금까지 ${st.total}명 초대</span></div>
