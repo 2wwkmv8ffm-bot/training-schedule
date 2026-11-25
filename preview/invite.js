@@ -69,7 +69,7 @@
 
   // ---------- "나" 탭 카드 ----------
   const monthKo = (p) => (p ? `${+p.slice(5, 7)}월 ` : "");
-  const cpName = (c) => (c.source === "referral" ? "🎁 친구 10명 초대" : c.source === "likes" ? `❤️ ${monthKo(c.period)}좋아요 1등` : `👑 ${monthKo(c.period)}팔로워 1등`);
+  const cpName = (c) => (c.source === "referral" ? "🎁 친구 10명 초대" : c.source === "likes" ? `❤️ ${monthKo(c.period)}좋아요 1등` : c.source === "gift" ? `💝 ZONE 선물${c.note && c.note !== "운영자 선물" ? ` · ${c.note}` : ""}` : `👑 ${monthKo(c.period)}팔로워 1등`);
   function cardsHtml() {
     if (!me() || !st.loaded) return "";
     const code = codeOf(me());
@@ -98,7 +98,8 @@
         ${used.map((c) => `<div class="set-row"><span><b>${esc(cpName(c))}</b><br><span class="hint">${c.source === "followers" ? "자동으로 사용됐어요 · 멤버십 30일" : "사용했어요 · 멤버십 30일"}</span></span><span class="hint">✔ 사용함</span></div>`).join("")}</div>` : ""}
       ${isAdmin() ? `<div class="card"><h3>🛡️ 운영자 · 멤버십</h3>
         <div class="set-row"><span>새 멤버십 신청 <b style="color:#dc2626">${st.adminReq}건</b></span><button type="button" class="pill" id="admMsReq">보기</button></div>
-        <div class="set-row"><span>쿠폰 승인 대기 <b style="color:#dc2626">${st.adminCp}건</b> <span class="hint">(추천 · 좋아요 1등)</span></span><button type="button" class="pill" id="admCp">보기</button></div></div>` : ""}`;
+        <div class="set-row"><span>쿠폰 승인 대기 <b style="color:#dc2626">${st.adminCp}건</b> <span class="hint">(추천 · 좋아요 1등)</span></span><button type="button" class="pill" id="admCp">보기</button></div>
+        <div class="set-row"><span>💝 쿠폰 직접 보내기 <span class="hint">(내가 고른 회원에게 · 메일 같이 가요)</span></span><button type="button" class="pill" id="admGift">보내기</button></div></div>` : ""}`;
   }
   // ⚙️ 설정의 "내 요금제" 줄 → 멤버십 줄 (누르면 안내 · 신청)
   function msRowHtml() { return ""; } // 멤버십은 친구 초대 카드 밑으로 옮겼어요
@@ -108,6 +109,7 @@
     if ($("invCopy")) $("invCopy").onclick = () => copyText(inviteText(codeOf(me())));
     if ($("admMsReq")) $("admMsReq").onclick = () => openAdminRequests(rerender);
     if ($("admCp")) $("admCp").onclick = () => openAdminCoupons(rerender);
+    if ($("admGift")) $("admGift").onclick = () => openGift(rerender);
     document.querySelectorAll("[data-reqcp]").forEach((b) => { b.onclick = async () => {
       b.disabled = true;
       const { data, error } = await db.rpc("request_coupon", { cid: +b.dataset.reqcp });
@@ -266,6 +268,38 @@
       if (ok) { await mail(cid, "approved"); toast("✅ 승인했어요. 회원에게 메일을 보냈어요."); }
       await load(); openAdminCoupons(rerender); if (rerender) rerender();
     }; });
+    if (!d.open) d.showModal();
+  }
+
+  // ---------- 운영자: 고른 회원에게 쿠폰 직접 보내기 ----------
+  function openGift(rerender) {
+    if (!isAdmin()) return;
+    const d = dlg("admGiftDlg");
+    d.innerHTML = `<div class="wide-hd"><b>💝 쿠폰 직접 보내기</b><span class="hint">운영자만 보여요</span><button type="button" class="wide-x" aria-label="닫기">✕</button></div>
+      <div class="rep-body"><p class="hint" style="margin:0 0 8px">받는 사람 쿠폰함에 <b>바로 쓸 수 있는 쿠폰</b>(멤버십 30일)이 들어가고, 그 사람과 운영자에게 메일이 가요.</p>
+        <form id="gfFind" class="ref-row"><input id="gfQ" maxlength="30" placeholder="닉네임 (예: 러너지민 또는 러너지민#1234)" /><button type="submit" class="pill">찾기</button></form>
+        <label style="display:block;margin-top:10px">보내는 이유 <span class="hint">(메일과 쿠폰에 보여요 · 선택)</span><input id="gfWhy" maxlength="40" placeholder="예: 첫 모임 참석 감사" /></label>
+        <div id="gfList" style="margin-top:10px"><button type="button" class="pill" id="gfMe" style="width:100%">🙋 나(운영자)에게 시험으로 보내기</button></div></div>`;
+    d.querySelector(".wide-x").onclick = () => d.close();
+    const give = async (uid, name) => {
+      if (!await TS.ask(`${name} 님에게 멤버십 쿠폰 1장(30일)을 보낼까요? 메일도 같이 가요.`, "보내기", "취소")) return;
+      const { data: cid, error } = await db.rpc("admin_give_coupon", { target: uid, why: $("gfWhy").value.trim() });
+      if (error || !cid) { alert("보내지 못했어요. 서버 설정(SQL)을 확인하거나 잠시 뒤 다시 시도해 주세요."); return; }
+      const r = await db.functions.invoke(MAIL_FN, { body: { id: cid, action: "approved" } }).catch((e) => ({ error: e }));
+      toast(r && !r.error ? `✅ ${name} 님에게 쿠폰과 메일을 보냈어요` : `✅ 쿠폰은 보냈어요 (메일은 보내지 못했어요)`);
+      await load(); if (rerender) rerender();
+    };
+    $("gfMe").onclick = () => give(me(), (TS.auth.member && TS.auth.member.nickname) || "나");
+    $("gfFind").onsubmit = async (e) => {
+      e.preventDefault();
+      const raw = $("gfQ").value.trim(); const [nick, no] = raw.split("#").map((x) => (x || "").trim());
+      const term = nick.replace(/[%_,()]/g, ""); if (!term) return;
+      let { data } = await db.from("members").select("id,nickname").ilike("nickname", `%${term}%`).limit(no ? 200 : 20);
+      data = (data || []).filter((m) => !no || (TS.tagNo && TS.tagNo(m.id) === no.replace(/\D/g, ""))).slice(0, 20);
+      $("gfList").innerHTML = data.length ? data.map((m) => `<div class="set-row"><span><b>${esc(m.nickname)}</b>${tag(m.id)}</span><button type="button" class="primary pill" data-gf="${esc(m.id)}" data-nm="${esc(m.nickname)}">쿠폰 보내기</button></div>`).join("")
+        : '<div class="note">그 닉네임의 회원을 찾지 못했어요.</div>';
+      $("gfList").querySelectorAll("[data-gf]").forEach((b) => { b.onclick = () => give(b.dataset.gf, b.dataset.nm); });
+    };
     if (!d.open) d.showModal();
   }
 

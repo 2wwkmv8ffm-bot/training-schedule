@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
   const { data: m } = await SB.from("members").select("nickname").eq("id", c.user_id).maybeSingle();
   const { data: ms } = await SB.from("memberships").select("ends_on").eq("user_id", c.user_id).maybeSingle();
   const nick = m?.nickname || "회원";
-  const what = c.source === "referral" ? "친구 10명 초대" : c.source === "likes" ? `${monthKo(c.period)}좋아요 1등` : `${monthKo(c.period)}팔로워 1등`;
+  const what = c.source === "referral" ? "친구 10명 초대" : c.source === "likes" ? `${monthKo(c.period)}좋아요 1등` : c.source === "gift" ? `ZONE 선물${c.note && c.note !== "운영자 선물" ? ` (${c.note})` : ""}` : `${monthKo(c.period)}팔로워 1등`;
 
   const mails: { to: string; subject: string; text: string }[] = [];
   if (toMember && email) {
@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
         `${nick}님, 축하해요!\n\n${what}(${c.note || ""})이 되셔서 ZONE 코칭 멤버십(월 ${PRICE})을 1개월 무료로 드려요.\n쿠폰이 자동으로 사용돼서 오늘부터 ${ms?.ends_on || ""}까지 멤버예요.\n\n멤버 혜택\n${BENEFITS}\n\n모임 · 피드백 일정은 카톡으로 안내드려요. 앱 → 나 → 💎 ZONE 코칭 멤버십에서 연락받을 카톡 아이디를 남겨 주세요.\n\nZONE 드림` });
     } else {
       mails.push({ to: email, subject: `[ZONE] 🎟️ 멤버십 1개월 무료 쿠폰이 도착했어요 (${what})`, text:
-        `${nick}님, 축하해요!\n\n${what}${c.note && c.source !== "referral" ? `(${c.note})` : ""}으로 ZONE 코칭 멤버십 1개월 무료 쿠폰(${PRICE} 상당)을 드려요.\n\n쓰는 방법\n앱 → 나 → 🎟️ 내 쿠폰 → [사용하기]\n원할 때 누르면 그날부터 30일 동안 멤버예요.\n\n멤버 혜택\n${BENEFITS}\n\nZONE 드림` });
+        `${nick}님, 축하해요!\n\n${what}${c.note && (c.source === "likes" || c.source === "followers") ? `(${c.note})` : ""}으로 ZONE 코칭 멤버십 1개월 무료 쿠폰(${PRICE} 상당)을 드려요.\n\n쓰는 방법\n앱 → 나 → 🎟️ 내 쿠폰 → [사용하기]\n원할 때 누르면 그날부터 30일 동안 멤버예요.\n\n멤버 혜택\n${BENEFITS}\n\nZONE 드림` });
     }
   }
   const ownerTitle = col === "mailed_request_at" ? `[ZONE 운영자] 쿠폰 승인해 주세요 · ${nick} · ${what}` : `[ZONE 운영자] 사본 · ${nick}님에게 ${action === "auto" ? "무료 멤버십 시작" : "쿠폰 도착"} 메일을 보냈어요`;

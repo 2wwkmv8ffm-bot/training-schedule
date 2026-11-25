@@ -55,7 +55,6 @@
       <a class="btn" id="play" href="https://play.google.com/store/apps/details?id=com.zonetraining.app">갤럭시 · Google Play에서 받기</a>
       <a class="btn" id="ios" href="#" hidden>아이폰 · App Store에서 받기</a>
       <p class="muted" id="iosNote" style="margin:10px 0 0;text-align:center">아이폰은 App Store에서 <b>ZONE</b>을 검색해 주세요.</p>
-      <a class="btn ghost" id="web" href="index.html">설치 없이 웹에서 바로 시작</a>
     </div>
     <p class="muted" style="text-align:center">수영 · 자전거 · 달리기 · 철인3종 맞춤 훈련 계획</p>
   </main>
@@ -70,7 +69,6 @@
       if (!ok) document.getElementById("copy").hidden = true;
       if (ok) {
         try { localStorage.setItem("zone.refCode", code); } catch (e) {}
-        document.getElementById("web").href = "index.html?c=" + encodeURIComponent(code);
       }
       if (APP_STORE) { var a = document.getElementById("ios"); a.href = APP_STORE; a.hidden = false; document.getElementById("iosNote").hidden = true; }
       // 앱 받기 버튼을 누르면 코드를 먼저 복사해 둬요 → 앱 가입 화면의 추천인 칸을 누르면 바로 들어가요
