@@ -55,9 +55,28 @@ const BEN: [string, string[]] = ["멤버 혜택", ["한 달에 한 번 코치와
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  let id = 0, action = "";
-  try { const b = await req.json(); id = Number(b.id); action = String(b.action || ""); } catch { return reply({ ok: false, reason: "bad body" }, 400); }
-  if (!id || !USER || !PASS) return reply({ ok: false, reason: "setup" }, 400);
+  let id = 0, action = "", b: any = {};
+  try { b = await req.json(); id = Number(b.id); action = String(b.action || ""); } catch { return reply({ ok: false, reason: "bad body" }, 400); }
+  if (!USER || !PASS) return reply({ ok: false, reason: "setup" }, 400);
+
+  // 🔔 운영자 알림 (멤버십 신청 · 신고 · 건의 · 빈 화면 등) — 로그인한 회원만, 운영자 메일로만 보내요
+  if (action === "notify") {
+    const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    const { data: who } = await SB.auth.getUser(token);
+    if (!who?.user) return reply({ ok: false, reason: "login" }, 401);
+    const subject = String(b.subject || "[ZONE] 알림").slice(0, 80);
+    const fields = Object.entries(b.fields && typeof b.fields === "object" ? b.fields : {}).slice(0, 12)
+      .map(([k, v]) => [String(k).slice(0, 20), String(v ?? "").slice(0, 400)] as [string, string]);
+    const { data: wm } = await SB.from("members").select("nickname").eq("id", who.user.id).maybeSingle();
+    const title = "🔔 " + subject.replace(/^\[ZONE[^\]]*\]\s*/, "");
+    const r = render({ to: OWNER, subject, title, lead: `${wm?.nickname || "회원"}님에게서 온 알림이에요.`, box: fields, button: "ZONE 앱 열기", foot: "운영자에게만 보내는 알림이에요." });
+    try {
+      const tx = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: USER, pass: PASS } });
+      await tx.sendMail({ from: `"ZONE 존" <${USER}>`, to: OWNER, subject: subject.startsWith("[ZONE") ? subject.replace(/^\[ZONE\]/, "[ZONE 운영자]") : `[ZONE 운영자] ${subject}`, text: r.text, html: r.html });
+    } catch (e) { return reply({ ok: false, reason: "mail failed", detail: String(e) }, 500); }
+    return reply({ ok: true, sent: 1 });
+  }
+  if (!id) return reply({ ok: false, reason: "bad body" }, 400);
 
   const { data: c, error: ce } = await SB.from("coupons").select("*").eq("id", id).maybeSingle();
   if (ce) return reply({ ok: false, reason: "db", detail: ce.message }, 500);

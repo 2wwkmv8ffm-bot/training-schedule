@@ -27,7 +27,12 @@
     }).catch(() => {}); // 메일이 실패해도 건의는 서버(받은 건의)에 저장돼 있어요
   }
   // 🆕 새 회원이 가입하면 운영자 메일로 알려요 (닉네임 + 가린 이메일)
-  TS.notifyOwner = (subject, fields) => {
+  // 로그인해 있으면 ZONE 메일 프로그램(운영자 네이버 메일)으로, 아니면(가입 직후 등) 예전 방식으로
+  TS.notifyOwner = async (subject, fields) => {
+    const A = TS.auth || {};
+    if (A.user) {
+      try { const { data, error } = await TS.db.functions.invoke("dynamic-processor", { body: { action: "notify", subject, fields } }); if (!error && data && data.ok) return; } catch (e) { /* 아래로 */ }
+    }
     if (!MAIL_TO) return;
     fetch(`https://formsubmit.co/ajax/${MAIL_TO}`, {
       method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -36,7 +41,7 @@
   };
   async function send(row) {
     const { error } = await TS.db.from("feedback").insert(row);
-    if (!error) mailOwner(row);
+    if (!error) { if (TS.auth && TS.auth.user) TS.notifyOwner(`[ZONE] 건의 · ${row.category}`, { 분류: row.category, 내용: row.body, 보낸사람: row.nickname || "익명", 기기: row.device || "", 앱버전: row.app_version || "" }); else mailOwner(row); }
     return !error;
   }
   async function flushQueue() { // 못 보낸 건의는 다음에 '나' 탭을 열 때 다시 보내요
