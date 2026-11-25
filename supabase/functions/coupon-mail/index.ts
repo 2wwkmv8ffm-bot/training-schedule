@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
         lead: `ZONE 코칭 멤버십(월 ${PRICE})을 1개월 무료로 드려요.\n쿠폰이 자동으로 사용돼서 오늘부터 바로 멤버예요.`,
         box: [["받은 이유", `${what}${c.note ? ` · ${c.note}` : ""}`], ["멤버 기간", `오늘부터 ${ms?.ends_on || ""}까지`], ["혜택 가치", `${PRICE} 상당`]],
         list: BEN, button: "ZONE 앱 열기",
-        foot: "모임 · 피드백 일정은 카톡으로 안내드려요. 앱 → 나 → 💎 ZONE 코칭 멤버십에서 연락받을 카톡 아이디를 남겨 주세요." });
+        foot: "모임 · 피드백 일정은 이 이메일로 안내드려요." });
     } else {
       mails.push({ to: email, subject: `[ZONE] 🎟️ 멤버십 1개월 무료 쿠폰이 도착했어요`,
         title: `🎟️ ${nick}님, 무료 쿠폰이 도착했어요!`,
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
   mails.push({ to: OWNER,
     subject: ask ? `[ZONE 운영자] 쿠폰 승인해 주세요 · ${nick} · ${what}` : `[ZONE 운영자] ${nick}님에게 ${action === "auto" ? "무료 멤버십 시작" : "쿠폰 도착"} 메일을 보냈어요`,
     title: ask ? "🛡️ 쿠폰 승인 요청이 왔어요" : `🛡️ ${nick}님에게 쿠폰 메일을 보냈어요`,
-    lead: ask ? "확인하고 승인해 주세요. 승인하면 회원에게 메일이 가요." : "회원에게 카톡으로 모임 · 피드백 일정을 안내해 주세요.",
+    lead: ask ? "확인하고 승인해 주세요. 승인하면 회원에게 메일이 가요." : "회원에게 이메일로 모임 · 피드백 일정을 안내해 주세요.",
     box: [["회원", `${nick}${email ? ` (${email})` : ""}`], ["쿠폰", `${what}${c.note ? ` · ${c.note}` : ""}`], ["상태", c.status === "pending" ? "승인 대기" : c.status === "used" ? "자동 사용됨" : "승인됨"], ...(ms?.ends_on ? [["멤버 끝나는 날", ms.ends_on] as [string, string]] : [])],
     button: ask ? "앱에서 승인하기" : "ZONE 앱 열기",
     foot: ask ? "앱 → 나 → 🛡️ 운영자 · 멤버십 → 쿠폰 승인 대기" : "운영자에게만 보내는 사본이에요." });
