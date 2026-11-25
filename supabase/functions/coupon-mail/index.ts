@@ -26,7 +26,7 @@ const reply = (o: unknown, status = 200) => new Response(JSON.stringify(o), { st
 const monthKo = (p?: string | null) => (p ? `${Number(p.slice(5, 7))}월 ` : "");
 const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const LOGO = "https://2wwkmv8ffm-bot.github.io/training-schedule/app-icon-1024.png";
-const APP = "https://2wwkmv8ffm-bot.github.io/training-schedule/";
+const APP = "https://2wwkmv8ffm-bot.github.io/training-schedule/open.html"; // 메일 버튼 → "ZONE 앱에서 열어 주세요" 안내 (메일 앱 브라우저는 로그인이 따로라서)
 
 // 📧 ZONE 메일 모양: 위에 앱 마크 + ZONE, 큰 제목, 내용 상자, 버튼, 아래 안내
 type Mail = { to: string; subject: string; title: string; lead: string; box?: [string, string][]; list?: [string, string[]]; button?: string; foot: string };
