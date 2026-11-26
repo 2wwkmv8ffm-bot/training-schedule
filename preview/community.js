@@ -1062,7 +1062,7 @@
       <p class="hint" style="margin:-6px 0 0">🌏 전체 공개로 올리면 모든 ZONE 사람들이 보고 응원할 수 있어요.</p>
       <p class="hint" style="margin:0">⚠️ 사진에 집 주소·다른 사람 얼굴이나 개인정보가 보이지 않는지 확인하고 올려 주세요.</p>
       <p class="warn" id="pcMsg" style="margin:0"></p>
-      <div class="actions"><div class="right"><button type="button" class="primary" id="pcGo" style="padding:12px 22px">올리기</button></div></div>`;
+      <div class="pc-go-bar"><button type="button" class="primary" id="pcGo">올리기</button></div>`;
     $("postDlg").showModal();
     $("pcClose").onclick = () => $("postDlg").close();
     $("postBody").querySelectorAll("[data-pick]").forEach((b) => { b.onclick = () => {
