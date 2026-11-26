@@ -741,7 +741,14 @@
     .post.ig .post-body { font-size: 14.5px; margin-bottom: 4px; }
     .htag { color: var(--accent); font-weight: 600; text-decoration: none; }
     .obadge { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 10.5px; font-weight: 900; color: #fff; background: linear-gradient(135deg, #2563eb, #7c3aed); vertical-align: 2px; letter-spacing: .3px; }
-    .cbadge { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 999px; font-size: 10.5px; font-weight: 900; color: #7c2d12; background: linear-gradient(135deg, #fde68a, #fbbf24); white-space: nowrap; vertical-align: middle; line-height: 1.7; }
+    /* 🏅 1등 배지 — 흰 바탕 + 종류마다 다른 색 테두리·글자 (잘 보이게) */
+    .cbadge { display: inline-block; margin-left: 4px; padding: 0 8px; border-radius: 999px; font-size: 10.5px; font-weight: 900; background: #fff; border: 1.5px solid; white-space: nowrap; vertical-align: middle; line-height: 1.7; }
+    .cbadge.cb-all { color: #6d28d9; border-color: #a78bfa; } /* 전체 1등 보라 */
+    .cbadge.cb-fol { color: #be185d; border-color: #f9a8d4; } /* 팔로워 1등 분홍 */
+    .cbadge.cb-month { color: #1d4ed8; border-color: #93c5fd; } /* 월간 1등 파랑 */
+    .cbadge.cb-week { color: #0e7490; border-color: #67e8f9; } /* 주간 1등 청록 */
+    .cbadge.cb-day { color: #c2410c; border-color: #fdba74; } /* 오늘 1등 주황 */
+    body.dark .cbadge, :root[data-theme="dark"] .cbadge { background: #1a2234; }
     .fbadge { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 10.5px; font-weight: 900; color: #fff; background: #1d6bf3; vertical-align: 2px; } /* 팔로워 배지 3개 모두 같은 파란 디자인 */ .fol-btn { font-size: 13px; font-weight: 700; color: var(--accent); padding: 0 4px; }
     .cm-more { display: block; padding: 2px 14px; color: var(--muted); font-size: 13.5px; }
     .post-time { font-size: 12px; margin-top: 2px; }
@@ -1091,23 +1098,23 @@
 
   <script src="vendor/supabase-js-2.49.4/supabase.js"></script>
   <script src="vendor/leaflet-1.9.4/leaflet.js"></script>
-  <script src="config.js?v=202611261900"></script>
-  <script src="zones.js?v=202611261900"></script>
-  <script src="app.js?v=202611261900"></script>
-  <script src="engine.js?v=202611261900"></script>
-  <script src="profile.js?v=202611261900"></script>
-  <script src="garmin.js?v=202611261900"></script>
-  <script src="tracker.js?v=202611261900"></script>
-  <script src="hub.js?v=202611261900"></script>
-  <script src="auth.js?v=202611261900"></script>
-  <script src="community.js?v=202611261900"></script>
-  <script src="invite.js?v=202611261900"></script>
-  <script src="coach.js?v=202611261900"></script>
-  <script src="predict.js?v=202611261900"></script>
-  <script src="feedback.js?v=202611261900"></script>
-  <script src="drills.js?v=202611261900"></script>
-  <script src="journal.js?v=202611261900"></script>
-  <script src="easy.js?v=202611261900"></script>
+  <script src="config.js?v=202611262000"></script>
+  <script src="zones.js?v=202611262000"></script>
+  <script src="app.js?v=202611262000"></script>
+  <script src="engine.js?v=202611262000"></script>
+  <script src="profile.js?v=202611262000"></script>
+  <script src="garmin.js?v=202611262000"></script>
+  <script src="tracker.js?v=202611262000"></script>
+  <script src="hub.js?v=202611262000"></script>
+  <script src="auth.js?v=202611262000"></script>
+  <script src="community.js?v=202611262000"></script>
+  <script src="invite.js?v=202611262000"></script>
+  <script src="coach.js?v=202611262000"></script>
+  <script src="predict.js?v=202611262000"></script>
+  <script src="feedback.js?v=202611262000"></script>
+  <script src="drills.js?v=202611262000"></script>
+  <script src="journal.js?v=202611262000"></script>
+  <script src="easy.js?v=202611262000"></script>
   <script>
     // 📶 인터넷이 끊기면 위에 알려 줘요 (마지막으로 본 화면은 그대로 볼 수 있어요)
     (function () {
@@ -1181,6 +1188,6 @@
       document.addEventListener("scroll", onScroll, true);
     })();
   </script>
-  <script src="nav.js?v=202611261900"></script>
+  <script src="nav.js?v=202611262000"></script>
 </body>
 </html>
