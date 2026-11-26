@@ -76,6 +76,41 @@ Deno.serve(async (req) => {
     } catch (e) { return reply({ ok: false, reason: "mail failed", detail: String(e) }, 500); }
     return reply({ ok: true, sent: 1 });
   }
+  // 💎 멤버십 신청 → 신청한 회원에게 '코치 연락처(카톡 · 전화)' 메일 + 운영자에게 알림 (신청마다 한 번만)
+  //    연락처는 수파베이스 Secrets 의 OWNER_KAKAO · OWNER_PHONE 에서 읽어요 (코드 · 저장소에 적지 않아요)
+  if (action === "apply") {
+    const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    const { data: who } = await SB.auth.getUser(token);
+    if (!who?.user) return reply({ ok: false, reason: "login" }, 401);
+    const KAKAO = Deno.env.get("OWNER_KAKAO") ?? "", PHONE = Deno.env.get("OWNER_PHONE") ?? "";
+    if (!KAKAO && !PHONE) return reply({ ok: false, reason: "no contact" }, 400);
+    const { data: r } = await SB.from("membership_requests").select("*").eq("id", id).maybeSingle();
+    if (!r || r.user_id !== who.user.id || r.status !== "new") return reply({ ok: false, reason: "no request" });
+    const { data: claimed } = await SB.from("membership_requests").update({ mailed_at: new Date().toISOString() }).eq("id", id).is("mailed_at", null).select("id");
+    if (!claimed || !claimed.length) return reply({ ok: false, reason: "already sent" });
+    const { data: wm } = await SB.from("members").select("nickname").eq("id", who.user.id).maybeSingle();
+    const nick = wm?.nickname || "회원";
+    const contact: [string, string][] = [...(KAKAO ? [["카카오톡 ID", KAKAO] as [string, string]] : []), ...(PHONE ? [["전화번호", PHONE] as [string, string]] : [])];
+    const toMember: Mail = { to: r.contact, subject: "[ZONE] 💎 코칭 멤버십 신청을 받았어요 · 코치에게 연락 주세요",
+      title: `💎 ${nick}님, 코칭 멤버십 신청 고마워요!`,
+      lead: `아래 카카오톡이나 전화로 편하게 연락 주세요.\n결제 방법과 첫 모임 · 통화 일정을 바로 안내해 드릴게요.\n연락 주실 때 "ZONE 멤버십 신청 · ${nick}"이라고 남겨 주시면 더 빨라요.`,
+      box: [...contact, ["멤버십", `ZONE 코칭 멤버십 · 월 ${PRICE}`], ["신청 닉네임", nick]],
+      list: BEN,
+      foot: "신청만으로는 결제되지 않아요. 결제는 코치와 연락한 뒤에 진행돼요. 환불 규정은 앱 → 나 → 💎 ZONE 코칭 멤버십에서 볼 수 있어요." };
+    const toOwner: Mail = { to: OWNER, subject: `[ZONE 운영자] 💎 새 멤버십 신청 · ${nick}`,
+      title: "🛡️ 새 멤버십 신청이 왔어요",
+      lead: "회원에게 카톡 ID · 전화번호 안내 메일을 보냈어요. 연락이 오면 결제를 안내해 주세요.",
+      box: [["회원", nick], ["이메일", r.contact], ["신청 시간", new Date(r.created_at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })]],
+      button: "ZONE 앱 열기", foot: "결제가 확인되면 앱 → 나 → 🛡️ 운영자 · 멤버십 → 새 멤버십 신청에서 '결제 확인 · 멤버 시작'을 눌러 주세요." };
+    try {
+      const tx = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: USER, pass: PASS } });
+      for (const x of [toMember, toOwner]) { const m = render(x); await tx.sendMail({ from: `"ZONE 존" <${USER}>`, to: x.to, subject: x.subject, text: m.text, html: m.html }); }
+    } catch (e) {
+      await SB.from("membership_requests").update({ mailed_at: null }).eq("id", id);
+      return reply({ ok: false, reason: "mail failed", detail: String(e) }, 500);
+    }
+    return reply({ ok: true, sent: 2 });
+  }
   if (!id) return reply({ ok: false, reason: "bad body" }, 400);
 
   const { data: c, error: ce } = await SB.from("coupons").select("*").eq("id", id).maybeSingle();

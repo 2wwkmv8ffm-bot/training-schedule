@@ -181,13 +181,13 @@
       <div class="rep-body">
         <div class="ms-ben">${BENEFITS.map(([i, t, s]) => `<div><span>${i}</span><div><b>${t}</b><p class="hint">${s}</p></div></div>`).join("")}</div>
         ${isMember() ? `<div class="note">✅ 멤버 이용 중이에요 · ${daysLeft()}일 남음 (${esc(st.endsOn)}까지). 모임 · 피드백 일정은 이메일로 안내해요.</div>` : ""}
-        ${waiting ? `<div class="note">📨 ${isMember() ? "연락처를 받았어요." : "신청이 접수됐어요."} 적어 주신 <b>이메일</b>로 안내드려요.</div>`
+        ${waiting ? `<div class="note">📨 ${isMember() ? "연락처를 받았어요." : "신청이 접수됐어요."} 적어 주신 <b>이메일</b>로 코치 카톡 · 전화번호를 보내 드렸어요. 메일이 안 보이면 스팸함도 확인해 주세요.</div>`
           : `<form id="msForm" class="ms-form">
-            <p class="hint" style="margin:0">${isMember() ? "모임 · 피드백 안내를 받을 이메일을 남겨 주세요." : "신청하면 적어 주신 이메일로 <b>결제 안내</b>를 드려요. 결제가 확인되면 그날부터 30일 동안 멤버예요."}</p>
+            <p class="hint" style="margin:0">${isMember() ? "모임 · 피드백 안내를 받을 이메일을 남겨 주세요." : "신청하면 적어 주신 이메일로 <b>코치 카톡 · 전화번호</b>를 바로 보내 드려요. 연락 주시면 결제를 안내해 드리고, 결제가 확인되면 그날부터 30일 동안 멤버예요."}</p>
             <label>이메일<input id="msContact" type="email" maxlength="60" required autocomplete="email" inputmode="email" autocapitalize="off" value="${esc((TS.auth && TS.auth.user && TS.auth.user.email) || "")}" placeholder="예: zone@naver.com" /></label>
             <label class="check" style="font-size:13px"><input type="checkbox" id="msAgree" required /> 안내를 위해 이메일을 운영자에게 보내는 데 동의해요</label>
             <button type="submit" class="primary" style="width:100%">${isMember() ? "이메일 남기기" : "멤버십 신청하기"}</button>
-            ${isMember() ? "" : '<p class="hint" style="margin:0">아직 돈이 나가지 않아요. 결제는 이메일 안내를 받은 뒤에 해요.</p>'}</form>`}
+            ${isMember() ? "" : '<p class="hint" style="margin:0">아직 돈이 나가지 않아요. 결제는 코치와 연락한 뒤에 해요.</p>'}</form>`}
         <details class="ms-refund"><summary>환불 규정</summary>
           <ol>
             <li>결제 후 7일 안에, 아직 혜택(모임 · 피드백 · 통화)을 하나도 받지 않았다면 <b>전액 환불</b>해 드려요.</li>
@@ -205,9 +205,13 @@
       const contact = $("msContact").value.trim(), name = ((TS.auth.member && TS.auth.member.nickname) || "회원").slice(0, 30);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) { alert("이메일 주소를 확인해 주세요."); return; }
       const btn = f.querySelector("button[type=submit]"); btn.disabled = true; btn.textContent = "보내는 중…";
-      const { error } = await db.from("membership_requests").insert({ user_id: me(), name, contact });
+      const { data: rq, error } = await db.from("membership_requests").insert({ user_id: me(), name, contact }).select("id").single();
       if (error) { btn.disabled = false; btn.textContent = "멤버십 신청하기"; alert("신청을 보내지 못했어요. 잠시 뒤 다시 시도해 주세요."); return; }
-      if (TS.notifyOwner) TS.notifyOwner("[ZONE] 새 멤버십 신청", { 닉네임: (TS.auth.member && TS.auth.member.nickname) || "", 이메일: contact, 안내: "앱 → 나 → 운영자 · 멤버십에서 확인" });
+      // 💌 신청한 사람에게 코치 연락처(카톡 · 전화) 메일 + 운영자 알림. 실패하면 운영자에게만 예전 알림
+      let sent = false;
+      try { const r = await db.functions.invoke(MAIL_FN, { body: { action: "apply", id: rq && rq.id } }); sent = !r.error && r.data && r.data.ok; } catch (e2) { /* 아래로 */ }
+      if (!sent && TS.notifyOwner) TS.notifyOwner("[ZONE] 새 멤버십 신청", { 닉네임: (TS.auth.member && TS.auth.member.nickname) || "", 이메일: contact, 안내: "앱 → 나 → 운영자 · 멤버십에서 확인" });
+      if (sent) toast("📨 신청했어요! 메일함에서 코치 연락처를 확인해 주세요.");
       await load(); openMembership(rerender); if (rerender) rerender();
     };
     if (!d.open) d.showModal();
