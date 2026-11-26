@@ -841,6 +841,7 @@
         <div class="set-row"><span>📝 훈련 일지 (컨디션·운동 기록·일기)</span><button type="button" class="pill" id="meJournal">모아보기</button></div>
         <div class="set-row"><span>기록 중 음성 안내</span><button type="button" class="pill" id="meVoice">${voiceOn() ? "켜짐 🔊" : "꺼짐 🔇"}</button></div>
         <div class="set-row"><span>데이터 저장</span><span class="hint">${TS.store.cloud && TS.isProfileCloud() ? "계정에 저장 중 ✓" : "일부는 이 기기에만 저장돼요 (로그인하면 계정에 저장)"}</span></div>
+        ${TS.auth && TS.auth.user ? `<div class="set-row"><span class="hint">회원 탈퇴 — 계정과 모든 기록·글·일지가 지워져요</span><button type="button" class="link" id="acDel" style="color:#dc2626">회원 탈퇴</button></div>` : ""}
       </div>
       <div id="fbBox"></div>
       <p class="hint" style="text-align:center;margin:16px 0 4px"><a href="terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="privacy.html" target="_blank" rel="noopener"><b>개인정보처리방침</b></a><br>ZONE의 훈련 안내는 일반적인 운동 정보예요. 몸에 이상이 있으면 운동을 멈추고 의사와 상의하세요.</p>`;
@@ -940,7 +941,6 @@
          ${TS.isOwner && TS.isOwner() ? `<div class="set-row"><span>🛡️ 운영자 · 이용 정지한 회원 <b style="color:#dc2626">${TS.bannedCount ? TS.bannedCount() : 0}명</b></span><button type="button" class="pill" onclick="TS.openBans && TS.openBans()">보기</button></div>` : ""}
          ${TS.isOwner && TS.isOwner() ? `<div class="set-row"><span>🛡️ 운영자 · 신고된 글 <b id="adminRep" style="color:#dc2626"></b></span><button type="button" class="pill" onclick="TS.openReports && TS.openReports()">보기</button></div>` : ""}
          <div class="set-row"><span>로그아웃</span><button type="button" class="pill" id="acOut">로그아웃</button></div>
-         <div class="set-row"><span class="hint">회원 탈퇴 — 계정과 모든 기록·글·일지가 지워져요</span><button type="button" class="link" id="acDel" style="color:#dc2626">회원 탈퇴</button></div>
          <div class="set-row"><span>🔔 좋아요·댓글 알림</span><button type="button" class="pill" id="acNotify">${A.member && A.member.notify_on === false ? "🔕 꺼짐 — 켜기" : "🔔 켜짐 — 끄기"}</button></div>`;
     return `<div class="card"><h3>👤 계정 · 공개 설정</h3>${acct}
       <div class="set-row"><span>📤 ZONE 앱 친구에게 공유하기 <span class="hint">(카톡·문자)</span></span><button type="button" class="primary pill" id="acShareApp">공유</button></div>
@@ -989,8 +989,8 @@
       if ($("adminCount")) $("adminCount").textContent = error || count == null ? "불러오지 못했어요" : `${count}명`;
     })();
     if ($("acDel")) $("acDel").onclick = async () => { // 회원 탈퇴 (앱스토어·개인정보보호법 필수)
-      if (!await TS.ask("정말 탈퇴할까요? 계정과 모든 훈련 기록·글·사진·일지가 지워지고 되돌릴 수 없어요.", "탈퇴", "취소")) return;
-      if (!await TS.ask("마지막 확인이에요. 탈퇴하면 같은 계정으로 다시 볼 수 없어요. 탈퇴할까요?", "탈퇴", "취소")) return;
+      if (!await TS.ask("정말 탈퇴할까요?\n\n탈퇴하면 저장된 데이터가 모두 지워져요.\n• 훈련 계획 · 운동 기록 · 개인 최고 기록\n• 커뮤니티 글 · 사진 · 댓글 · 훈련 일지\n• 쿠폰 · 멤버십 · 친구 초대 기록\n\n괜찮으세요?", "네, 지워도 괜찮아요", "취소")) return;
+      if (!await TS.ask("마지막 확인이에요.\n\n지워진 데이터는 되돌릴 수 없고, 같은 계정으로 다시 볼 수 없어요.\n정말 탈퇴할까요?", "탈퇴하기", "취소")) return;
       const { error } = await db.rpc("delete_my_account");
       if (error) { alert("지금은 탈퇴를 처리하지 못했어요. 잠시 뒤 다시 시도하거나 건의사항으로 알려 주세요."); return; }
       try { sessionStorage.setItem("zone.deleted", "1"); localStorage.setItem("zone.deleted", "1"); } catch (e) { /* 무시 */ } // 다시 열면 회원가입 화면부터 (두 곳에 적어 두어 확실하게)

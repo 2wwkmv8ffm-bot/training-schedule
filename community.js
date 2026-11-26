@@ -114,7 +114,7 @@
     const own = owners.has(uid) ? '<span class="obadge" title="ZONE 운영자">✔ ZONE 운영자</span>' : "";
     // 🏅 닉네임 옆에는 '지금 좋아요 1등'인 사람에게만 배지 1개 (1등이 바뀌면 새 1등에게로 옮겨 가요)
     const c = champOf[uid];
-    return own + (c ? `<span class="cbadge" title="${c.all.map((k) => CHAMP_LABEL[k]).join(" · ")} (글 하나의 좋아요 ${c.n}개)">${CHAMP_ICON[c.top]} ${CHAMP_LABEL[c.top]}</span>` : "");
+    return own + (c ? `<span class="cbadge cb-${c.top}" title="${c.all.map((k) => CHAMP_LABEL[k]).join(" · ")}">${CHAMP_ICON[c.top]} ${CHAMP_LABEL[c.top]}</span>` : "");
   }
   // 🔢 이름 뒤 번호 (예: 박찬욱#4821) — 아이디로 자동으로 정해져서 바뀌지 않고, 같은 닉네임끼리 구분돼요
   function tagNo(uid) { return uid ? String(parseInt(String(uid).replace(/-/g, "").slice(0, 8), 16) % 9000 + 1000) : ""; }
@@ -349,8 +349,8 @@
     return out;
   }
   // 🏅 지금 1등: 기간마다 좋아요가 가장 많은 글을 쓴 사람 (같으면 먼저 올린 글) — 피드에 안 보이는 글까지 모두 세요
-  const CHAMP_ICON = { all: "👑", month: "🏆", week: "⚡", day: "🔥" };
-  const CHAMP_LABEL = { all: "전체 1등", month: "월간 1등", week: "주간 1등", day: "오늘 1등" };
+  const CHAMP_ICON = { all: "👑", fol: "💗", mil: "🏃", month: "🏆", week: "🎖️", day: "⭐" };
+  const CHAMP_LABEL = { all: "전체 1등", fol: "팔로워 1등", mil: "마일리지왕", month: "월간 1등", week: "주간 1등", day: "오늘 1등" };
   let champOf = {};
   async function loadChamps() {
     try {
@@ -359,12 +359,23 @@
       const list = (data || []).filter((p) => !isStoryPost(p) && !banned.has(p.user_id) && !hiddenP.has(String(p.id)))
         .map((p) => ({ u: p.user_id, t: p.created_at, n: (p.post_likes && p.post_likes[0] && p.post_likes[0].count) || 0 })).filter((p) => p.n > 0);
       const next = {};
-      ["all", "month", "week", "day"].forEach((k) => { // 위에서부터 높은 배지 (사람마다 가장 높은 것 하나만 보여요)
+      const add = (uid, k) => { if (!uid) return; if (!next[uid]) next[uid] = { top: k, all: [] }; next[uid].all.push(k); }; // top = 가장 먼저(가장 높은) 배지
+      // 👑 전체 > 💗 팔로워 > 🏆 월간 > 🎖️ 주간 > ⭐ 오늘 (사람마다 가장 높은 것 하나만 보여요)
+      { const s = periodStart("all"); const best = list.filter((p) => p.t >= s).sort((a, b) => b.n - a.n || a.t.localeCompare(b.t))[0]; if (best) add(best.u, "all"); }
+      try { // 💗 팔로워 1등: 팔로워가 가장 많은 사람 (운영자·정지 회원 빼고)
+        const { data: fls } = await db.from("follows").select("followee").limit(20000);
+        const cnt = {}; (fls || []).forEach((r) => { if (!banned.has(r.followee)) cnt[r.followee] = (cnt[r.followee] || 0) + 1; });
+        const topFol = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+        if (topFol && topFol[1] > 0) add(topFol[0], "fol");
+      } catch (e) { /* 무시 */ }
+      try { // 🏃 마일리지왕: 이번 달 운동 거리 1등 (서버에서 계산 · 아이디만 받아요)
+        const { data: king } = await db.rpc("zone_mileage_king");
+        if (king && !banned.has(king)) add(king, "mil");
+      } catch (e) { /* 서버 함수 없으면 그냥 넘어가요 */ }
+      ["month", "week", "day"].forEach((k) => {
         const s = periodStart(k);
         const best = list.filter((p) => p.t >= s).sort((a, b) => b.n - a.n || a.t.localeCompare(b.t))[0];
-        if (!best) return;
-        if (!next[best.u]) next[best.u] = { top: k, all: [], n: best.n };
-        next[best.u].all.push(k);
+        if (best) add(best.u, k);
       });
       champOf = next;
     } catch (e) { /* 무시 */ }
@@ -1062,7 +1073,7 @@
       <p class="hint" style="margin:-6px 0 0">🌏 전체 공개로 올리면 모든 ZONE 사람들이 보고 응원할 수 있어요.</p>
       <p class="hint" style="margin:0">⚠️ 사진에 집 주소·다른 사람 얼굴이나 개인정보가 보이지 않는지 확인하고 올려 주세요.</p>
       <p class="warn" id="pcMsg" style="margin:0"></p>
-      <div class="actions"><div class="right"><button type="button" class="primary" id="pcGo" style="padding:12px 22px">올리기</button></div></div>`;
+      <div class="pc-go-bar"><button type="button" class="primary" id="pcGo">올리기</button></div>`;
     $("postDlg").showModal();
     $("pcClose").onclick = () => $("postDlg").close();
     $("postBody").querySelectorAll("[data-pick]").forEach((b) => { b.onclick = () => {

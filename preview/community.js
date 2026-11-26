@@ -349,8 +349,8 @@
     return out;
   }
   // 🏅 지금 1등: 기간마다 좋아요가 가장 많은 글을 쓴 사람 (같으면 먼저 올린 글) — 피드에 안 보이는 글까지 모두 세요
-  const CHAMP_ICON = { all: "👑", fol: "💗", month: "🏆", week: "🎖️", day: "⭐" };
-  const CHAMP_LABEL = { all: "전체 1등", fol: "팔로워 1등", month: "월간 1등", week: "주간 1등", day: "오늘 1등" };
+  const CHAMP_ICON = { all: "👑", fol: "💗", mil: "🏃", month: "🏆", week: "🎖️", day: "⭐" };
+  const CHAMP_LABEL = { all: "전체 1등", fol: "팔로워 1등", mil: "마일리지왕", month: "월간 1등", week: "주간 1등", day: "오늘 1등" };
   let champOf = {};
   async function loadChamps() {
     try {
@@ -368,6 +368,10 @@
         const topFol = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
         if (topFol && topFol[1] > 0) add(topFol[0], "fol");
       } catch (e) { /* 무시 */ }
+      try { // 🏃 마일리지왕: 이번 달 운동 거리 1등 (서버에서 계산 · 아이디만 받아요)
+        const { data: king } = await db.rpc("zone_mileage_king");
+        if (king && !banned.has(king)) add(king, "mil");
+      } catch (e) { /* 서버 함수 없으면 그냥 넘어가요 */ }
       ["month", "week", "day"].forEach((k) => {
         const s = periodStart(k);
         const best = list.filter((p) => p.t >= s).sort((a, b) => b.n - a.n || a.t.localeCompare(b.t))[0];
