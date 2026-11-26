@@ -15,9 +15,10 @@
   };
   const appVersion = () => { const s = [...document.scripts].map((x) => x.src).find((x) => /app\.js\?v=/.test(x)); return s ? s.split("v=")[1] : ""; };
 
-  // 📧 건의가 오면 앱 주인 메일로도 보내요 (FormSubmit 무료 서비스 — 처음 한 번 'Activate' 메일 확인 필요)
-  //    메일 주소를 숨기려면: Activate 후 FormSubmit이 알려 주는 임의 문자열로 아래 MAIL_TO를 바꾸면 돼요
-  const MAIL_TO = "cksdnr990605@naver.com"; // 운영자 알림 받는 메일 (처음 한 번 FormSubmit 확인 메일의 Activate를 눌러야 해요)
+  // 📧 운영자 알림은 로그인한 사용자면 ZONE 메일 함수(dynamic-processor)로 가요.
+  //    이메일을 코드에 적으면 공개되므로 비워 뒀어요. 꼭 FormSubmit 대비책을 쓰려면 수파베이스가 아니라
+  //    여기에 FormSubmit이 준 '임의 문자열'(이메일 아님)을 넣으세요.
+  const MAIL_TO = ""; // 보안: 운영자 이메일을 코드에 두지 않아요
   function mailOwner(row) {
     if (!MAIL_TO) return;
     fetch(`https://formsubmit.co/ajax/${MAIL_TO}`, {

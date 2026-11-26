@@ -51,6 +51,23 @@ ${m.button ? `<table cellpadding="0" cellspacing="0" style="margin:24px 0 8px"><
   const text = [m.title, "", m.lead, "", ...(m.box || []).map(([k, v]) => `${k}: ${v}`), ...(m.list ? ["", m.list[0], ...m.list[1].map((x) => "- " + x)] : []), "", m.foot].join("\n");
   return { html, text };
 }
+// 🛡️ 메일 폭탄 막기: 한 사람 하루 30통 · 20초에 3통 · 전체 하루 400통 (Gmail 한도 보호)
+async function throttle(who: string | null): Promise<boolean> {
+  try {
+    const now = Date.now();
+    const dayAgo = new Date(now - 864e5).toISOString();
+    const [mine, all] = await Promise.all([
+      who ? SB.from("email_log").select("created_at").eq("who", who).gte("created_at", dayAgo) : Promise.resolve({ data: [] as any[] }),
+      SB.from("email_log").select("id", { count: "exact", head: true }).gte("created_at", dayAgo),
+    ]);
+    const mn = (mine.data || []) as { created_at: string }[];
+    const burst = mn.filter((r) => now - new Date(r.created_at).getTime() < 20000).length;
+    if (mn.length >= 30 || burst >= 3 || (all.count || 0) >= 400) return false;
+    await SB.from("email_log").insert({ who });
+    return true;
+  } catch { return true; } // 표가 아직 없으면 그냥 보내요 (SQL 실행 전 호환)
+}
+
 const BEN: [string, string[]] = ["멤버 혜택", ["한 달에 한 번 코치와 2시간 모임", "개인 카톡 자세 피드백", "주 1회 코치 통화 상담"]];
 
 Deno.serve(async (req) => {
@@ -64,6 +81,7 @@ Deno.serve(async (req) => {
     const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     const { data: who } = await SB.auth.getUser(token);
     if (!who?.user) return reply({ ok: false, reason: "login" }, 401);
+    if (!(await throttle(who.user.id))) return reply({ ok: false, reason: "rate" }, 429);
     const subject = String(b.subject || "[ZONE] 알림").slice(0, 80);
     const fields = Object.entries(b.fields && typeof b.fields === "object" ? b.fields : {}).slice(0, 12)
       .map(([k, v]) => [String(k).slice(0, 20), String(v ?? "").slice(0, 400)] as [string, string]);
@@ -88,6 +106,7 @@ Deno.serve(async (req) => {
     if (!r || r.user_id !== who.user.id || r.status !== "new") return reply({ ok: false, reason: "no request" });
     const { data: claimed } = await SB.from("membership_requests").update({ mailed_at: new Date().toISOString() }).eq("id", id).is("mailed_at", null).select("id");
     if (!claimed || !claimed.length) return reply({ ok: false, reason: "already sent" });
+    if (!(await throttle(who.user.id))) return reply({ ok: false, reason: "rate" }, 429);
     const { data: wm } = await SB.from("members").select("nickname").eq("id", who.user.id).maybeSingle();
     const nick = wm?.nickname || "회원";
     const contact: [string, string][] = [...(KAKAO ? [["카카오톡 ID", KAKAO] as [string, string]] : []), ...(PHONE ? [["전화번호", PHONE] as [string, string]] : [])];
