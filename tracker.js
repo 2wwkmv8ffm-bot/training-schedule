@@ -83,11 +83,10 @@
             <li>기록한 경로는 내 기록에 저장되고, 고른 공개 범위(친구만·전체·나만)에 따라 다른 사람에게 보일 수 있어요.</li>
           </ul>
           <p class="hint" style="margin:0 0 12px">다음 화면에서 휴대폰이 위치 권한을 물으면 '앱 사용 중 허용'을 눌러 주세요. 자세한 내용은 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>에 있어요.</p>
-          <button type="button" class="primary" id="lcOk" style="width:100%">동의하고 계속</button>
-          <button type="button" class="link" id="lcNo" style="display:block;margin:10px auto 0">나중에 할게요</button></div></div>`;
+          <button type="button" class="primary" id="lcOk" style="width:100%">동의하고 계속</button></div></div>`;
       const go = () => { try { localStorage.setItem("zone.locOk", new Date().toISOString()); } catch (e) { /* 무시 */ } renderReady(); startWatch(); };
       $("lcOk").onclick = go;
-      $("lcX").onclick = $("lcNo").onclick = () => { st = null; hide(); };
+      $("lcX").onclick = () => { st = null; hide(); };
       return;
     }
     renderReady();
@@ -118,8 +117,7 @@
         requestPermissions: true, stale: false, distanceFilter: 0,
       }, (loc, err) => {
         if (err) {
-          setGps("err", err.code === "NOT_AUTHORIZED" ? "위치 권한을 '항상 허용'으로 바꿔 주세요 (설정 → 앱 → ZONE → 권한)" : "GPS 신호 찾는 중…");
-          if (err.code === "NOT_AUTHORIZED" && CAP.Plugins.BackgroundGeolocation.openSettings) CAP.Plugins.BackgroundGeolocation.openSettings();
+          setGps("err", err.code === "NOT_AUTHORIZED" ? "위치 권한이 꺼져 있어 거리·경로를 잴 수 없어요. 원하시면 휴대폰 설정에서 ZONE 위치 권한을 켜 주세요." : "GPS 신호 찾는 중…");
           return;
         }
         if (loc) onPos({ coords: { latitude: loc.latitude, longitude: loc.longitude, accuracy: loc.accuracy } });

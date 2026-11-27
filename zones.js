@@ -131,6 +131,15 @@
           <ul style="margin:0;padding-left:18px;line-height:1.7">${x.good.map((g) => `<li>${g}</li>`).join("")}</ul>
           <p style="margin:8px 0 0"><b>언제 하나요</b> — ${x.when}</p></details>`).join("")}
         <p class="hint" style="margin:0">운동자각도(RPE): 1 = 거의 안 힘듦, 10 = 최대로 힘듦. 심박은 더위·탈수·피로·카페인에 따라 5~10bpm 오르내려요. 심박과 느낌이 다르면 느낌(RPE)을 우선하세요.</p>
+        <div style="background:#f1f5f9;border-radius:12px;padding:12px 14px;font-size:12.5px;line-height:1.7;color:#334155">
+          <b>출처 · 참고 자료</b><br>
+          이 심박 존·최대심박 정보는 아래 공신력 있는 자료를 바탕으로 해요.
+          <ul style="margin:6px 0 0;padding-left:18px">
+            <li>미국심장협회(AHA) — 목표 심박수: <a href="https://www.heart.org/en/healthy-living/fitness/fitness-basics/target-heart-rates" target="_blank" rel="noopener">heart.org</a></li>
+            <li>최대심박 추정 공식(208 − 0.7 × 나이) — Tanaka 등, 2001: <a href="https://pubmed.ncbi.nlm.nih.gov/11153730/" target="_blank" rel="noopener">pubmed.ncbi.nlm.nih.gov</a></li>
+            <li>세계보건기구(WHO) — 신체활동 지침: <a href="https://www.who.int/news-room/fact-sheets/detail/physical-activity" target="_blank" rel="noopener">who.int</a></li>
+          </ul>
+        </div>
       </div>`;
       d.querySelector('[data-zc="x"]').onclick = () => d.close();
       const now = d.querySelector("#zNow");
