@@ -46,6 +46,39 @@
   const KEY = "zone.maxHr";
 
   function profile() { try { return window.TS && TS.getProfile ? TS.getProfile() : null; } catch (e) { return null; } }
+
+  // ⚠️ 건강·안전 동의 (앱스토어 1.4.1) — 훈련 계획·심박 존을 처음 열 때 한 번, "확인했어요"를 눌러야 열려요
+  const HEALTH_KEY = "zone.healthAck";
+  const healthOk = () => { try { return localStorage.getItem(HEALTH_KEY) === "1"; } catch (e) { return false; } };
+  function healthGate(cb) {
+    if (healthOk()) { cb(); return; }
+    let d = document.getElementById("healthDlg");
+    if (!d) { d = document.createElement("dialog"); d.id = "healthDlg"; document.body.appendChild(d); }
+    d.innerHTML = `<div style="padding:20px;display:grid;gap:14px;max-width:420px">
+      <b style="font-size:18px">⚠️ 시작하기 전에 꼭 읽어 주세요</b>
+      <div style="font-size:14.5px;line-height:1.65;color:var(--text)">
+        <p style="margin:0 0 10px"><b>ZONE의 훈련 안내는 의학적 조언이 아니에요.</b> 일반적인 운동 정보예요.</p>
+        <p style="margin:0 0 10px">특히 <b>고강도 운동(Z4·Z5·인터벌·전력 질주)</b>은 몸에 큰 부담을 줘요. 아래에 해당하면 <b>시작 전에 꼭 의사와 상의</b>하세요.</p>
+        <ul style="margin:0 0 10px;padding-left:18px">
+          <li>심장 질환·고혈압·당뇨가 있거나 가슴 통증을 겪은 적이 있어요</li>
+          <li>임신 중이거나 수술·부상에서 회복 중이에요</li>
+          <li>오랫동안 운동을 안 했거나 처음 시작해요</li>
+        </ul>
+        <p style="margin:0">운동 중 <b>가슴 통증·어지러움·숨이 비정상적으로 참·관절 통증</b>이 있으면 <b>바로 멈추세요.</b></p>
+      </div>
+      <label class="check" style="font-size:13.5px;display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="healthChk" style="margin-top:3px" /> <span>위 내용을 읽었고, 내 건강 상태에 맞게 스스로 판단해 운동하겠습니다.</span></label>
+      <div class="actions"><div class="right" style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" id="healthNo">닫기</button>
+        <button type="button" class="primary" id="healthYes" disabled style="padding:10px 20px">확인했어요</button></div></div>
+    </div>`;
+    const chk = d.querySelector("#healthChk"), yes = d.querySelector("#healthYes");
+    chk.onchange = () => { yes.disabled = !chk.checked; };
+    d.querySelector("#healthNo").onclick = () => d.close();
+    yes.onclick = () => { try { localStorage.setItem(HEALTH_KEY, "1"); } catch (e) { /* 무시 */ } d.close(); cb(); };
+    if (!d.open) d.showModal();
+  }
+  if (window.TS) { TS.healthGate = healthGate; TS.healthOk = healthOk; }
+
   // 최대심박: 직접 입력(문진표·계산기) → 나이로 추정(208 − 0.7 × 나이)
   function maxHr() {
     const p = profile() || {};
@@ -79,6 +112,7 @@
       const M = maxHr();
       d.innerHTML = `<div style="padding:18px;display:grid;gap:12px;max-height:88vh;overflow:auto">
         <div class="spread"><b style="font-size:17px">❤️ 심박 존 가이드</b><button type="button" class="link" data-zc="x" style="font-size:20px">✕</button></div>
+        <div style="background:#fff7ed;border:1.5px solid #fb923c;border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.55;color:#9a3412">⚠️ 의학적 조언이 아니에요. 고강도 존(Z4·Z5)은 부담이 커요. 건강 문제가 있거나 처음이라면 시작 전 의사와 상의하고, 운동 중 이상이 있으면 바로 멈추세요.</div>
         <div class="card" style="margin:0">
           <div class="eyebrow" style="margin:0 0 6px">내 최대심박</div>
           <div style="display:flex;gap:8px;align-items:center"><input id="zMax" type="number" inputmode="numeric" placeholder="예: 190" value="${M && M.measured ? M.v : ""}" style="flex:1" />
@@ -126,7 +160,7 @@
     if (!b) return;
     e.preventDefault(); e.stopPropagation();
     const dv = b.closest("dialog"); if (dv && dv.id !== "zoneDlg" && dv.open) dv.close();
-    openGuide(+b.dataset.zguide || 0);
+    healthGate(() => openGuide(+b.dataset.zguide || 0));
   }, true);
 
   // 훈련 하나의 강도 구성 막대: "고강도 10% 2.5km · 저강도 90% 22.5km"
