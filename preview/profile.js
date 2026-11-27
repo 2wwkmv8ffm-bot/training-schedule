@@ -922,6 +922,7 @@
   }
   function openPlan(force) {
     if (!profile) { openWizard(0); return; }
+    if (window.TS && TS.healthGate && !(TS.healthOk && TS.healthOk())) { TS.healthGate(() => openPlan(force)); return; } // ⚠️ 건강 동의 먼저 (앱스토어 1.4.1)
     // 계획을 보여주기 전에: 어떤 대회·거리를 목표로, 목표 기록·현재 최고기록이 얼마인지 먼저 확인
     if (!profile.goalSetAt && force !== true) { openGoal(() => openPlan(true)); return; }
     variants = makeVariants(profile); planTab = "month"; // 계획을 열면 월간부터
